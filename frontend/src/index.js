@@ -2,13 +2,14 @@ import React from "react";
 import ReactDOM from "react-dom";
 import CssBaseline from "@material-ui/core/CssBaseline";
 import App from "./App";
-import { loadJSON } from "./helpers/loadJSON";
+import { loadConfig } from "./helpers/loadConfig";
 import { i18n } from "./translate/i18n";
 import axios from "axios";
 
 const BACKEND_RETRY_INTERVAL_SECONDS = 15;
-const BACKEND_PROBE_TIMEOUT_MS = 5000;
+const BACKEND_PROBE_TIMEOUT_MS = 3000;
 let backendRetryTimeout = null;
+let backendProbeStarted = false;
 
 function clearBackendRetryTimers() {
   if (backendRetryTimeout) {
@@ -68,49 +69,40 @@ function renderApp() {
   );
 }
 
-function probeBackendAndRender(config, attempt = 1) {
+function probeBackendInBackground(config, attempt = 1) {
+  if (backendProbeStarted) {
+    return;
+  }
+  backendProbeStarted = true;
+
   const backendBase = getBackendProbeUrl(config);
   const healthUrl = `${backendBase}/health?cb=${Date.now()}`;
 
   axios
     .get(healthUrl, { timeout: BACKEND_PROBE_TIMEOUT_MS })
-    .then(() => {
-      renderApp();
-    })
     .catch(() => {
       const fallbackUrl = `${backendBase}/?cb=${Date.now()}`;
-      axios
-        .get(fallbackUrl, { timeout: BACKEND_PROBE_TIMEOUT_MS })
-        .then(response => {
-          const serverDate = new Date(response.headers["date"]);
-          const clientDate = new Date();
-          const diff = Math.abs(serverDate - clientDate);
-          const diffMinutes = Math.floor(diff / 1000 / 60);
-
-          if (diffMinutes > 5) {
-            let message = i18n.t("frontendErrors.ERR_CLOCK_OUT_OF_SYNC");
-            message += `<br><br>${i18n.t("common.serverTime")} ${serverDate.toLocaleString()}`;
-            message += `<br>${i18n.t("common.clientTime")} ${clientDate.toLocaleString()}`;
-            message += `<br>${i18n.t("common.differenceMinutes", { count: diffMinutes })}`;
-            window.renderError(message);
-            return;
-          }
-
-          renderApp();
-        })
-        .catch(error => {
-          const retryMessage = getRetryMessage(error);
-          showRetryMessage(retryMessage, () => {
-            probeBackendAndRender(config, attempt + 1);
-          });
-        });
+      return axios.get(fallbackUrl, { timeout: BACKEND_PROBE_TIMEOUT_MS });
+    })
+    .catch(error => {
+      const retryMessage = getRetryMessage(error);
+      showRetryMessage(retryMessage, () => {
+        backendProbeStarted = false;
+        probeBackendInBackground(config, attempt + 1);
+      });
     });
 }
 
-const config = loadJSON("/config.json");
+async function bootstrap() {
+  const config = await loadConfig();
 
-if (!config) {
-  window.renderError(i18n.t("frontendErrors.ERR_CONFIG_ERROR"));
-} else {
-  probeBackendAndRender(config);
+  if (!config) {
+    window.renderError(i18n.t("frontendErrors.ERR_CONFIG_ERROR"));
+    return;
+  }
+
+  renderApp();
+  probeBackendInBackground(config);
 }
+
+bootstrap();

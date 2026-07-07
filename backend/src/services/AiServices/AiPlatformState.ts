@@ -22,7 +22,7 @@ export const setPlatformBootstrap = (input: {
   migrationsPending: string[];
   autoMigrateEnabled: boolean;
   aiFeaturesEnabled: boolean;
-  globalDiagnostics: AiDiagnosticsResult;
+  globalDiagnostics: AiDiagnosticsResult | null;
 }): void => {
   state.migrationsPending = input.migrationsPending;
   state.autoMigrateEnabled = input.autoMigrateEnabled;

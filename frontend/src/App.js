@@ -477,42 +477,32 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    getPublicSetting("primaryColorLight")
-      .then(color => {
-        setPrimaryColorLight(color || brandTokens.primaryLight);
-      })
-      .catch(() => {});
-    getPublicSetting("primaryColorDark")
-      .then(color => {
-        setPrimaryColorDark(color || brandTokens.primaryDark);
-      })
-      .catch(() => {});
-    getPublicSetting("appLogoLight")
+    Promise.all([
+      getPublicSetting("primaryColorLight"),
+      getPublicSetting("primaryColorDark"),
+      getPublicSetting("appLogoLight"),
+      getPublicSetting("appLogoDark"),
+      getPublicSetting("appLogoFavicon"),
+      getPublicSetting("appName")
+    ])
       .then(
-        file => {
+        ([colorLight, colorDark, logoLight, logoDark, logoFavicon, name]) => {
+          setPrimaryColorLight(colorLight || brandTokens.primaryLight);
+          setPrimaryColorDark(colorDark || brandTokens.primaryDark);
           setAppLogoLight(
-            file ? `${getBackendURL()}/public/${file}` : defaultLogoLight
+            logoLight
+              ? `${getBackendURL()}/public/${logoLight}`
+              : defaultLogoLight
           );
-        },
-        _ => {}
+          setAppLogoDark(
+            logoDark ? `${getBackendURL()}/public/${logoDark}` : defaultLogoDark
+          );
+          setAppLogoFavicon(
+            logoFavicon ? `${getBackendURL()}/public/${logoFavicon}` : null
+          );
+          setAppName(name || brandTokens.appTitle);
+        }
       )
-      .catch(() => {});
-    getPublicSetting("appLogoDark")
-      .then(file => {
-        setAppLogoDark(
-          file ? `${getBackendURL()}/public/${file}` : defaultLogoDark
-        );
-      })
-      .catch(() => {});
-    getPublicSetting("appLogoFavicon")
-      .then(file => {
-        setAppLogoFavicon(file ? `${getBackendURL()}/public/${file}` : null);
-      })
-      .catch(() => {});
-    getPublicSetting("appName")
-      .then(name => {
-        setAppName(name || brandTokens.appTitle);
-      })
       .catch(() => {
         setAppName(brandTokens.appTitle);
       });

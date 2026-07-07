@@ -153,17 +153,29 @@ const useAuth = () => {
       if (!isAccessTokenExpired(token)) {
         setIsAuth(true);
         setLoading(false);
+
+        refreshSession()
+          .then(data => {
+            if (data?.user) {
+              setUser(data.user);
+            }
+          })
+          .catch(() => {});
+
+        return;
       }
 
       try {
         const data = await refreshSession();
         setUser(data.user || {});
       } catch (err) {
-        if (!isAccessTokenExpired(token)) {
-          setIsAuth(true);
-        } else {
-          toastError(err);
-        }
+        clearAllCachedSettings();
+        localStorage.removeItem("token");
+        localStorage.removeItem("companyId");
+        api.defaults.headers.Authorization = undefined;
+        setIsAuth(false);
+        setUser({});
+        toastError(err);
       } finally {
         setLoading(false);
       }

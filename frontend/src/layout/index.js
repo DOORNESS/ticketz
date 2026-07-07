@@ -363,7 +363,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   const [aboutModalOpen, setAboutModalOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
-  const { handleLogout, loading } = useContext(AuthContext);
+  const { handleLogout, loading, isAuth } = useContext(AuthContext);
   const [drawerOpen, setDrawerOpen] = useState(() => {
     const isDesktop = window.matchMedia("(min-width:600px)").matches;
 
@@ -544,7 +544,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
     ? dateToClient(user.company.dueDate)
     : "-";
 
-  if (loading) {
+  if (loading && !isAuth) {
     return <BackdropLoading />;
   }
 

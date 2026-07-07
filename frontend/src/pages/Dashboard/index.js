@@ -20,11 +20,11 @@ import { makeStyles } from "@material-ui/core/styles";
 import { toast } from "react-toastify";
 
 import TableAttendantsStatus from "../../components/Dashboard/TableAttendantsStatus";
+import BackdropLoading from "../../components/BackdropLoading";
 
 import { isEmpty } from "lodash";
 import moment from "moment";
 import { i18n } from "../../translate/i18n";
-import toastError from "../../errors/toastError";
 import useAuth from "../../hooks/useAuth.js";
 
 import { SmallPie } from "./SmallPie";
@@ -217,6 +217,7 @@ const Dashboard = () => {
   const classes = useStyles();
   const [period, setPeriod] = useState(0);
   const [currentUser, setCurrentUser] = useState({});
+  const [userChecked, setUserChecked] = useState(false);
   const [dateFrom, setDateFrom] = useState(
     moment("1", "D").format("YYYY-MM-DDTHH") + ":00"
   );
@@ -252,12 +253,18 @@ const Dashboard = () => {
   }, [socketManager, companyId]);
 
   useEffect(() => {
-    getCurrentUserInfo().then(user => {
-      if (user?.profile !== "admin") {
-        window.location.href = "/tickets";
-      }
-      setCurrentUser(user);
-    });
+    getCurrentUserInfo()
+      .then(user => {
+        if (user?.profile !== "admin") {
+          window.location.href = "/tickets";
+          return;
+        }
+        setCurrentUser(user);
+      })
+      .catch(() => {})
+      .finally(() => {
+        setUserChecked(true);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -367,28 +374,33 @@ const Dashboard = () => {
       return;
     }
 
-    api
+    const ticketsRequest = api
       .get("/dashboard/tickets", { params })
       .then(result => {
         if (result?.data) {
           setTicketsData(result.data);
         }
       })
-      .catch(toastError);
+      .catch(() => {
+        setTicketsData({});
+      });
 
     setLoadingUsers(true);
-    api
+    const usersRequest = api
       .get("/dashboard/users", { params })
       .then(result => {
         if (result?.data) {
           setUsersData(result.data);
-          setLoadingUsers(false);
         }
       })
-      .catch(err => {
+      .catch(() => {
+        setUsersData({});
+      })
+      .finally(() => {
         setLoadingUsers(false);
-        toastError(err);
       });
+
+    return Promise.allSettled([ticketsRequest, usersRequest]);
   }
 
   useEffect(() => {
@@ -460,8 +472,8 @@ const Dashboard = () => {
     );
   }
 
-  if (currentUser?.profile !== "admin") {
-    return <div></div>;
+  if (!userChecked || currentUser?.profile !== "admin") {
+    return <BackdropLoading />;
   }
 
   return (

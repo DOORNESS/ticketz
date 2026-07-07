@@ -149,7 +149,7 @@ export async function ticketsStatusSummary(companyId: number) {
         required: false
       }
     ],
-    group: ["status", "queueId", "queue.id", "queue.name"]
+    group: ["status", "queueId", "queue.id", "queue.name", "queue.color"]
   });
 
   return ticketsSummary;
@@ -286,9 +286,14 @@ export async function userReport(companyId: number, start: Date, end: Date) {
 }
 
 export async function statusSummaryService(companyId: number) {
+  const [ticketsSummary, usersSummary] = await Promise.all([
+    ticketsStatusSummary(companyId),
+    usersStatusSummary(companyId)
+  ]);
+
   return {
-    ticketsStatusSummary: await ticketsStatusSummary(companyId),
-    usersStatusSummary: await usersStatusSummary(companyId)
+    ticketsStatusSummary: ticketsSummary,
+    usersStatusSummary: usersSummary
   };
 }
 
@@ -309,17 +314,19 @@ export async function ticketsStatisticsService(
     throw new Error("Invalid date range");
   }
 
+  const [create, accept, transfer, close] = await Promise.all([
+    listCounterSerie(companyId, "ticket-create", start, end),
+    listCounterSerie(companyId, "ticket-accept", start, end),
+    listCounterSerie(companyId, "ticket-transfer", start, end),
+    listCounterSerie(companyId, "ticket-close", start, end)
+  ]);
+
   return {
     ticketCounters: {
-      create: await listCounterSerie(companyId, "ticket-create", start, end),
-      accept: await listCounterSerie(companyId, "ticket-accept", start, end),
-      transfer: await listCounterSerie(
-        companyId,
-        "ticket-transfer",
-        start,
-        end
-      ),
-      close: await listCounterSerie(companyId, "ticket-close", start, end)
+      create,
+      accept,
+      transfer,
+      close
     },
     ticketStatistics: await calculateTicketStatistics(companyId, start, end)
   };

@@ -89,6 +89,29 @@ app.get("/public/*", (req, res) => {
   });
 });
 
+app.use((req, res, next) => {
+  const startedAt = Date.now();
+
+  res.on("finish", () => {
+    const durationMs = Date.now() - startedAt;
+    if (durationMs < 1000) {
+      return;
+    }
+
+    logger.warn(
+      {
+        method: req.method,
+        url: req.originalUrl,
+        statusCode: res.statusCode,
+        durationMs
+      },
+      "Slow HTTP request"
+    );
+  });
+
+  next();
+});
+
 app.use((req, _res, next) => {
   const { method, url, query, body, headers } = req;
   logger.trace(

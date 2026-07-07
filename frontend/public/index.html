@@ -362,9 +362,9 @@
       };
 
       fetch("/config.json").then(async response => {
-        response.json().then(config => {
-          configureSplash(config);
-        });
+        const config = await response.json();
+        window.__APP_CONFIG__ = config;
+        configureSplash(config);
       });
 
       window.removeSplash = () => {
