@@ -1,3 +1,4 @@
+import "express-async-errors";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
@@ -54,7 +55,9 @@ const turnstileSiteKeyAliases = new Set([
 
 const isTurnstileEnabled = (): boolean =>
   ["true", "1", "yes", "enabled"].includes(
-    String(process.env.TURNSTILE_ENABLED || "").trim().toLowerCase()
+    String(process.env.TURNSTILE_ENABLED || "")
+      .trim()
+      .toLowerCase()
   );
 
 const readTurnstileSiteKeyFromEnv = (): string | null =>
@@ -89,10 +92,11 @@ app.get("/public-settings/:settingKey", (req, res) => {
 
 app.post("/auth/login", async (req, res) => {
   try {
+    await ensureCoreRoutes();
+
     const { email, password, turnstileToken } = req.body;
-    const { verifyTurnstileToken } = await import(
-      "./services/AuthServices/VerifyTurnstileService"
-    );
+    const { verifyTurnstileToken } =
+      await import("./services/AuthServices/VerifyTurnstileService");
     const { ensureAuthSecretsReady } = await import("./config/auth");
     const { SendRefreshToken } = await import("./helpers/SendRefreshToken");
     const AuthUserService = (
@@ -119,15 +123,25 @@ app.post("/auth/login", async (req, res) => {
     });
   } catch (error) {
     if (error instanceof AppError) {
-      logger[error.level](error);
-      return res.status(error.statusCode).json({ error: error.message });
+      res.status(error.statusCode).json({ error: error.message });
+      try {
+        logger[error.level](error);
+      } catch {
+        // logging must never block auth responses
+      }
+      return;
     }
 
-    logger.error(error);
-    return res.status(500).json({
+    const message = error instanceof Error ? error.message : String(error);
+    res.status(500).json({
       error: "Internal server error",
-      message: error instanceof Error ? error.message : String(error)
+      message
     });
+    try {
+      logger.error(error);
+    } catch {
+      // logging must never block auth responses
+    }
   }
 });
 
@@ -177,9 +191,14 @@ export async function ensureCoreRoutes(): Promise<void> {
   await coreRoutesPromise;
 }
 
+const isFastShellPath = (req: express.Request): boolean =>
+  req.path === "/health" ||
+  req.path.startsWith("/public-settings/") ||
+  (req.method === "POST" && req.path === "/auth/login");
+
 app.use(async (req, res, next) => {
-  if (req.path === "/health") {
-    return next();
+  if (isFastShellPath(req)) {
+    return;
   }
 
   try {
