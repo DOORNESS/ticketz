@@ -64,6 +64,20 @@ const ensureAgent = async (companyId: number): Promise<AiAgent> => {
     fallbackQueueId: agent.fallbackQueueId || fallbackQueue?.id || null
   });
 
+  await AiAgent.update(
+    {
+      ackEnabled: true,
+      ackMessage: DEFAULT_ACK_MESSAGE
+    },
+    {
+      where: {
+        companyId,
+        active: true,
+        ackMessage: null
+      }
+    }
+  );
+
   return agent.reload();
 };
 

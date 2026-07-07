@@ -2014,6 +2014,11 @@ const handleMessage = async (
       if (activeAgent) {
         const rawMediaUrl = newMessage?.getDataValue("mediaUrl");
 
+        if (ticket.chatbot) {
+          await updateTicket(ticket, { chatbot: false });
+          await ticket.reload();
+        }
+
         await enqueueAiInboundMessage({
           companyId,
           ticketId: ticket.id,

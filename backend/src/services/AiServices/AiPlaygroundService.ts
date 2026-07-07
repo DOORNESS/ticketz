@@ -82,7 +82,8 @@ export const runPlaygroundQuery = async ({
     : await getKnowledgeBaseIdsForAgent(companyId, agent.id);
 
   let chunks: PlaygroundChunk[] = [];
-  let contextBlock = "Sem trechos relevantes.";
+  let contextBlock =
+    "Nenhum trecho indexado na base selecionada. Responda com cordialidade usando o contexto geral do agente.";
 
   if (knowledgeBaseIds.length) {
     const queryEmbedding = await createEmbedding(

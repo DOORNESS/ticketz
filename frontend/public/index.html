@@ -18,6 +18,22 @@
       content="minimum-scale=1, initial-scale=1, width=device-width"
     />
 
+    <script>
+      (function () {
+        var setVh = function () {
+          var height = window.visualViewport
+            ? window.visualViewport.height
+            : window.innerHeight;
+          document.documentElement.style.setProperty("--vh", height + "px");
+        };
+        setVh();
+        window.addEventListener("resize", setVh);
+        if (window.visualViewport) {
+          window.visualViewport.addEventListener("resize", setVh);
+        }
+      })();
+    </script>
+
     <style>
       html,
       body {

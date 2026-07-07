@@ -67,8 +67,9 @@ function persistDrawerOpenState(value) {
 const useStyles = makeStyles(theme => ({
   root: {
     display: "flex",
-    height: "var(--vh)",
+    height: "var(--vh, 100vh)",
     minHeight: 0,
+    width: "100%",
     overflow: "hidden",
     backgroundColor: theme.palette.fancyBackground,
     "& .MuiButton-outlinedPrimary": {
@@ -275,15 +276,34 @@ const useStyles = makeStyles(theme => ({
     width: drawerWidthCollapsed
   },
   appBarSpacer: {
-    minHeight: `${appBarHeight}px`
+    display: "none"
   },
   content: {
-    flex: 1,
-    minHeight: 0,
-    minWidth: 0,
-    overflow: "auto",
+    position: "fixed",
+    top: appBarHeight,
+    right: 0,
+    bottom: 0,
+    left: drawerWidthCollapsed,
+    display: "flex",
+    flexDirection: "column",
+    overflowY: "auto",
+    overflowX: "hidden",
     WebkitOverflowScrolling: "touch",
-    ...theme.scrollbarStyles
+    overscrollBehavior: "contain",
+    transition: theme.transitions.create("left", {
+      easing: theme.transitions.easing.sharp,
+      duration: theme.transitions.duration.enteringScreen
+    }),
+    ...theme.scrollbarStyles,
+    [theme.breakpoints.down("sm")]: {
+      left: 0
+    }
+  },
+  contentShift: {
+    left: drawerWidth,
+    [theme.breakpoints.down("sm")]: {
+      left: 0
+    }
   },
   container: {
     paddingTop: theme.spacing(4),
@@ -777,8 +797,12 @@ const LoggedInLayout = ({ children, themeToggle }) => {
           }
         }}
       />
-      <main className={classes.content}>
-        <div className={classes.appBarSpacer} />
+      <main
+        className={clsx(
+          classes.content,
+          drawerOpen && greaterThenSm && classes.contentShift
+        )}
+      >
         <OnlyForSuperUser user={currentUser} yes={() => <GoogleAnalytics />} />
         {children ? children : null}
       </main>
