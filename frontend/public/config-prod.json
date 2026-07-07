@@ -2,5 +2,6 @@
   "BACKEND_PROTOCOL": "https",
   "BACKEND_HOST": "suporte.fortmax.com.br",
   "BACKEND_PATH": "/backend",
+  "TURNSTILE_SITE_KEY": "0x4AAAAAADhSILt9PsBiVeID",
   "LOG_LEVEL": "info"
 }

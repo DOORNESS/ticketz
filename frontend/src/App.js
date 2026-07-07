@@ -58,8 +58,8 @@ const App = () => {
   const [primaryColorDark, setPrimaryColorDark] = useState(
     brandTokens.primaryDark
   );
-  const [appLogoLight, setAppLogoLight] = useState("");
-  const [appLogoDark, setAppLogoDark] = useState("");
+  const [appLogoLight, setAppLogoLight] = useState(defaultLogoLight);
+  const [appLogoDark, setAppLogoDark] = useState(defaultLogoDark);
   const [appLogoFavicon, setAppLogoFavicon] = useState("");
   const [appName, setAppName] = useState("");
   const { getPublicSetting } = useSettings();
@@ -477,35 +477,37 @@ const App = () => {
   }, []);
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       getPublicSetting("primaryColorLight"),
       getPublicSetting("primaryColorDark"),
       getPublicSetting("appLogoLight"),
       getPublicSetting("appLogoDark"),
       getPublicSetting("appLogoFavicon"),
       getPublicSetting("appName")
-    ])
-      .then(
-        ([colorLight, colorDark, logoLight, logoDark, logoFavicon, name]) => {
-          setPrimaryColorLight(colorLight || brandTokens.primaryLight);
-          setPrimaryColorDark(colorDark || brandTokens.primaryDark);
-          setAppLogoLight(
-            logoLight
-              ? `${getBackendURL()}/public/${logoLight}`
-              : defaultLogoLight
-          );
-          setAppLogoDark(
-            logoDark ? `${getBackendURL()}/public/${logoDark}` : defaultLogoDark
-          );
-          setAppLogoFavicon(
-            logoFavicon ? `${getBackendURL()}/public/${logoFavicon}` : null
-          );
-          setAppName(name || brandTokens.appTitle);
-        }
-      )
-      .catch(() => {
-        setAppName(brandTokens.appTitle);
-      });
+    ]).then(results => {
+      const valueAt = index =>
+        results[index].status === "fulfilled" ? results[index].value : null;
+
+      const colorLight = valueAt(0);
+      const colorDark = valueAt(1);
+      const logoLight = valueAt(2);
+      const logoDark = valueAt(3);
+      const logoFavicon = valueAt(4);
+      const name = valueAt(5);
+
+      setPrimaryColorLight(colorLight || brandTokens.primaryLight);
+      setPrimaryColorDark(colorDark || brandTokens.primaryDark);
+      setAppLogoLight(
+        logoLight ? `${getBackendURL()}/public/${logoLight}` : defaultLogoLight
+      );
+      setAppLogoDark(
+        logoDark ? `${getBackendURL()}/public/${logoDark}` : defaultLogoDark
+      );
+      setAppLogoFavicon(
+        logoFavicon ? `${getBackendURL()}/public/${logoFavicon}` : null
+      );
+      setAppName(name || brandTokens.appTitle);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

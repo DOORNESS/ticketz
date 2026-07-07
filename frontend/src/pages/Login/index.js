@@ -28,6 +28,7 @@ import ColorModeContext from "../../layout/themeContext";
 import { loadJSON } from "../../helpers/loadJSON";
 import brandTokens from "../../theme/brandTokens";
 import TurnstileWidget from "../../components/TurnstileWidget";
+import { resolveTurnstileSiteKey } from "../../helpers/turnstileConfig";
 
 const gitinfo = loadJSON("/gitinfo.json");
 
@@ -333,7 +334,9 @@ const Login = () => {
   const [loginLinks, setLoginLinks] = useState([]);
   const [sidePanelImage, setSidePanelImage] = useState("");
   const [backgroundContent, setBackgroundContent] = useState("");
-  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState(() =>
+    resolveTurnstileSiteKey()
+  );
   const [turnstileToken, setTurnstileToken] = useState("");
 
   const { handleLogin } = useContext(AuthContext);
@@ -362,7 +365,7 @@ const Login = () => {
   };
 
   useEffect(() => {
-    Promise.all([
+    Promise.allSettled([
       getPublicSetting("allowSignup"),
       getPublicSetting("loginPageLinks"),
       getPublicSetting("loginSidePanelImage"),
@@ -370,27 +373,18 @@ const Login = () => {
       getPublicSetting("turnstileSiteKey"),
       getPublicSetting("TURNSTILE_SITE_KEY"),
       getPublicSetting("cfTurnstileSiteKey")
-    ])
-      .then(
-        ([
-          allowSignupValue,
-          loginLinksValue,
-          sidePanelImageValue,
-          backgroundContentValue,
-          turnstileKeyA,
-          turnstileKeyB,
-          turnstileKeyC
-        ]) => {
-          setAllowSignup(allowSignupValue === "enabled");
-          setLoginLinks(parseLoginLinks(loginLinksValue));
-          setSidePanelImage(sidePanelImageValue || "");
-          setBackgroundContent(backgroundContentValue || "");
-          setTurnstileSiteKey(
-            turnstileKeyA || turnstileKeyB || turnstileKeyC || ""
-          );
-        }
-      )
-      .catch(() => {});
+    ]).then(results => {
+      const valueAt = index =>
+        results[index].status === "fulfilled" ? results[index].value : null;
+
+      setAllowSignup(valueAt(0) === "enabled");
+      setLoginLinks(parseLoginLinks(valueAt(1)));
+      setSidePanelImage(valueAt(2) || "");
+      setBackgroundContent(valueAt(3) || "");
+      setTurnstileSiteKey(
+        resolveTurnstileSiteKey(valueAt(4), valueAt(5), valueAt(6))
+      );
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -399,7 +393,11 @@ const Login = () => {
   const shouldRenderBackgroundVideo = isVideoFile(backgroundContent);
   const showSidePanelImage = !!sidePanelImageUrl;
   const isLightMode = theme.palette.type === "light";
-  const logoSrc = theme.calculatedLogo();
+  const logoSrc =
+    theme.calculatedLogo() ||
+    (theme.palette.type === "light"
+      ? brandTokens.logo.light
+      : brandTokens.logo.dark);
 
   return (
     <div className={classes.root}>

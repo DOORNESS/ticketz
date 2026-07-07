@@ -78,7 +78,11 @@ const useSettings = () => {
         if (timestamp && Date.now() - timestamp > 10 * 60 * 1000) {
           clearCachedSettingsKey(cacheKey);
         } else {
-          return JSON.parse(cached);
+          const parsedValue = JSON.parse(cached);
+          if (parsedValue != null && parsedValue !== "") {
+            return parsedValue;
+          }
+          clearCachedSettingsKey(cacheKey);
         }
       }
 
@@ -92,7 +96,9 @@ const useSettings = () => {
           method: "GET"
         })
         .then(({ data }) => {
-          setCachedSettingValue(cacheKey, data);
+          if (data != null && data !== "") {
+            setCachedSettingValue(cacheKey, data);
+          }
           publicSettingsInFlight.delete(key);
           return data;
         })
