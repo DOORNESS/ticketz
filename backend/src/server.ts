@@ -18,6 +18,7 @@ if (!process.env.PORT) {
 }
 
 const HOST = process.env.HOST || "0.0.0.0";
+const port = Number(process.env.PORT);
 
 // Function to start server and initialize services
 async function startServer() {
@@ -52,8 +53,8 @@ async function startServer() {
 }
 
 // Listen immediately so container health checks pass; init i18n/services in background.
-const server = app.listen(process.env.PORT, HOST, () => {
-  logger.info(`Server is listening on ${HOST}:${process.env.PORT}`);
+const server = app.listen(port, HOST, () => {
+  logger.info(`Server is listening on ${HOST}:${port}`);
 });
 
 initIO(server);
