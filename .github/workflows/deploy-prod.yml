@@ -116,6 +116,30 @@ jobs:
           fi
           printf '%s' "$TURNSTILE_SECRET_KEY" | npx wrangler secret put TURNSTILE_SECRET_KEY
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: docker
+
+      - name: Configurar Docker wrapper para Wrangler
+        run: |
+          set -euo pipefail
+          cat > "${RUNNER_TEMP}/docker-wrangler" <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          if [[ "${1:-}" == "build" ]]; then
+            shift
+            exec docker buildx build --load "$@"
+          fi
+          exec docker "$@"
+          EOF
+          chmod +x "${RUNNER_TEMP}/docker-wrangler"
+          echo "WRANGLER_DOCKER_BIN=${RUNNER_TEMP}/docker-wrangler" >> "$GITHUB_ENV"
+
+      - name: Validar build do container (API)
+        working-directory: backend
+        run: docker build -f Dockerfile.cloudflare .
+
       - name: Deploy Worker + Container
         uses: cloudflare/wrangler-action@v3
         with:

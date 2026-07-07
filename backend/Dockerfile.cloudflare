@@ -5,7 +5,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run generate:i18nkeys && npm run build
+RUN npm run build
 
 FROM node:24-bookworm-slim
 WORKDIR /usr/src/app
