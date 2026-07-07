@@ -25,6 +25,8 @@ export interface UpdateTicketData {
   chatbot?: boolean;
   queueOptionId?: number;
   justClose?: boolean;
+  aiHandoff?: boolean;
+  aiAgentId?: number | null;
 }
 
 interface Request {
@@ -103,6 +105,8 @@ const UpdateTicketService = async ({
     const fromChatbot = ticketData.chatbot || false;
     let chatbot: boolean | null = fromChatbot;
     let queueOptionId: number | null = ticketData.queueOptionId || null;
+    let aiHandoff = ticketData.aiHandoff;
+    let aiAgentId = ticketData.aiAgentId;
 
     const io = getIO();
 
@@ -281,13 +285,19 @@ const UpdateTicketService = async ({
       ticketTraking.chatbotendAt = moment().toDate();
     }
 
+    if (status !== undefined && ["open"].indexOf(status) > -1 && userId) {
+      aiHandoff = true;
+    }
+
     await ticket.update({
       status,
       queueId,
       userId,
       whatsappId: ticket.whatsappId,
       chatbot,
-      queueOptionId
+      queueOptionId,
+      aiHandoff: aiHandoff !== undefined ? aiHandoff : ticket.aiHandoff,
+      aiAgentId: aiAgentId !== undefined ? aiAgentId : ticket.aiAgentId
     });
 
     if (oldStatus !== status) {

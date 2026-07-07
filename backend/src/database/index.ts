@@ -41,6 +41,13 @@ import UserSocketSession from "../models/UserSocketSession";
 import OutOfTicketMessage from "../models/OutOfTicketMessages";
 import Translation from "../models/Translation";
 import Wavoip from "../models/Wavoip";
+import AiAgent from "../models/AiAgent";
+import AiAgentQueue from "../models/AiAgentQueue";
+import KnowledgeBase from "../models/KnowledgeBase";
+import KnowledgeDocument from "../models/KnowledgeDocument";
+import KnowledgeChunk from "../models/KnowledgeChunk";
+import AiConversationLog from "../models/AiConversationLog";
+import MessageMediaFile from "../models/MessageMediaFile";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const dbConfig = require("../config/database");
@@ -89,7 +96,14 @@ const models = [
   OutOfTicketMessage,
   Subscriptions,
   Translation,
-  Wavoip
+  Wavoip,
+  AiAgent,
+  AiAgentQueue,
+  KnowledgeBase,
+  KnowledgeDocument,
+  KnowledgeChunk,
+  AiConversationLog,
+  MessageMediaFile
 ];
 
 sequelize.addModels(models);

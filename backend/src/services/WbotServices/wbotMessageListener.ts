@@ -71,6 +71,8 @@ import { verifyContact } from "./verifyContact";
 import { decryptMessageEdit } from "./decryptMessageEdit";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import saveMediaToFile from "../../helpers/saveMediaFile";
+import ProcessInboundMessageService from "../AiServices/ProcessInboundMessageService";
+import { getActiveAgent } from "../AiServices/AiHelpers";
 import { _t } from "../TranslationServices/i18nService";
 import WhatsappLidMap from "../../models/WhatsappLidMap";
 import normalizePhone from "../../helpers/NormalizePhone";
@@ -2013,6 +2015,35 @@ const handleMessage = async (
     } catch (e) {
       Sentry.captureException(e);
       console.log(e);
+    }
+
+    if (!ticket.userId && !ticket.aiHandoff) {
+      const activeAgent = await getActiveAgent(companyId, ticket.queueId);
+      if (activeAgent) {
+        let mediaBuffer: Buffer | undefined;
+        if (newMessage?.mediaUrl && !newMessage.mediaUrl.startsWith("http")) {
+          const fullPath = path.join(getPublicPath(), newMessage.mediaUrl);
+          if (fs.existsSync(fullPath)) {
+            mediaBuffer = fs.readFileSync(fullPath);
+          }
+        }
+
+        await ProcessInboundMessageService({
+          ticket,
+          companyId,
+          messageBody: newMessage?.body || bodyMessage || "",
+          messageId: newMessage?.id,
+          mediaType: newMessage?.mediaType,
+          mediaBuffer,
+          mediaFilename: newMessage?.mediaUrl?.split("/").pop()
+        });
+
+        if (justCreated && newMessage) {
+          await newMessage.reload();
+          websocketCreateMessage(newMessage);
+        }
+        return;
+      }
     }
 
     if (

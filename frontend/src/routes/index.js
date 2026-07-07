@@ -31,6 +31,10 @@ import CampaignReport from "../pages/CampaignReport";
 import Annoucements from "../pages/Annoucements";
 import Chat from "../pages/Chat";
 import ToDoList from "../pages/ToDoList/";
+import AiAgents from "../pages/AiAgents";
+import AiKnowledgeBases from "../pages/AiKnowledgeBases";
+import AiDocuments from "../pages/AiDocuments";
+import AiLogs from "../pages/AiLogs";
 import Subscription from "../pages/Subscription/";
 
 const Routes = () => {
@@ -102,6 +106,20 @@ const Routes = () => {
                   isPrivate
                 />
                 <Route exact path="/queues" component={Queues} isPrivate />
+                <Route exact path="/ai/agents" component={AiAgents} isPrivate />
+                <Route
+                  exact
+                  path="/ai/knowledge-bases"
+                  component={AiKnowledgeBases}
+                  isPrivate
+                />
+                <Route
+                  exact
+                  path="/ai/documents"
+                  component={AiDocuments}
+                  isPrivate
+                />
+                <Route exact path="/ai/logs" component={AiLogs} isPrivate />
                 <Route
                   exact
                   path="/announcements"

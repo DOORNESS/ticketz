@@ -28,6 +28,7 @@ import ListIcon from "@material-ui/icons/ListAlt";
 import AnnouncementIcon from "@material-ui/icons/Announcement";
 import ForumIcon from "@material-ui/icons/Forum";
 import LocalAtmIcon from "@material-ui/icons/LocalAtm";
+import AndroidIcon from "@material-ui/icons/Android";
 import { i18n } from "../translate/i18n";
 import BorderColorIcon from "@material-ui/icons/BorderColor";
 import { WhatsAppsContext } from "../context/WhatsApp/WhatsAppsContext";
@@ -224,6 +225,7 @@ const MainListItems = props => {
   const { user } = useContext(AuthContext);
   const [connectionWarning, setConnectionWarning] = useState(false);
   const [openCampaignSubmenu, setOpenCampaignSubmenu] = useState(false);
+  const [openAiSubmenu, setOpenAiSubmenu] = useState(false);
 
   const [showCampaigns, setShowCampaigns] = useState(false);
   const history = useHistory();
@@ -503,6 +505,49 @@ const MainListItems = props => {
               primary={i18n.t("mainDrawer.listItems.queues")}
               icon={<AccountTreeOutlinedIcon />}
             />
+            <ListItem button onClick={() => setOpenAiSubmenu(prev => !prev)}>
+              <ListItemIcon>
+                <AndroidIcon />
+              </ListItemIcon>
+              <ListItemText primary="IA" />
+              {openAiSubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </ListItem>
+            <Collapse
+              style={{ paddingLeft: 15 }}
+              in={openAiSubmenu}
+              timeout="auto"
+              unmountOnExit
+            >
+              <List component="div" disablePadding>
+                <ListItem onClick={() => history.push("/ai/agents")} button>
+                  <ListItemIcon>
+                    <AndroidIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Agentes" />
+                </ListItem>
+                <ListItem
+                  onClick={() => history.push("/ai/knowledge-bases")}
+                  button
+                >
+                  <ListItemIcon>
+                    <ListIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Base de Conhecimento" />
+                </ListItem>
+                <ListItem onClick={() => history.push("/ai/documents")} button>
+                  <ListItemIcon>
+                    <ListIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Documentos" />
+                </ListItem>
+                <ListItem onClick={() => history.push("/ai/logs")} button>
+                  <ListItemIcon>
+                    <SettingsOutlinedIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Logs" />
+                </ListItem>
+              </List>
+            </Collapse>
             <ListItemLink
               to="/users"
               primary={i18n.t("mainDrawer.listItems.users")}

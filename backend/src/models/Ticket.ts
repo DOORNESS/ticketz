@@ -110,6 +110,13 @@ class Ticket extends Model<Ticket> {
   @BelongsTo(() => Company)
   company: Company;
 
+  @Default(false)
+  @Column
+  aiHandoff: boolean;
+
+  @Column
+  aiAgentId: number;
+
   @Default(uuidv4())
   @Column
   uuid: string;
