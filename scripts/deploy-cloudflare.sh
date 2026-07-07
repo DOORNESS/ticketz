@@ -24,8 +24,7 @@ CLOUDFLARE_ACCOUNT_ID="$CLOUDFLARE_ACCOUNT_ID" \
 npx wrangler pages deploy frontend/build \
   --project-name="$CF_PROJECT" \
   --branch="$CF_BRANCH" \
-  --commit-dirty=true \
-  ${BACKEND_ORIGIN:+--var BACKEND_ORIGIN:$BACKEND_ORIGIN}
+  --commit-dirty=true
 
 if [ -n "${CLOUDFLARE_ZONE_ID:-}" ]; then
   echo "==> Purge cache zona fortmax.com.br"

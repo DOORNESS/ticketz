@@ -72,7 +72,6 @@ jobs:
             --project-name=${{ env.CF_PROJECT_NAME }}
             --branch=${{ env.CF_BRANCH }}
             --commit-dirty=true
-            --var BACKEND_ORIGIN:${{ secrets.BACKEND_ORIGIN }}
 
       - name: Purge Cloudflare cache
         env:
