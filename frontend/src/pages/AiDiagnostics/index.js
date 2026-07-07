@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
   Button,
-  Paper,
   Typography,
   List,
   ListItem,
@@ -22,6 +21,8 @@ import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
+import { useAiPageStyles } from "../../components/Ai/shared";
+import { AiSectionPaper } from "../../components/Ai/forms";
 
 const statusIcon = status => {
   if (status === "ok") return <CheckCircle style={{ color: "#4caf50" }} />;
@@ -38,6 +39,7 @@ const statusColor = status => {
 };
 
 const AiDiagnostics = () => {
+  const classes = useAiPageStyles();
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
   const [data, setData] = useState(null);
@@ -83,10 +85,10 @@ const AiDiagnostics = () => {
           <CircularProgress />
         </Box>
       ) : (
-        <>
-          <Paper style={{ padding: 16, marginBottom: 16 }}>
-            <Typography variant="h6" gutterBottom>
-              Status geral:{" "}
+        <div className={classes.pageContent}>
+          <AiSectionPaper title="Status geral">
+            <Typography variant="body1" gutterBottom>
+              Status:{" "}
               <Chip
                 label={data?.overall || "unknown"}
                 color={statusColor(data?.overall)}
@@ -107,13 +109,10 @@ const AiDiagnostics = () => {
                 Migrations pendentes: {data.pendingMigrations.join(", ")}
               </Typography>
             )}
-          </Paper>
+          </AiSectionPaper>
 
           {data?.errors?.length > 0 && (
-            <Paper style={{ padding: 16, marginBottom: 16 }}>
-              <Typography variant="subtitle1" color="error">
-                Erros
-              </Typography>
+            <AiSectionPaper title="Erros">
               <List dense>
                 {data.errors.map(msg => (
                   <ListItem key={msg}>
@@ -121,14 +120,11 @@ const AiDiagnostics = () => {
                   </ListItem>
                 ))}
               </List>
-            </Paper>
+            </AiSectionPaper>
           )}
 
           {data?.warnings?.length > 0 && (
-            <Paper style={{ padding: 16, marginBottom: 16 }}>
-              <Typography variant="subtitle1" style={{ color: "#ff9800" }}>
-                Avisos
-              </Typography>
+            <AiSectionPaper title="Avisos">
               <List dense>
                 {data.warnings.map(msg => (
                   <ListItem key={msg}>
@@ -136,13 +132,16 @@ const AiDiagnostics = () => {
                   </ListItem>
                 ))}
               </List>
-            </Paper>
+            </AiSectionPaper>
           )}
 
-          <Paper>
+          <AiSectionPaper
+            title="Verificações"
+            subtitle="Componentes necessários para a IA operar corretamente."
+          >
             <List>
               {(data?.items || []).map(item => (
-                <ListItem key={item.key}>
+                <ListItem key={item.key} divider>
                   <ListItemIcon>{statusIcon(item.status)}</ListItemIcon>
                   <ListItemText
                     primary={item.label}
@@ -156,8 +155,8 @@ const AiDiagnostics = () => {
                 </ListItem>
               ))}
             </List>
-          </Paper>
-        </>
+          </AiSectionPaper>
+        </div>
       )}
     </MainContainer>
   );

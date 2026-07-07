@@ -1,17 +1,17 @@
 import React, { useEffect, useState } from "react";
 import {
   Button,
-  Paper,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions
+  DialogActions,
+  Box,
+  Typography
 } from "@material-ui/core";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
@@ -19,8 +19,15 @@ import Title from "../../components/Title";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
+import { useAiPageStyles } from "../../components/Ai/shared";
+import {
+  AiFormSelect,
+  AiFormTextField,
+  AiSectionPaper
+} from "../../components/Ai/forms";
 
 const AiDocuments = () => {
+  const classes = useAiPageStyles();
   const [documents, setDocuments] = useState([]);
   const [bases, setBases] = useState([]);
   const [openText, setOpenText] = useState(false);
@@ -37,8 +44,8 @@ const AiDocuments = () => {
         api.get("/ai/documents"),
         api.get("/ai/knowledge-bases")
       ]);
-      setDocuments(docs);
-      setBases(kb);
+      setDocuments(docs || []);
+      setBases((kb || []).filter(base => base.active));
     } catch (err) {
       toastError(err);
     }
@@ -75,6 +82,11 @@ const AiDocuments = () => {
     }
   };
 
+  const baseOptions = bases.map(base => ({
+    value: base.id,
+    label: base.name
+  }));
+
   return (
     <MainContainer>
       <MainHeader>
@@ -88,93 +100,87 @@ const AiDocuments = () => {
         </Button>
       </MainHeader>
 
-      <Paper style={{ padding: 16, marginBottom: 16 }}>
-        <TextField
-          select
-          label="Base de conhecimento"
-          fullWidth
-          margin="dense"
-          value={form.knowledgeBaseId}
-          onChange={e => setForm({ ...form, knowledgeBaseId: e.target.value })}
-          SelectProps={{ native: true }}
+      <div className={classes.pageContent}>
+        <AiSectionPaper
+          title="Upload de arquivos"
+          subtitle="Envie PDF, DOCX, TXT, MD ou HTML para a base selecionada."
         >
-          <option value="">Selecione</option>
-          {bases.map(b => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-            </option>
-          ))}
-        </TextField>
-        <input
-          type="file"
-          accept=".pdf,.docx,.txt,.md,.html"
-          onChange={e => setFile(e.target.files[0])}
-        />
-        <Button
-          variant="outlined"
-          color="primary"
-          disabled={!file || !form.knowledgeBaseId}
-          onClick={handleUpload}
-        >
-          Upload de Arquivo
-        </Button>
-      </Paper>
+          <AiFormSelect
+            label="Base de conhecimento"
+            value={form.knowledgeBaseId}
+            onChange={e =>
+              setForm({ ...form, knowledgeBaseId: String(e.target.value) })
+            }
+            options={baseOptions}
+            helperText="Escolha a base que receberá o documento."
+          />
+          <Box mt={1} mb={2}>
+            <input
+              type="file"
+              accept=".pdf,.docx,.txt,.md,.html"
+              onChange={e => setFile(e.target.files[0])}
+            />
+            {file && (
+              <Typography variant="body2" color="textSecondary">
+                Arquivo selecionado: {file.name}
+              </Typography>
+            )}
+          </Box>
+          <Button
+            variant="outlined"
+            color="primary"
+            disabled={!file || !form.knowledgeBaseId}
+            onClick={handleUpload}
+          >
+            Upload de Arquivo
+          </Button>
+        </AiSectionPaper>
 
-      <Paper>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Título</TableCell>
-              <TableCell>Tipo</TableCell>
-              <TableCell>Status</TableCell>
-              <TableCell>Arquivo</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {documents.map(doc => (
-              <TableRow key={doc.id}>
-                <TableCell>{doc.title}</TableCell>
-                <TableCell>{doc.type}</TableCell>
-                <TableCell>{doc.status}</TableCell>
-                <TableCell>{doc.originalFilename}</TableCell>
+        <AiSectionPaper
+          title="Documentos cadastrados"
+          subtitle="Status de ingestão e arquivos disponíveis para consulta da IA."
+        >
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Título</TableCell>
+                <TableCell>Tipo</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell>Arquivo</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Paper>
+            </TableHead>
+            <TableBody>
+              {documents.map(doc => (
+                <TableRow key={doc.id}>
+                  <TableCell>{doc.title}</TableCell>
+                  <TableCell>{doc.type}</TableCell>
+                  <TableCell>{doc.status}</TableCell>
+                  <TableCell>{doc.originalFilename}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </AiSectionPaper>
+      </div>
 
       <Dialog open={openText} onClose={() => setOpenText(false)} fullWidth>
         <DialogTitle>Documento em Texto Manual</DialogTitle>
-        <DialogContent>
-          <TextField
-            select
+        <DialogContent dividers>
+          <AiFormSelect
             label="Base de conhecimento"
-            fullWidth
-            margin="dense"
             value={form.knowledgeBaseId}
             onChange={e =>
-              setForm({ ...form, knowledgeBaseId: e.target.value })
+              setForm({ ...form, knowledgeBaseId: String(e.target.value) })
             }
-            SelectProps={{ native: true }}
-          >
-            <option value="">Selecione</option>
-            {bases.map(b => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </TextField>
-          <TextField
+            options={baseOptions}
+          />
+          <AiFormTextField
             label="Título"
-            fullWidth
-            margin="dense"
             value={form.title}
             onChange={e => setForm({ ...form, title: e.target.value })}
           />
-          <TextField
+          <AiFormTextField
             label="Conteúdo"
-            fullWidth
-            margin="dense"
             multiline
             rows={8}
             value={form.content}
@@ -183,7 +189,12 @@ const AiDocuments = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpenText(false)}>Cancelar</Button>
-          <Button color="primary" variant="contained" onClick={handleSaveText}>
+          <Button
+            color="primary"
+            variant="contained"
+            onClick={handleSaveText}
+            disabled={!form.knowledgeBaseId || !form.content.trim()}
+          >
             Salvar
           </Button>
         </DialogActions>

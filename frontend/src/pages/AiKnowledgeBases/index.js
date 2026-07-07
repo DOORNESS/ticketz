@@ -1,14 +1,12 @@
 import React, { useEffect, useState } from "react";
 import {
   Button,
-  Paper,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
   IconButton,
-  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -22,8 +20,11 @@ import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
 import AiSetupWizard from "../../components/AiSetupWizard";
+import { useAiPageStyles } from "../../components/Ai/shared";
+import { AiFormTextField, AiSectionPaper } from "../../components/Ai/forms";
 
 const AiKnowledgeBases = () => {
+  const classes = useAiPageStyles();
   const [bases, setBases] = useState([]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", active: true });
@@ -76,76 +77,89 @@ const AiKnowledgeBases = () => {
         </Button>
       </MainHeader>
       <AiSetupWizard />
-      <Paper>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Nome</TableCell>
-              <TableCell>Descrição</TableCell>
-              <TableCell>Ativa</TableCell>
-              <TableCell align="center">Ações</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {bases.map(base => (
-              <TableRow key={base.id}>
-                <TableCell>{base.name}</TableCell>
-                <TableCell>{base.description}</TableCell>
-                <TableCell>{base.active ? "Sim" : "Não"}</TableCell>
-                <TableCell align="center">
-                  <IconButton
-                    onClick={() => {
-                      setEditingId(base.id);
-                      setForm({
-                        name: base.name,
-                        description: base.description || "",
-                        active: base.active
-                      });
-                      setOpen(true);
-                    }}
-                  >
-                    <Edit />
-                  </IconButton>
-                  <IconButton
-                    onClick={async () => {
-                      await api.delete(`/ai/knowledge-bases/${base.id}`);
-                      load();
-                    }}
-                  >
-                    <DeleteOutline />
-                  </IconButton>
-                </TableCell>
+      <div className={classes.pageContent}>
+        <AiSectionPaper
+          title="Bases cadastradas"
+          subtitle="Organize o conhecimento que alimenta os agentes de IA."
+        >
+          <Table>
+            <TableHead>
+              <TableRow>
+                <TableCell>Nome</TableCell>
+                <TableCell>Descrição</TableCell>
+                <TableCell>Ativa</TableCell>
+                <TableCell align="center">Ações</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </Paper>
+            </TableHead>
+            <TableBody>
+              {bases.map(base => (
+                <TableRow key={base.id}>
+                  <TableCell>{base.name}</TableCell>
+                  <TableCell>{base.description}</TableCell>
+                  <TableCell>{base.active ? "Sim" : "Não"}</TableCell>
+                  <TableCell align="center">
+                    <IconButton
+                      onClick={() => {
+                        setEditingId(base.id);
+                        setForm({
+                          name: base.name,
+                          description: base.description || "",
+                          active: base.active
+                        });
+                        setOpen(true);
+                      }}
+                    >
+                      <Edit />
+                    </IconButton>
+                    <IconButton
+                      onClick={async () => {
+                        await api.delete(`/ai/knowledge-bases/${base.id}`);
+                        load();
+                      }}
+                    >
+                      <DeleteOutline />
+                    </IconButton>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </AiSectionPaper>
+      </div>
 
-      <Dialog open={open} onClose={() => setOpen(false)} fullWidth>
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
         <DialogTitle>
           {editingId ? "Editar Base" : "Nova Base de Conhecimento"}
         </DialogTitle>
-        <DialogContent>
-          <TextField
+        <DialogContent dividers>
+          <AiFormTextField
             label="Nome"
-            fullWidth
-            margin="dense"
             value={form.name}
             onChange={e => setForm({ ...form, name: e.target.value })}
+            helperText="Nome interno da base de conhecimento."
           />
-          <TextField
+          <AiFormTextField
             label="Descrição"
-            fullWidth
-            margin="dense"
             multiline
             rows={3}
             value={form.description}
             onChange={e => setForm({ ...form, description: e.target.value })}
+            helperText="Resumo do conteúdo ou finalidade desta base."
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpen(false)}>Cancelar</Button>
-          <Button color="primary" variant="contained" onClick={handleSave}>
+          <Button
+            color="primary"
+            variant="contained"
+            onClick={handleSave}
+            disabled={!form.name.trim()}
+          >
             Salvar
           </Button>
         </DialogActions>

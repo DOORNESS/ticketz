@@ -11,6 +11,7 @@ import * as AiHealthController from "../controllers/AiHealthController";
 import * as AiDiagnosticsController from "../controllers/AiDiagnosticsController";
 import * as AiSetupController from "../controllers/AiSetupController";
 import * as AiPlaygroundController from "../controllers/AiPlaygroundController";
+import * as AiDashboardController from "../controllers/AiDashboardController";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -30,6 +31,7 @@ aiRoutes.get("/ai/agents", AiAgentController.index);
 aiRoutes.get("/ai/knowledge-bases", KnowledgeBaseController.index);
 aiRoutes.get("/ai/documents", KnowledgeDocumentController.index);
 aiRoutes.get("/ai/logs", AiLogController.index);
+aiRoutes.get("/ai/dashboard", AiDashboardController.index);
 
 aiRoutes.use(requireAiPlatformReady);
 

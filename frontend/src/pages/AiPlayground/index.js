@@ -1,23 +1,29 @@
 import React, { useEffect, useState } from "react";
 import {
   Button,
-  Paper,
-  Typography,
-  TextField,
   Box,
-  Chip,
+  CircularProgress,
+  Grid,
+  Typography,
   List,
   ListItem,
-  ListItemText,
-  CircularProgress
+  ListItemText
 } from "@material-ui/core";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
+import { useAiPageStyles } from "../../components/Ai/shared";
+import {
+  AiFormSelect,
+  AiFormTextField,
+  AiMetricCard,
+  AiSectionPaper
+} from "../../components/Ai/forms";
 
 const AiPlayground = () => {
+  const classes = useAiPageStyles();
   const [agents, setAgents] = useState([]);
   const [bases, setBases] = useState([]);
   const [agentId, setAgentId] = useState("");
@@ -33,8 +39,8 @@ const AiPlayground = () => {
           api.get("/ai/agents"),
           api.get("/ai/knowledge-bases")
         ]);
-        setAgents(agentsData.filter(a => a.active));
-        setBases(basesData.filter(b => b.active));
+        setAgents((agentsData || []).filter(agent => agent.active));
+        setBases((basesData || []).filter(base => base.active));
       } catch (err) {
         toastError(err);
       }
@@ -66,104 +72,122 @@ const AiPlayground = () => {
         <Title>IA — Playground</Title>
       </MainHeader>
 
-      <Paper style={{ padding: 16, marginBottom: 16 }}>
-        <TextField
-          select
-          label="Agente"
-          fullWidth
-          margin="dense"
-          value={agentId}
-          onChange={e => setAgentId(e.target.value)}
-          SelectProps={{ native: true }}
+      <div className={classes.pageContent}>
+        <AiSectionPaper
+          title="Testar agente"
+          subtitle="Simule perguntas e valide respostas antes de colocar em produção."
         >
-          <option value="">Selecione</option>
-          {agents.map(agent => (
-            <option key={agent.id} value={agent.id}>
-              {agent.name}
-            </option>
-          ))}
-        </TextField>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <AiFormSelect
+                label="Agente"
+                value={agentId}
+                onChange={e => setAgentId(String(e.target.value))}
+                options={agents.map(agent => ({
+                  value: agent.id,
+                  label: agent.name
+                }))}
+                helperText="Selecione o agente que responderá à pergunta."
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <AiFormSelect
+                label="Base de conhecimento (opcional)"
+                value={knowledgeBaseId}
+                onChange={e => setKnowledgeBaseId(String(e.target.value))}
+                emptyLabel="Todas vinculadas ao agente"
+                options={bases.map(base => ({
+                  value: base.id,
+                  label: base.name
+                }))}
+                helperText="Deixe vazio para usar todas as bases vinculadas ao agente."
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <AiFormTextField
+                label="Pergunta"
+                multiline
+                rows={4}
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+                helperText="Descreva a pergunta do cliente como no WhatsApp."
+              />
+            </Grid>
+          </Grid>
 
-        <TextField
-          select
-          label="Base de conhecimento (opcional)"
-          fullWidth
-          margin="dense"
-          value={knowledgeBaseId}
-          onChange={e => setKnowledgeBaseId(e.target.value)}
-          SelectProps={{ native: true }}
-        >
-          <option value="">Todas vinculadas ao agente</option>
-          {bases.map(base => (
-            <option key={base.id} value={base.id}>
-              {base.name}
-            </option>
-          ))}
-        </TextField>
+          <div className={classes.actionsRow}>
+            <Button
+              variant="contained"
+              color="primary"
+              disabled={loading || !agentId || !message.trim()}
+              onClick={handleSubmit}
+            >
+              {loading ? "Processando..." : "Enviar pergunta"}
+            </Button>
+          </div>
+        </AiSectionPaper>
 
-        <TextField
-          label="Pergunta"
-          fullWidth
-          margin="dense"
-          multiline
-          rows={3}
-          value={message}
-          onChange={e => setMessage(e.target.value)}
-        />
+        {loading && (
+          <Box display="flex" justifyContent="center" p={2}>
+            <CircularProgress size={28} />
+          </Box>
+        )}
 
-        <Box mt={2}>
-          <Button
-            variant="contained"
-            color="primary"
-            disabled={loading || !agentId || !message.trim()}
-            onClick={handleSubmit}
-          >
-            {loading ? "Processando..." : "Enviar pergunta"}
-          </Button>
-        </Box>
-      </Paper>
+        {result && (
+          <>
+            <AiSectionPaper title="Resposta da IA">
+              <div className={classes.resultCard}>
+                <Typography variant="body1" style={{ whiteSpace: "pre-wrap" }}>
+                  {result.response}
+                </Typography>
+              </div>
 
-      {loading && (
-        <Box display="flex" justifyContent="center" p={2}>
-          <CircularProgress size={28} />
-        </Box>
-      )}
-
-      {result && (
-        <>
-          <Paper style={{ padding: 16, marginBottom: 16 }}>
-            <Typography variant="h6" gutterBottom>
-              Resposta
-            </Typography>
-            <Typography variant="body1" style={{ whiteSpace: "pre-wrap" }}>
-              {result.response}
-            </Typography>
-            <Box mt={2} display="flex" flexWrap="wrap" style={{ gap: 8 }}>
-              <Chip label={`Modelo: ${result.model}`} />
-              <Chip label={`Tokens in: ${result.tokensInput}`} />
-              <Chip label={`Tokens out: ${result.tokensOutput}`} />
-              <Chip label={`Custo ~$${result.estimatedCostUsd.toFixed(6)}`} />
-              <Chip label={`Tempo: ${result.latencyMs}ms`} />
-            </Box>
-          </Paper>
-
-          <Paper style={{ padding: 16 }}>
-            <Typography variant="h6" gutterBottom>
-              Chunks utilizados ({result.chunks?.length || 0})
-            </Typography>
-            <List dense>
-              {(result.chunks || []).map(chunk => (
-                <ListItem key={chunk.id} alignItems="flex-start">
-                  <ListItemText
-                    primary={`Similaridade: ${(chunk.similarity * 100).toFixed(1)}% — ${chunk.documentTitle || "Documento"}`}
-                    secondary={chunk.content}
+              <Box mt={2}>
+                <div className={classes.metricsGrid}>
+                  <AiMetricCard label="Modelo" value={result.model} />
+                  <AiMetricCard
+                    label="Tokens entrada"
+                    value={result.tokensInput}
                   />
-                </ListItem>
-              ))}
-            </List>
-          </Paper>
-        </>
-      )}
+                  <AiMetricCard
+                    label="Tokens saída"
+                    value={result.tokensOutput}
+                  />
+                  <AiMetricCard
+                    label="Custo estimado"
+                    value={`$${Number(result.estimatedCostUsd || 0).toFixed(6)}`}
+                  />
+                  <AiMetricCard
+                    label="Tempo de resposta"
+                    value={`${result.latencyMs}ms`}
+                  />
+                </div>
+              </Box>
+            </AiSectionPaper>
+
+            <AiSectionPaper
+              title={`Chunks utilizados (${result.chunks?.length || 0})`}
+              subtitle="Trechos da base de conhecimento usados para compor a resposta."
+            >
+              <List dense>
+                {(result.chunks || []).map(chunk => (
+                  <ListItem key={chunk.id} className={classes.chunkItem}>
+                    <ListItemText
+                      primary={`${(chunk.similarity * 100).toFixed(1)}% — ${chunk.documentTitle || "Documento"}`}
+                      secondary={chunk.content}
+                    />
+                  </ListItem>
+                ))}
+                {!result.chunks?.length && (
+                  <Typography variant="body2" color="textSecondary">
+                    Nenhum chunk relevante foi utilizado.
+                  </Typography>
+                )}
+              </List>
+            </AiSectionPaper>
+          </>
+        )}
+      </div>
     </MainContainer>
   );
 };

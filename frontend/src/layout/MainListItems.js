@@ -519,6 +519,12 @@ const MainListItems = props => {
               unmountOnExit
             >
               <List component="div" disablePadding>
+                <ListItem onClick={() => history.push("/ai/dashboard")} button>
+                  <ListItemIcon>
+                    <DashboardOutlinedIcon />
+                  </ListItemIcon>
+                  <ListItemText primary="Dashboard" />
+                </ListItem>
                 <ListItem onClick={() => history.push("/ai/agents")} button>
                   <ListItemIcon>
                     <AndroidIcon />

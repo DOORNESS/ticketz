@@ -11,7 +11,6 @@ import {
   IconButton,
   Switch,
   FormControlLabel,
-  TextField,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -22,7 +21,9 @@ import {
   MenuItem,
   Typography,
   Link,
-  CircularProgress
+  CircularProgress,
+  Box,
+  Grid
 } from "@material-ui/core";
 import { DeleteOutline, Edit } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
@@ -32,6 +33,8 @@ import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
 import AiSetupWizard from "../../components/AiSetupWizard";
+import { useAiPageStyles } from "../../components/Ai/shared";
+import { AiFormTextField } from "../../components/Ai/forms";
 
 const defaultAgent = {
   name: "",
@@ -62,7 +65,26 @@ const normalizeQueues = data => {
   return [];
 };
 
+const SectionBlock = ({ title, subtitle, children }) => {
+  const classes = useAiPageStyles();
+
+  return (
+    <Box mb={2}>
+      <Typography variant="subtitle1" className={classes.sectionTitle}>
+        {title}
+      </Typography>
+      {subtitle && (
+        <Typography variant="body2" className={classes.sectionSubtitle}>
+          {subtitle}
+        </Typography>
+      )}
+      {children}
+    </Box>
+  );
+};
+
 const AiAgents = () => {
+  const classes = useAiPageStyles();
   const [agents, setAgents] = useState([]);
   const [queues, setQueues] = useState([]);
   const [queuesLoading, setQueuesLoading] = useState(false);
@@ -183,18 +205,18 @@ const AiAgents = () => {
   const renderQueueField = () => {
     if (queuesLoading) {
       return (
-        <div style={{ display: "flex", alignItems: "center", margin: "8px 0" }}>
+        <Box display="flex" alignItems="center" py={1}>
           <CircularProgress size={20} style={{ marginRight: 8 }} />
           <Typography variant="body2" color="textSecondary">
             Carregando filas...
           </Typography>
-        </div>
+        </Box>
       );
     }
 
     if (!queues.length) {
       return (
-        <Typography variant="body2" style={{ marginTop: 8, marginBottom: 8 }}>
+        <Typography variant="body2" color="textSecondary">
           Nenhuma fila cadastrada.{" "}
           <Link
             component={RouterLink}
@@ -208,7 +230,7 @@ const AiAgents = () => {
     }
 
     return (
-      <FormControl fullWidth margin="dense" variant="outlined">
+      <FormControl fullWidth variant="outlined" margin="normal">
         <InputLabel id="fallback-queue-label">
           Fila padrão de transferência
         </InputLabel>
@@ -229,6 +251,9 @@ const AiAgents = () => {
             </MenuItem>
           ))}
         </Select>
+        <Typography variant="caption" color="textSecondary">
+          Fila usada quando a IA transferir o atendimento para um humano.
+        </Typography>
       </FormControl>
     );
   };
@@ -246,7 +271,7 @@ const AiAgents = () => {
         </Button>
       </MainHeader>
       <AiSetupWizard />
-      <Paper>
+      <Paper className={classes.tablePaper} elevation={0}>
         <Table>
           <TableHead>
             <TableRow>
@@ -285,105 +310,148 @@ const AiAgents = () => {
         <DialogTitle>
           {editingId ? "Editar Agente" : "Novo Agente de IA"}
         </DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Nome"
-            fullWidth
-            margin="dense"
-            value={form.name}
-            onChange={e => setForm({ ...form, name: e.target.value })}
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={form.active}
-                onChange={e => setForm({ ...form, active: e.target.checked })}
-                color="primary"
-              />
-            }
-            label="Ativo"
-          />
-          <TextField
-            label="Modelo de texto"
-            fullWidth
-            margin="dense"
-            value={form.textModel}
-            onChange={e => setForm({ ...form, textModel: e.target.value })}
-          />
-          <TextField
-            label="Modelo de visão"
-            fullWidth
-            margin="dense"
-            value={form.visionModel}
-            onChange={e => setForm({ ...form, visionModel: e.target.value })}
-          />
-          <TextField
-            label="Modelo de transcrição"
-            fullWidth
-            margin="dense"
-            value={form.transcriptionModel}
-            onChange={e =>
-              setForm({ ...form, transcriptionModel: e.target.value })
-            }
-          />
-          <TextField
-            label="Temperatura"
-            type="number"
-            fullWidth
-            margin="dense"
-            value={form.temperature}
-            onChange={e => setForm({ ...form, temperature: e.target.value })}
-          />
-          <TextField
-            label="Limite de tokens"
-            type="number"
-            fullWidth
-            margin="dense"
-            value={form.maxTokens}
-            onChange={e => setForm({ ...form, maxTokens: e.target.value })}
-          />
-          {renderQueueField()}
-          <TextField
-            label="Prompt base"
-            fullWidth
-            margin="dense"
-            multiline
-            rows={4}
-            value={form.basePrompt}
-            onChange={e => setForm({ ...form, basePrompt: e.target.value })}
-          />
-          <TextField
-            label="Mensagem de transferência"
-            fullWidth
-            margin="dense"
-            multiline
-            rows={2}
-            value={form.handoffMessage}
-            onChange={e => setForm({ ...form, handoffMessage: e.target.value })}
-          />
-          <FormControlLabel
-            control={
-              <Switch
-                checked={form.ackEnabled}
-                onChange={e =>
-                  setForm({ ...form, ackEnabled: e.target.checked })
+        <DialogContent dividers>
+          <SectionBlock
+            title="Identificação"
+            subtitle="Nome e status do agente no painel."
+          >
+            <AiFormTextField
+              label="Nome"
+              value={form.name}
+              onChange={e => setForm({ ...form, name: e.target.value })}
+              helperText="Nome exibido internamente para identificar o agente."
+            />
+            <div className={classes.switchRow}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={form.active}
+                    onChange={e =>
+                      setForm({ ...form, active: e.target.checked })
+                    }
+                    color="primary"
+                  />
                 }
-                color="primary"
+                label="Ativo"
               />
-            }
-            label="Enviar mensagem automática ao receber (ACK)"
-          />
-          <TextField
-            label="Mensagem automática (ACK)"
-            fullWidth
-            margin="dense"
-            multiline
-            rows={2}
-            disabled={!form.ackEnabled}
-            placeholder="Recebi sua mensagem. Estou analisando e já vou responder."
-            value={form.ackMessage}
-            onChange={e => setForm({ ...form, ackMessage: e.target.value })}
-          />
+            </div>
+          </SectionBlock>
+
+          <SectionBlock
+            title="Modelos de IA"
+            subtitle="Modelos usados para texto, visão e transcrição de áudio."
+          >
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={6}>
+                <AiFormTextField
+                  label="Modelo de texto"
+                  value={form.textModel}
+                  onChange={e =>
+                    setForm({ ...form, textModel: e.target.value })
+                  }
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <AiFormTextField
+                  label="Modelo de visão"
+                  value={form.visionModel}
+                  onChange={e =>
+                    setForm({ ...form, visionModel: e.target.value })
+                  }
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <AiFormTextField
+                  label="Modelo de transcrição"
+                  value={form.transcriptionModel}
+                  onChange={e =>
+                    setForm({ ...form, transcriptionModel: e.target.value })
+                  }
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <AiFormTextField
+                  label="Temperatura"
+                  type="number"
+                  value={form.temperature}
+                  onChange={e =>
+                    setForm({ ...form, temperature: e.target.value })
+                  }
+                  helperText="0 = mais objetivo, 1 = mais criativo."
+                />
+              </Grid>
+              <Grid item xs={12} md={3}>
+                <AiFormTextField
+                  label="Limite de tokens"
+                  type="number"
+                  value={form.maxTokens}
+                  onChange={e =>
+                    setForm({ ...form, maxTokens: e.target.value })
+                  }
+                />
+              </Grid>
+            </Grid>
+          </SectionBlock>
+
+          <SectionBlock
+            title="Comportamento"
+            subtitle="Instruções base que orientam o tom e as regras do agente."
+          >
+            <AiFormTextField
+              label="Prompt base"
+              multiline
+              rows={4}
+              value={form.basePrompt}
+              onChange={e => setForm({ ...form, basePrompt: e.target.value })}
+              helperText="Contexto fixo enviado em todas as conversas."
+            />
+          </SectionBlock>
+
+          <SectionBlock
+            title="Transferência"
+            subtitle="Defina para qual fila o atendimento será enviado ao humano."
+          >
+            {renderQueueField()}
+            <AiFormTextField
+              label="Mensagem de transferência"
+              multiline
+              rows={2}
+              value={form.handoffMessage}
+              onChange={e =>
+                setForm({ ...form, handoffMessage: e.target.value })
+              }
+              helperText="Mensagem enviada ao cliente antes da transferência."
+            />
+          </SectionBlock>
+
+          <SectionBlock
+            title="Mensagens"
+            subtitle="Confirmação automática opcional ao receber nova mensagem."
+          >
+            <div className={classes.switchRow}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={form.ackEnabled}
+                    onChange={e =>
+                      setForm({ ...form, ackEnabled: e.target.checked })
+                    }
+                    color="primary"
+                  />
+                }
+                label="Enviar mensagem automática ao receber (ACK)"
+              />
+            </div>
+            <AiFormTextField
+              label="Mensagem automática (ACK)"
+              multiline
+              rows={2}
+              disabled={!form.ackEnabled}
+              placeholder="Recebi sua mensagem. Estou analisando e já vou responder."
+              value={form.ackMessage}
+              onChange={e => setForm({ ...form, ackMessage: e.target.value })}
+            />
+          </SectionBlock>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpen(false)}>Cancelar</Button>

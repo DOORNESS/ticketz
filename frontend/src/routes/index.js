@@ -32,6 +32,7 @@ import Annoucements from "../pages/Annoucements";
 import Chat from "../pages/Chat";
 import ToDoList from "../pages/ToDoList/";
 import AiAgents from "../pages/AiAgents";
+import AiDashboard from "../pages/AiDashboard";
 import AiKnowledgeBases from "../pages/AiKnowledgeBases";
 import AiDocuments from "../pages/AiDocuments";
 import AiLogs from "../pages/AiLogs";
@@ -108,6 +109,12 @@ const Routes = () => {
                   isPrivate
                 />
                 <Route exact path="/queues" component={Queues} isPrivate />
+                <Route
+                  exact
+                  path="/ai/dashboard"
+                  component={AiDashboard}
+                  isPrivate
+                />
                 <Route exact path="/ai/agents" component={AiAgents} isPrivate />
                 <Route
                   exact
