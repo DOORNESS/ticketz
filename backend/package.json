@@ -17,7 +17,8 @@
     "lint": "eslint src/**/*.ts",
     "mark-seeds": "node dist/database/markSeedsAsExecuted.js",
     "generate:i18nkeys": "ts-node src/scripts/extractTranslationKeys.ts",
-    "ingest:pending": "ts-node-dev --transpile-only src/scripts/ingestPendingDocuments.ts"
+    "ingest:pending": "ts-node-dev --transpile-only src/scripts/ingestPendingDocuments.ts",
+    "seed:turnstile": "ts-node-dev --transpile-only src/scripts/seedTurnstileSettings.ts"
   },
   "author": "",
   "license": "MIT",

@@ -22,6 +22,20 @@ const publicSettingsKeys = [
   "cfTurnstileSiteKey"
 ];
 
+const TURNSTILE_SITE_KEY_ALIASES = [
+  "turnstileSiteKey",
+  "TURNSTILE_SITE_KEY",
+  "cfTurnstileSiteKey"
+];
+
+const readTurnstileSiteKeyFromEnv = (): string | null => {
+  const found = TURNSTILE_SITE_KEY_ALIASES.map(alias =>
+    process.env[alias]?.trim()
+  ).find(value => Boolean(value));
+
+  return found || null;
+};
+
 const GetPublicSettingService = async ({
   key
 }: Request): Promise<string | undefined> => {
@@ -36,7 +50,15 @@ const GetPublicSettingService = async ({
     }
   });
 
-  return setting?.value || null;
+  if (setting?.value) {
+    return setting.value;
+  }
+
+  if (TURNSTILE_SITE_KEY_ALIASES.includes(key)) {
+    return readTurnstileSiteKeyFromEnv() || null;
+  }
+
+  return null;
 };
 
 export default GetPublicSettingService;
