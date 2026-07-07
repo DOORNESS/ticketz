@@ -61,6 +61,26 @@ const server = app.listen(port, HOST, () => {
 
 initIO(server);
 
+setImmediate(() => {
+  i18nReady
+    .then(async () => {
+      logger.trace("i18n initialized");
+      await seedTurnstileSettingsFromEnv().catch(error => {
+        logger.warn({ error }, "Turnstile settings sync skipped");
+      });
+      await bootstrapAiPlatform();
+      await startServer();
+    })
+    .catch(async error => {
+      logger.error(`i18n initialization failed: ${error.message}`);
+      await seedTurnstileSettingsFromEnv().catch(seedError => {
+        logger.warn({ error: seedError }, "Turnstile settings sync skipped");
+      });
+      await bootstrapAiPlatform();
+      await startServer();
+    });
+});
+
 gracefulShutdown(server, {
   signals: "SIGINT SIGTERM",
   timeout: 30000,
@@ -71,24 +91,6 @@ gracefulShutdown(server, {
     logger.info("Server has shut down.");
   }
 });
-
-i18nReady
-  .then(async () => {
-    logger.trace("i18n initialized");
-    await seedTurnstileSettingsFromEnv().catch(error => {
-      logger.warn({ error }, "Turnstile settings sync skipped");
-    });
-    await bootstrapAiPlatform();
-    await startServer();
-  })
-  .catch(async error => {
-    logger.error(`i18n initialization failed: ${error.message}`);
-    await seedTurnstileSettingsFromEnv().catch(seedError => {
-      logger.warn({ error: seedError }, "Turnstile settings sync skipped");
-    });
-    await bootstrapAiPlatform();
-    await startServer();
-  });
 
 // Global Exception Handlers
 process.on("uncaughtException", err => {

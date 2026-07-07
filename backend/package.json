@@ -19,7 +19,8 @@
     "generate:i18nkeys": "ts-node src/scripts/extractTranslationKeys.ts",
     "ingest:pending": "ts-node-dev --transpile-only src/scripts/ingestPendingDocuments.ts",
     "seed:turnstile": "ts-node-dev --transpile-only src/scripts/seedTurnstileSettings.ts",
-    "reset:test-env": "ts-node-dev --transpile-only scripts/reset-test-environment.ts"
+    "reset:test-env": "ts-node-dev --transpile-only scripts/reset-test-environment.ts",
+    "set:user-password": "ts-node-dev --transpile-only scripts/set-user-password.ts"
   },
   "author": "",
   "license": "MIT",

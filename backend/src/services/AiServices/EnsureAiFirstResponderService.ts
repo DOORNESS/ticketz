@@ -15,17 +15,35 @@ const DEFAULT_BASE_PROMPT = `Você é o primeiro atendente virtual da Fortmax Si
 Seja cordial, objetivo e resolva o máximo possível antes de envolver um humano.
 Use a base de conhecimento quando houver trechos relevantes.
 Se não houver informação exata na base, responda com educação, peça detalhes e ofereça ajuda.
-Só sugira transferência para atendente humano se o cliente pedir explicitamente.`;
+Se não conseguir resolver ou o cliente pedir atendente humano, informe que vai transferir para o Suporte.`;
+
+const findPreferredHandoffQueue = async (
+  companyId: number
+): Promise<Queue | null> => {
+  const queues = await Queue.findAll({
+    where: { companyId },
+    order: [["id", "ASC"]]
+  });
+
+  const preferred = queues.find(queue => {
+    const name = queue.name.toLowerCase();
+    return (
+      name.includes("suporte") ||
+      name.includes("atendimento") ||
+      name.includes("gerência") ||
+      name.includes("gerencia")
+    );
+  });
+
+  return preferred || queues[0] || null;
+};
 
 const ensureAgent = async (companyId: number): Promise<AiAgent> => {
   let agent = await AiAgent.findOne({
     where: { companyId, name: DEFAULT_AGENT_NAME }
   });
 
-  const fallbackQueue = await Queue.findOne({
-    where: { companyId },
-    order: [["id", "ASC"]]
-  });
+  const handoffQueue = await findPreferredHandoffQueue(companyId);
 
   if (!agent) {
     agent = await AiAgent.findOne({
@@ -46,9 +64,9 @@ const ensureAgent = async (companyId: number): Promise<AiAgent> => {
       basePrompt: DEFAULT_BASE_PROMPT,
       temperature: 0.4,
       maxTokens: 1024,
-      fallbackQueueId: fallbackQueue?.id || null,
+      fallbackQueueId: handoffQueue?.id || null,
       handoffMessage:
-        "Vou transferir você para um atendente humano. Por favor, aguarde um momento.",
+        "Vou transferir você para o Suporte humano. Por favor, aguarde um momento.",
       ackEnabled: true,
       ackMessage: DEFAULT_ACK_MESSAGE
     });
@@ -61,7 +79,10 @@ const ensureAgent = async (companyId: number): Promise<AiAgent> => {
     ackEnabled: true,
     ackMessage: agent.ackMessage?.trim() || DEFAULT_ACK_MESSAGE,
     basePrompt: agent.basePrompt?.trim() || DEFAULT_BASE_PROMPT,
-    fallbackQueueId: agent.fallbackQueueId || fallbackQueue?.id || null
+    handoffMessage:
+      agent.handoffMessage?.trim() ||
+      "Vou transferir você para o Suporte humano. Por favor, aguarde um momento.",
+    fallbackQueueId: agent.fallbackQueueId || handoffQueue?.id || null
   });
 
   await AiAgent.update(

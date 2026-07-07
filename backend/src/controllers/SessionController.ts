@@ -3,6 +3,7 @@ import AppError from "../errors/AppError";
 import { getIO } from "../libs/socket";
 
 import AuthUserService from "../services/UserServices/AuthUserService";
+import { ensureAuthSecretsReady } from "../config/auth";
 import { SendRefreshToken } from "../helpers/SendRefreshToken";
 import { RefreshTokenService } from "../services/AuthServices/RefreshTokenService";
 import FindUserFromToken from "../services/AuthServices/FindUserFromToken";
@@ -34,6 +35,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     /-/g,
     "_"
   );
+
+  await ensureAuthSecretsReady();
 
   const { token, serializedUser, refreshToken } = await AuthUserService({
     email,
@@ -71,6 +74,8 @@ export const update = async (
   if (!token) {
     throw new AppError("ERR_UNAUTHORIZED", 401);
   }
+
+  await ensureAuthSecretsReady();
 
   const { user, newToken, refreshToken } = await RefreshTokenService(
     res,

@@ -43,9 +43,13 @@ const toastError = err => {
   const errorMsg = resolveErrorMessage(err);
 
   if (errorMsg) {
-    toast.error(errorMsg, {
+    const displayMsg =
+      errorMsg === "Network Error"
+        ? "Não foi possível conectar à API. Aguarde alguns segundos e tente novamente."
+        : errorMsg;
+    toast.error(displayMsg, {
       ...toastOptions,
-      toastId: errorMsg
+      toastId: displayMsg
     });
     return;
   }
