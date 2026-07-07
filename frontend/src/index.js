@@ -6,8 +6,8 @@ import { loadJSON } from "./helpers/loadJSON";
 import { i18n } from "./translate/i18n";
 import axios from "axios";
 
-const BACKEND_RETRY_INTERVAL_SECONDS = 30;
-const BACKEND_PROBE_TIMEOUT_MS = 10000;
+const BACKEND_RETRY_INTERVAL_SECONDS = 15;
+const BACKEND_PROBE_TIMEOUT_MS = 5000;
 let backendRetryTimeout = null;
 
 function clearBackendRetryTimers() {
@@ -27,7 +27,7 @@ function getBackendProbeUrl(config) {
       ? ""
       : "/backend");
 
-  return `${protocol}://${hostname}${port}${path}/`;
+  return `${protocol}://${hostname}${port}${path}`;
 }
 
 function getRetryMessage(error) {
@@ -38,12 +38,16 @@ function getRetryMessage(error) {
   return i18n.t("frontendErrors.ERR_BACKEND_UNREACHABLE");
 }
 
-function showRetryProgress(message, onRetry) {
+function showRetryMessage(message, onRetry) {
   window.renderError(
-    `${message}<br><br><div class="progress-bar" style="margin: 8px auto 0 auto;"><div class="progress regress" style="animation-duration: ${BACKEND_RETRY_INTERVAL_SECONDS}s;"></div></div>`
+    `${message}<br><br><button type="button" onclick="window.__retryBackend && window.__retryBackend()" style="margin-top:12px;padding:8px 16px;border:none;border-radius:6px;background:#d32f2f;color:#fff;cursor:pointer;">Tentar novamente</button>`
   );
 
   clearBackendRetryTimers();
+  window.__retryBackend = () => {
+    clearBackendRetryTimers();
+    onRetry();
+  };
 
   backendRetryTimeout = setTimeout(() => {
     clearBackendRetryTimers();
@@ -54,45 +58,52 @@ function showRetryProgress(message, onRetry) {
 function renderApp() {
   clearBackendRetryTimers();
   ReactDOM.render(
-    // <React.StrictMode>
     <CssBaseline>
       <App />
     </CssBaseline>,
-    // </React.StrictMode>
     document.getElementById("root"),
     () => {
-      window.finishProgress();
+      window.finishProgress?.();
     }
   );
 }
 
 function probeBackendAndRender(config, attempt = 1) {
-  const backendUrl = `${getBackendProbeUrl(config)}?cb=${Date.now()}`;
+  const backendBase = getBackendProbeUrl(config);
+  const healthUrl = `${backendBase}/health?cb=${Date.now()}`;
 
   axios
-    .get(backendUrl, { timeout: BACKEND_PROBE_TIMEOUT_MS })
-    .then(response => {
-      const serverDate = new Date(response.headers["date"]);
-      const clientDate = new Date();
-      const diff = Math.abs(serverDate - clientDate);
-      const diffMinutes = Math.floor(diff / 1000 / 60);
-
-      if (diffMinutes > 5) {
-        let message = i18n.t("frontendErrors.ERR_CLOCK_OUT_OF_SYNC");
-        message += `<br><br>${i18n.t("common.serverTime")} ${serverDate.toLocaleString()}`;
-        message += `<br>${i18n.t("common.clientTime")} ${clientDate.toLocaleString()}`;
-        message += `<br>${i18n.t("common.differenceMinutes", { count: diffMinutes })}`;
-        window.renderError(message);
-        return;
-      }
-
+    .get(healthUrl, { timeout: BACKEND_PROBE_TIMEOUT_MS })
+    .then(() => {
       renderApp();
     })
-    .catch(error => {
-      const retryMessage = getRetryMessage(error);
-      showRetryProgress(retryMessage, () => {
-        probeBackendAndRender(config, attempt + 1);
-      });
+    .catch(() => {
+      const fallbackUrl = `${backendBase}/?cb=${Date.now()}`;
+      axios
+        .get(fallbackUrl, { timeout: BACKEND_PROBE_TIMEOUT_MS })
+        .then(response => {
+          const serverDate = new Date(response.headers["date"]);
+          const clientDate = new Date();
+          const diff = Math.abs(serverDate - clientDate);
+          const diffMinutes = Math.floor(diff / 1000 / 60);
+
+          if (diffMinutes > 5) {
+            let message = i18n.t("frontendErrors.ERR_CLOCK_OUT_OF_SYNC");
+            message += `<br><br>${i18n.t("common.serverTime")} ${serverDate.toLocaleString()}`;
+            message += `<br>${i18n.t("common.clientTime")} ${clientDate.toLocaleString()}`;
+            message += `<br>${i18n.t("common.differenceMinutes", { count: diffMinutes })}`;
+            window.renderError(message);
+            return;
+          }
+
+          renderApp();
+        })
+        .catch(error => {
+          const retryMessage = getRetryMessage(error);
+          showRetryMessage(retryMessage, () => {
+            probeBackendAndRender(config, attempt + 1);
+          });
+        });
     });
 }
 

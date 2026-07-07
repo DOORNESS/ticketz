@@ -16,7 +16,10 @@ const publicSettingsKeys = [
   "loginSidePanelImage",
   "loginBackgroundContent",
   "vapidPublicKey",
-  "extensionDownloadUrl"
+  "extensionDownloadUrl",
+  "turnstileSiteKey",
+  "TURNSTILE_SITE_KEY",
+  "cfTurnstileSiteKey"
 ];
 
 const GetPublicSettingService = async ({

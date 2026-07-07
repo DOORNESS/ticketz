@@ -209,9 +209,6 @@
           />
         </div>
         <div id="splash-tagline">Sistema de atendimento</div>
-        <div class="progress-bar">
-          <div class="progress" id="progress-bar"></div>
-        </div>
       </div>
     </div>
     <div id="root"></div>
@@ -248,7 +245,7 @@
         root.addEventListener("focusin", handleFocus);
       }
 
-      // Simulate progress update
+      // Splash removido assim que o React montar
       progress = 0;
       const themes = {
         light: {
@@ -370,27 +367,15 @@
         });
       });
 
-      const progressBar = document.getElementById("progress-bar");
-      const interval = setInterval(() => {
-        if (progress < 50) {
-          progress += 10;
-        } else if (progress < 80) {
-          progress += 3;
-        } else if (progress < 99) {
-          progress += (99 - progress) / 20;
+      window.removeSplash = () => {
+        const splashScreen = document.getElementById("splash-background");
+        if (splashScreen) {
+          splashScreen.remove();
         }
-        progressBar.style.width = progress + "%";
+      };
 
-        if (progress >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            const splashScreen = document.getElementById("splash-background");
-            splashScreen.remove();
-          }, 500);
-        }
-      }, 1000);
       window.finishProgress = () => {
-        progress = 100;
+        window.removeSplash();
       };
     </script>
     <script src="/notificame-gateway.js"></script>

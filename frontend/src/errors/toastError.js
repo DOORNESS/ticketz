@@ -16,7 +16,7 @@ const toastError = err => {
       toast.error(i18n.t(`backendErrors.${errorMsg}`), {
         toastId: errorMsg,
         autoClose: 2000,
-        hideProgressBar: false,
+        hideProgressBar: true,
         closeOnClick: true,
         pauseOnHover: false,
         draggable: true,
@@ -28,7 +28,7 @@ const toastError = err => {
       toast.error(errorMsg, {
         toastId: errorMsg,
         autoClose: 2000,
-        hideProgressBar: false,
+        hideProgressBar: true,
         closeOnClick: true,
         pauseOnHover: false,
         draggable: true,

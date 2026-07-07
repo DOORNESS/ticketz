@@ -13,9 +13,15 @@ import Company from "../models/Company";
 import Setting from "../models/Setting";
 import Translation from "../models/Translation";
 import { decodeRefreshToken } from "../helpers/DecodeRefreshToken";
+import { verifyTurnstileToken } from "../services/AuthServices/VerifyTurnstileService";
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
-  const { email, password } = req.body;
+  const { email, password, turnstileToken } = req.body;
+
+  await verifyTurnstileToken(
+    turnstileToken,
+    req.ip || req.socket.remoteAddress
+  );
 
   const langs = await Translation.findAll({
     attributes: ["language"],

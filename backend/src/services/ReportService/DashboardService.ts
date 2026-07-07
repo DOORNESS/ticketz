@@ -87,23 +87,27 @@ export async function calculateTicketStatistics(
   ticketStatistics.totalClosed = Number(ticketStatistics.totalClosed) || null;
 
   const countContactsQuery = `
-  SELECT COUNT(*) AS count FROM (SELECT FROM (
-    SELECT 
+  SELECT COUNT(*) AS count FROM (
+    SELECT "contactId"
+    FROM (
+      SELECT
         t.id AS "ticketId",
         t."contactId",
         c."createdAt"
-    FROM 
+      FROM
         "TicketTraking" tt
-    JOIN 
+      JOIN
         "Tickets" t ON tt."ticketId" = t.id
-    JOIN 
+      JOIN
         "Contacts" c ON t."contactId" = c.id
-    WHERE 
+      WHERE
         (tt."createdAt" BETWEEN :startDate AND :endDate)
         AND (tt."companyId" = :companyId)
         AND (tt."finishedAt" BETWEEN :startDate AND :endDate)
         AND (c."createdAt" BETWEEN :startDate AND :endDate)
-  ) counters_list GROUP BY "contactId") counters_totals
+    ) counters_list
+    GROUP BY "contactId"
+  ) counters_totals
   `;
 
   const newContacts = (await sequelize.query(countContactsQuery, {

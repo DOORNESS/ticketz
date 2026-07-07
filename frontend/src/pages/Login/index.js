@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useState, useCallback } from "react";
 import { Link as RouterLink } from "react-router-dom";
 
 import Button from "@material-ui/core/Button";
@@ -27,6 +27,7 @@ import { getBackendURL } from "../../services/config";
 import ColorModeContext from "../../layout/themeContext";
 import { loadJSON } from "../../helpers/loadJSON";
 import brandTokens from "../../theme/brandTokens";
+import TurnstileWidget from "../../components/TurnstileWidget";
 
 const gitinfo = loadJSON("/gitinfo.json");
 
@@ -332,8 +333,14 @@ const Login = () => {
   const [loginLinks, setLoginLinks] = useState([]);
   const [sidePanelImage, setSidePanelImage] = useState("");
   const [backgroundContent, setBackgroundContent] = useState("");
+  const [turnstileSiteKey, setTurnstileSiteKey] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
 
   const { handleLogin } = useContext(AuthContext);
+
+  const handleTurnstileToken = useCallback(token => {
+    setTurnstileToken(token || "");
+  }, []);
 
   const handleChangeInput = event => {
     setUser(prevUser => ({
@@ -344,7 +351,14 @@ const Login = () => {
 
   const handlSubmit = event => {
     event.preventDefault();
-    handleLogin(user);
+    if (turnstileSiteKey && !turnstileToken) {
+      return;
+    }
+
+    handleLogin({
+      ...user,
+      turnstileToken: turnstileSiteKey ? turnstileToken : undefined
+    });
   };
 
   useEffect(() => {
@@ -352,19 +366,28 @@ const Login = () => {
       getPublicSetting("allowSignup"),
       getPublicSetting("loginPageLinks"),
       getPublicSetting("loginSidePanelImage"),
-      getPublicSetting("loginBackgroundContent")
+      getPublicSetting("loginBackgroundContent"),
+      getPublicSetting("turnstileSiteKey"),
+      getPublicSetting("TURNSTILE_SITE_KEY"),
+      getPublicSetting("cfTurnstileSiteKey")
     ])
       .then(
         ([
           allowSignupValue,
           loginLinksValue,
           sidePanelImageValue,
-          backgroundContentValue
+          backgroundContentValue,
+          turnstileKeyA,
+          turnstileKeyB,
+          turnstileKeyC
         ]) => {
           setAllowSignup(allowSignupValue === "enabled");
           setLoginLinks(parseLoginLinks(loginLinksValue));
           setSidePanelImage(sidePanelImageValue || "");
           setBackgroundContent(backgroundContentValue || "");
+          setTurnstileSiteKey(
+            turnstileKeyA || turnstileKeyB || turnstileKeyC || ""
+          );
         }
       )
       .catch(() => {});
@@ -521,12 +544,19 @@ const Login = () => {
                     onChange={handleChangeInput}
                     autoComplete="current-password"
                   />
+                  {turnstileSiteKey && (
+                    <TurnstileWidget
+                      siteKey={turnstileSiteKey}
+                      onTokenChange={handleTurnstileToken}
+                    />
+                  )}
                   <Button
                     type="submit"
                     fullWidth
                     variant="contained"
                     color="primary"
                     className={classes.submit}
+                    disabled={turnstileSiteKey && !turnstileToken}
                   >
                     {i18n.t("login.buttons.submit")}
                   </Button>
