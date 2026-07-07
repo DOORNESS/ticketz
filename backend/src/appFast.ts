@@ -29,6 +29,18 @@ let coreRoutesReady = false;
 let coreRoutesError: Error | null = null;
 let coreRoutesPromise: Promise<void> | null = null;
 
+const LOGIN_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
+const LOGIN_RATE_LIMIT_BLOCK_MS = 10 * 60 * 1000;
+const LOGIN_RATE_LIMIT_MAX_FAILURES = 8;
+
+type LoginAttempt = {
+  count: number;
+  windowStartedAt: number;
+  blockedUntil: number;
+};
+
+const loginAttempts = new Map<string, LoginAttempt>();
+
 const publicSettingsKeys = new Set([
   "allowSignup",
   "primaryColorLight",
@@ -65,6 +77,77 @@ const readTurnstileSiteKeyFromEnv = (): string | null =>
     .map(key => process.env[key]?.trim())
     .find(value => Boolean(value)) || null;
 
+const getClientIp = (req: express.Request): string => {
+  const cfIp = req.headers["cf-connecting-ip"];
+  if (typeof cfIp === "string" && cfIp.trim()) {
+    return cfIp.trim();
+  }
+
+  const forwardedFor = req.headers["x-forwarded-for"];
+  if (typeof forwardedFor === "string" && forwardedFor.trim()) {
+    return forwardedFor.split(",")[0].trim();
+  }
+
+  return req.ip || req.socket.remoteAddress || "unknown";
+};
+
+const getLoginRateLimitKey = (req: express.Request): string => {
+  const email =
+    typeof req.body?.email === "string"
+      ? req.body.email.trim().toLowerCase()
+      : "unknown";
+
+  return `${getClientIp(req)}:${email}`;
+};
+
+const getActiveLoginAttempt = (
+  req: express.Request
+): LoginAttempt | null => {
+  const attempt = loginAttempts.get(getLoginRateLimitKey(req));
+  if (!attempt) {
+    return null;
+  }
+
+  const now = Date.now();
+  if (attempt.blockedUntil > now) {
+    return attempt;
+  }
+
+  if (now - attempt.windowStartedAt > LOGIN_RATE_LIMIT_WINDOW_MS) {
+    loginAttempts.delete(getLoginRateLimitKey(req));
+    return null;
+  }
+
+  return attempt;
+};
+
+const isLoginRateLimited = (req: express.Request): boolean => {
+  const attempt = getActiveLoginAttempt(req);
+  return Boolean(attempt && attempt.blockedUntil > Date.now());
+};
+
+const recordFailedLoginAttempt = (req: express.Request): void => {
+  const key = getLoginRateLimitKey(req);
+  const now = Date.now();
+  const current = loginAttempts.get(key);
+
+  const attempt =
+    current && now - current.windowStartedAt <= LOGIN_RATE_LIMIT_WINDOW_MS
+      ? current
+      : { count: 0, windowStartedAt: now, blockedUntil: 0 };
+
+  attempt.count += 1;
+  if (attempt.count >= LOGIN_RATE_LIMIT_MAX_FAILURES) {
+    attempt.blockedUntil = now + LOGIN_RATE_LIMIT_BLOCK_MS;
+  }
+
+  loginAttempts.set(key, attempt);
+};
+
+const clearLoginAttempts = (req: express.Request): void => {
+  loginAttempts.delete(getLoginRateLimitKey(req));
+};
+
 app.get("/health", (_req, res) => {
   res.status(200).json({
     ok: true,
@@ -92,6 +175,10 @@ app.get("/public-settings/:settingKey", (req, res) => {
 
 app.post("/auth/login", async (req, res) => {
   try {
+    if (isLoginRateLimited(req)) {
+      return res.status(429).json({ error: "ERR_TOO_MANY_LOGIN_ATTEMPTS" });
+    }
+
     await ensureCoreRoutes();
 
     const { email, password, turnstileToken } = req.body;
@@ -116,6 +203,7 @@ app.post("/auth/login", async (req, res) => {
     });
 
     SendRefreshToken(res, refreshToken);
+    clearLoginAttempts(req);
 
     return res.status(200).json({
       token,
@@ -123,6 +211,10 @@ app.post("/auth/login", async (req, res) => {
     });
   } catch (error) {
     if (error instanceof AppError) {
+      if (error.statusCode === 401) {
+        recordFailedLoginAttempt(req);
+      }
+
       res.status(error.statusCode).json({ error: error.message });
       try {
         logger[error.level](error);
