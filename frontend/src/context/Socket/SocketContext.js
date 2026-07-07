@@ -392,7 +392,7 @@ const socketManager = {
       this.currentUserId = userId;
 
       this.currentSocket = openSocket(getBackendSocketURL(), {
-        transports: ["websocket"],
+        transports: ["polling", "websocket"],
         pingTimeout: 60000,
         pingInterval: 25000,
         reconnection: true,
