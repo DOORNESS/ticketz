@@ -1268,6 +1268,10 @@ const messages = {
         ERR_SUBSCRIPTION_CHECK_FAILED: "Assinatura inválida ou não encontrada",
         ERR_WAPP_NOT_FOUND: "Conexão indisponível",
         ERR_SUBSCRIPTION_EXPIRED: "Assinatura expirada",
+        ERR_AI_MIGRATIONS_PENDING:
+          "Há atualizações pendentes no banco de dados. Reinicie o backend para aplicar as migrations de IA e tente novamente.",
+        ERR_AI_PLATFORM_NOT_READY:
+          "A plataforma de IA ainda não está pronta. Verifique Administração → IA → Diagnóstico.",
         ERR_UNKOWN: "Erro desconhecido"
       },
       phoneCall: {

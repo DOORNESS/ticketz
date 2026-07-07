@@ -1263,6 +1263,10 @@ const messages = {
         ERR_SUBSCRIPTION_CHECK_FAILED: "Subscription check failed.",
         ERR_WAPP_NOT_FOUND: "Connection unavailable.",
         ERR_SUBSCRIPTION_EXPIRED: "Your subscription has expired.",
+        ERR_AI_MIGRATIONS_PENDING:
+          "Database updates are pending. Restart the backend to apply AI migrations and try again.",
+        ERR_AI_PLATFORM_NOT_READY:
+          "The AI platform is not ready yet. Check Administration → AI → Diagnostics.",
         ERR_UNKOWN: "Unknown error."
       },
       phoneCall: {

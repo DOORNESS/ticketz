@@ -30,7 +30,7 @@ import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import api from "../../services/api";
-import toastError from "../../errors/toastError";
+import toastError, { resolveErrorMessage } from "../../errors/toastError";
 import { toast } from "react-toastify";
 import AiSetupWizard from "../../components/AiSetupWizard";
 import { useAiPageStyles } from "../../components/Ai/shared";
@@ -91,6 +91,7 @@ const AiAgents = () => {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(defaultAgent);
   const [editingId, setEditingId] = useState(null);
+  const [saveError, setSaveError] = useState("");
 
   const loadAgents = async () => {
     try {
@@ -138,6 +139,7 @@ const AiAgents = () => {
   }, [open, editingId, loadQueues]);
 
   const handleSave = async () => {
+    setSaveError("");
     try {
       const payload = {
         ...form,
@@ -160,12 +162,16 @@ const AiAgents = () => {
       setForm(defaultAgent);
       loadAgents();
     } catch (err) {
+      setSaveError(
+        resolveErrorMessage(err) || "Não foi possível salvar o agente."
+      );
       toastError(err);
     }
   };
 
   const handleEdit = agent => {
     setEditingId(agent.id);
+    setSaveError("");
     setForm({
       name: agent.name,
       active: agent.active,
@@ -199,6 +205,7 @@ const AiAgents = () => {
   const handleOpenNewAgent = () => {
     setEditingId(null);
     setForm(defaultAgent);
+    setSaveError("");
     setOpen(true);
   };
 
@@ -303,7 +310,10 @@ const AiAgents = () => {
 
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
+        onClose={() => {
+          setOpen(false);
+          setSaveError("");
+        }}
         fullWidth
         maxWidth="md"
       >
@@ -311,6 +321,17 @@ const AiAgents = () => {
           {editingId ? "Editar Agente" : "Novo Agente de IA"}
         </DialogTitle>
         <DialogContent dividers>
+          {saveError && (
+            <Box
+              mb={2}
+              p={2}
+              borderRadius={4}
+              bgcolor="#fdecea"
+              color="#611a15"
+            >
+              <Typography variant="body2">{saveError}</Typography>
+            </Box>
+          )}
           <SectionBlock
             title="Identificação"
             subtitle="Nome e status do agente no painel."

@@ -1,29 +1,27 @@
 import { Request, Response, NextFunction } from "express";
 import AppError from "../errors/AppError";
+import { getPendingMigrations } from "../services/MigrationServices/MigrationService";
 import {
-  getMigrationsPending,
-  isAiFeaturesEnabled
+  updateAiFeaturesEnabled,
+  updateMigrationsPending
 } from "../services/AiServices/AiPlatformState";
 
-export const requireAiPlatformReady = (
-  req: Request,
-  res: Response,
+export const requireAiPlatformReady = async (
+  _req: Request,
+  _res: Response,
   next: NextFunction
-): void => {
-  const pending = getMigrationsPending();
-  if (pending.length) {
-    throw new AppError(
-      `Database migrations pending (${pending.length}). Update the database before using AI features.`,
-      503
-    );
-  }
+): Promise<void> => {
+  try {
+    const pending = await getPendingMigrations();
+    updateMigrationsPending(pending);
 
-  if (!isAiFeaturesEnabled()) {
-    throw new AppError(
-      "AI platform is not ready. Check Administration → IA → Diagnóstico.",
-      503
-    );
-  }
+    if (pending.length) {
+      throw new AppError("ERR_AI_MIGRATIONS_PENDING", 503);
+    }
 
-  next();
+    updateAiFeaturesEnabled(true);
+    next();
+  } catch (error) {
+    next(error);
+  }
 };

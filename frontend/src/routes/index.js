@@ -192,7 +192,12 @@ const Routes = () => {
               </LoggedInLayout>
             </WhatsAppsProvider>
           </Switch>
-          <ToastContainer autoClose={2500} hideProgressBar newestOnTop />
+          <ToastContainer
+            autoClose={4000}
+            hideProgressBar
+            newestOnTop
+            style={{ zIndex: 10000 }}
+          />
         </TicketsContextProvider>
       </AuthProvider>
     </BrowserRouter>

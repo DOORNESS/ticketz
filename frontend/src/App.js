@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 
 import "react-toastify/dist/ReactToastify.css";
+import "./toast-overrides.css";
 
 import { ptBR } from "@material-ui/core/locale";
 import { createTheme, ThemeProvider } from "@material-ui/core/styles";
