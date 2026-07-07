@@ -12,6 +12,7 @@ const RETRYABLE_ERROR_MARKERS = [
   "connection refused",
   "ECONNREFUSED",
   "ERR_API_WARMING_UP",
+  "ERR_API_ROUTES_LOADING",
   "ERR_UPSTREAM_TIMEOUT"
 ];
 

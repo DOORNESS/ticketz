@@ -1,6 +1,6 @@
 import http from "http";
-import type { Application } from "express";
 import gracefulShutdown from "http-graceful-shutdown";
+import appFast, { ensureCoreRoutes } from "./appFast";
 import { logger } from "./utils/logger";
 
 if (!process.env.PORT) {
@@ -10,7 +10,6 @@ if (!process.env.PORT) {
 
 const HOST = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT);
-const LISTEN_FIRST = process.env.LISTEN_FIRST === "true";
 
 async function startBackgroundServices() {
   const { StartAllWhatsAppsSessions } =
@@ -113,113 +112,49 @@ function setupProcessHandlers() {
   });
 }
 
-function createWarmingHandler(appReady: { value: boolean }) {
-  return (req: http.IncomingMessage, res: http.ServerResponse) => {
-    const path = (req.url || "").split("?")[0];
+const server = http.createServer(appFast);
 
-    if (path === "/health") {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(
-        JSON.stringify({
-          ok: true,
-          warming: !appReady.value
-        })
-      );
-      return;
-    }
+server.listen(port, HOST, () => {
+  logger.info(`Ticketz API listening on ${HOST}:${port} (fast shell)`);
+});
 
-    res.writeHead(503, {
-      "Content-Type": "application/json",
-      "Retry-After": "3"
-    });
-    res.end(
-      JSON.stringify({
-        ok: false,
-        error: "ERR_API_WARMING_UP"
-      })
-    );
-  };
-}
+setupGracefulShutdown(server);
+setupProcessHandlers();
 
-async function startListenFirst() {
-  const appReady = { value: false };
-  let requestHandler: (
-    req: http.IncomingMessage,
-    res: http.ServerResponse
-  ) => void = createWarmingHandler(appReady);
-
-  const server = http.createServer((req, res) => requestHandler(req, res));
-
-  server.listen(port, HOST, () => {
-    logger.info(`[listen-first] Accepting connections on ${HOST}:${port}`);
-  });
-
-  setupGracefulShutdown(server);
-  setupProcessHandlers();
-
-  setImmediate(async () => {
-    try {
-      const { default: app } = await import("./appFast");
+setImmediate(() => {
+  ensureCoreRoutes()
+    .then(async () => {
       const { initIO } = await import("./libs/socket");
-
-      requestHandler = app as Application;
-      appReady.value = true;
       initIO(server);
-      logger.info("[listen-first] Fast API attached (auth + public settings)");
+      logger.info("Core routes attached (auth + public settings)");
 
       setImmediate(() => {
         import("./routes/heavyRoutes")
           .then(({ default: heavyRoutes }) => {
-            app.use(heavyRoutes);
-            logger.info("[listen-first] Heavy routes attached");
+            appFast.use(heavyRoutes);
+            logger.info("Heavy routes attached");
           })
           .catch(error => {
-            logger.error(
-              { error },
-              "[listen-first] Heavy routes failed to attach"
-            );
+            logger.error({ error }, "Heavy routes failed to attach");
           });
 
         import("./app")
           .then(({ default: fullApp }) => {
-            app.set("queues", fullApp.get("queues"));
+            appFast.set("queues", fullApp.get("queues"));
           })
           .catch(error => {
-            logger.warn({ error }, "[listen-first] Queue registry deferred");
+            logger.warn({ error }, "Queue registry deferred");
           });
       });
 
       await runPostListenBootstrap(server);
-    } catch (error) {
+    })
+    .catch(error => {
       logger.error(
         { error },
-        `[listen-first] Failed to attach application: ${
+        `Failed to attach core routes: ${
           error instanceof Error ? error.message : error
         }`
       );
-    }
-  });
-}
-
-async function startDefault() {
-  const { default: app } = await import("./app");
-  const { initIO } = await import("./libs/socket");
-
-  const server = app.listen(port, HOST, () => {
-    logger.info(`Server is listening on ${HOST}:${port}`);
-  });
-
-  initIO(server);
-  setupGracefulShutdown(server);
-  setupProcessHandlers();
-
-  setImmediate(() => {
-    runPostListenBootstrap(server);
-  });
-}
-
-if (LISTEN_FIRST) {
-  startListenFirst();
-} else {
-  startDefault();
-}
+    });
+});
