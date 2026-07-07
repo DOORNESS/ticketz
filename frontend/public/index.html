@@ -209,6 +209,9 @@
           />
         </div>
         <div id="splash-tagline">Sistema de atendimento</div>
+        <div class="progress-bar">
+          <div class="progress" id="progress-bar"></div>
+        </div>
       </div>
     </div>
     <div id="root"></div>
@@ -247,6 +250,7 @@
 
       // Splash removido assim que o React montar
       progress = 0;
+      let progressInterval = null;
       const themes = {
         light: {
           background: "#f8fafc",
@@ -304,6 +308,10 @@
         const root = document.documentElement;
         root.style.setProperty("--primary", "#f44");
         progress = 0;
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
       };
 
       window.mentionClick = mention => {
@@ -384,8 +392,48 @@
         }
       };
 
+      const tickProgress = () => {
+        const bar = document.getElementById("progress-bar");
+        if (!bar) {
+          return;
+        }
+
+        if (progress < 50) {
+          progress += 10;
+        } else if (progress < 80) {
+          progress += 3;
+        } else if (progress < 99) {
+          progress += (99 - progress) / 20;
+        }
+
+        bar.style.width = `${progress}%`;
+
+        if (progress >= 100) {
+          if (progressInterval) {
+            clearInterval(progressInterval);
+            progressInterval = null;
+          }
+          setTimeout(() => {
+            window.removeSplash();
+          }, 350);
+        }
+      };
+
+      progressInterval = setInterval(tickProgress, 400);
+
       window.finishProgress = () => {
-        window.removeSplash();
+        progress = 100;
+        const bar = document.getElementById("progress-bar");
+        if (bar) {
+          bar.style.width = "100%";
+        }
+        if (progressInterval) {
+          clearInterval(progressInterval);
+          progressInterval = null;
+        }
+        setTimeout(() => {
+          window.removeSplash();
+        }, 350);
       };
     </script>
     <script src="/notificame-gateway.js"></script>
