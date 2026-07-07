@@ -28,7 +28,7 @@ const loadTurnstileScript = () =>
     document.body.appendChild(script);
   });
 
-const TurnstileWidget = ({ siteKey, onTokenChange }) => {
+const TurnstileWidget = ({ siteKey, onTokenChange, resetNonce = 0 }) => {
   const containerRef = useRef(null);
   const widgetIdRef = useRef(null);
 
@@ -72,7 +72,7 @@ const TurnstileWidget = ({ siteKey, onTokenChange }) => {
         widgetIdRef.current = null;
       }
     };
-  }, [siteKey, onTokenChange]);
+  }, [siteKey, onTokenChange, resetNonce]);
 
   if (!siteKey) {
     return null;

@@ -2,9 +2,21 @@ import { QueryInterface, DataTypes } from "sequelize";
 
 export default {
   up: async (queryInterface: QueryInterface) => {
-    await queryInterface.sequelize.query(
-      "CREATE EXTENSION IF NOT EXISTS vector;"
+    const [extensions] = await queryInterface.sequelize.query(
+      "SELECT 1 FROM pg_extension WHERE extname = 'vector'"
     );
+
+    if (!(extensions as unknown[]).length) {
+      try {
+        await queryInterface.sequelize.query(
+          "CREATE EXTENSION IF NOT EXISTS vector WITH SCHEMA extensions;"
+        );
+      } catch {
+        await queryInterface.sequelize.query(
+          "CREATE EXTENSION IF NOT EXISTS vector;"
+        );
+      }
+    }
 
     await queryInterface.createTable("AiAgents", {
       id: {
@@ -445,7 +457,10 @@ export default {
       "companyId",
       "createdAt"
     ]);
-    await queryInterface.addIndex("MessageMediaFiles", ["companyId", "ticketId"]);
+    await queryInterface.addIndex("MessageMediaFiles", [
+      "companyId",
+      "ticketId"
+    ]);
   },
 
   down: async (queryInterface: QueryInterface) => {

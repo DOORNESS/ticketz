@@ -1,36 +1,57 @@
 import { Container } from "@cloudflare/containers";
 
 function buildContainerEnv(env) {
+  const passthroughKeys = [
+    "PORT",
+    "HOST",
+    "NODE_ENV",
+    "FRONTEND_URL",
+    "BACKEND_URL",
+    "DB_DIALECT",
+    "DB_HOST",
+    "DB_PORT",
+    "DB_USER",
+    "DB_PASS",
+    "DB_NAME",
+    "DB_SCHEMA",
+    "DB_SSL",
+    "DB_SSL_REJECT_UNAUTHORIZED",
+    "DB_TIMEZONE",
+    "DB_MAX_CONNECTIONS",
+    "DB_MIN_CONNECTIONS",
+    "REDIS_URI",
+    "VERIFY_TOKEN",
+    "SOCKET_ADMIN",
+    "TZ",
+    "USER_LIMIT",
+    "CONNECTIONS_LIMIT",
+    "CLOSED_SEND_BY_ME",
+    "STORAGE_ROOT_PREFIX",
+    "AUTO_MIGRATE",
+    "TURNSTILE_SITE_KEY",
+    "TURNSTILE_SECRET_KEY",
+    "JWT_ACCESS_EXPIRES_IN",
+    "JWT_REFRESH_EXPIRES_IN",
+    "AI_QUEUE_CONCURRENCY",
+    "AI_QUEUE_DEBOUNCE_MS",
+    "AI_QUEUE_MAX_ATTEMPTS",
+    "AI_QUEUE_BACKOFF_MS",
+    "AI_QUEUE_CONGESTION_THRESHOLD"
+  ];
+
   const vars = {
     PORT: "3000",
     HOST: "0.0.0.0",
-    NODE_ENV: "production",
-    FRONTEND_URL: env.FRONTEND_URL,
-    BACKEND_URL: env.BACKEND_URL,
-    DB_DIALECT: env.DB_DIALECT,
-    DB_HOST: env.DB_HOST,
-    DB_PORT: env.DB_PORT,
-    DB_USER: env.DB_USER,
-    DB_PASS: env.DB_PASS,
-    DB_NAME: env.DB_NAME,
-    DB_SCHEMA: env.DB_SCHEMA,
-    DB_SSL: env.DB_SSL,
-    DB_SSL_REJECT_UNAUTHORIZED: env.DB_SSL_REJECT_UNAUTHORIZED,
-    DB_TIMEZONE: env.DB_TIMEZONE,
-    DB_MAX_CONNECTIONS: env.DB_MAX_CONNECTIONS,
-    DB_MIN_CONNECTIONS: env.DB_MIN_CONNECTIONS,
-    REDIS_URI: env.REDIS_URI,
-    VERIFY_TOKEN: env.VERIFY_TOKEN,
-    SOCKET_ADMIN: env.SOCKET_ADMIN,
-    TZ: env.TZ,
-    USER_LIMIT: env.USER_LIMIT,
-    CONNECTIONS_LIMIT: env.CONNECTIONS_LIMIT,
-    CLOSED_SEND_BY_ME: env.CLOSED_SEND_BY_ME
+    NODE_ENV: "production"
   };
 
-  return Object.fromEntries(
-    Object.entries(vars).filter(([, value]) => value != null && value !== "")
-  );
+  for (const key of passthroughKeys) {
+    if (env[key] != null && env[key] !== "") {
+      vars[key] = env[key];
+    }
+  }
+
+  return vars;
 }
 
 export class TicketzBackend extends Container {

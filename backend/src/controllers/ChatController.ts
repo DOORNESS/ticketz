@@ -25,15 +25,19 @@ type StoreData = {
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
-  const { pageNumber } = req.query as unknown as IndexQuery;
-  const ownerId = +req.user.id;
+  try {
+    const { pageNumber } = req.query as unknown as IndexQuery;
+    const ownerId = +req.user.id;
 
-  const { records, count, hasMore } = await ListService({
-    ownerId,
-    pageNumber
-  });
+    const { records, count, hasMore } = await ListService({
+      ownerId,
+      pageNumber
+    });
 
-  return res.json({ records, count, hasMore });
+    return res.json({ records, count, hasMore });
+  } catch {
+    return res.json({ records: [], count: 0, hasMore: false });
+  }
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {

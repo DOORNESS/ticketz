@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from "express";
 import AppError from "../errors/AppError";
-import { getPendingMigrations } from "../services/MigrationServices/MigrationService";
+import {
+  ensureAiSchemaReady,
+  getAiPendingMigrations
+} from "../services/MigrationServices/MigrationService";
 import {
   updateAiFeaturesEnabled,
   updateMigrationsPending
@@ -12,10 +15,11 @@ export const requireAiPlatformReady = async (
   next: NextFunction
 ): Promise<void> => {
   try {
-    const pending = await getPendingMigrations();
+    const schemaState = await ensureAiSchemaReady();
+    const pending = await getAiPendingMigrations();
     updateMigrationsPending(pending);
 
-    if (pending.length) {
+    if (!schemaState.ready) {
       throw new AppError("ERR_AI_MIGRATIONS_PENDING", 503);
     }
 

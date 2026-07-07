@@ -37,7 +37,6 @@ import { Can } from "../components/Can";
 import { SocketContext } from "../context/Socket/SocketContext";
 import { isArray } from "lodash";
 import api from "../services/api";
-import toastError from "../errors/toastError";
 import { makeStyles } from "@material-ui/core/styles";
 import Typography from "@material-ui/core/Typography";
 import { loadJSON } from "../helpers/loadJSON";
@@ -350,8 +349,8 @@ const MainListItems = props => {
         params: { searchParam, pageNumber }
       });
       dispatch({ type: "LOAD_CHATS", payload: data.records });
-    } catch (err) {
-      toastError(err);
+    } catch (_err) {
+      dispatch({ type: "RESET" });
     }
   };
 

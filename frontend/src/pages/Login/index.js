@@ -338,6 +338,7 @@ const Login = () => {
     resolveTurnstileSiteKey()
   );
   const [turnstileToken, setTurnstileToken] = useState("");
+  const [turnstileNonce, setTurnstileNonce] = useState(0);
 
   const { handleLogin } = useContext(AuthContext);
 
@@ -352,16 +353,21 @@ const Login = () => {
     }));
   };
 
-  const handlSubmit = event => {
+  const handlSubmit = async event => {
     event.preventDefault();
     if (turnstileSiteKey && !turnstileToken) {
       return;
     }
 
-    handleLogin({
+    const ok = await handleLogin({
       ...user,
       turnstileToken: turnstileSiteKey ? turnstileToken : undefined
     });
+
+    if (!ok) {
+      setTurnstileToken("");
+      setTurnstileNonce(current => current + 1);
+    }
   };
 
   useEffect(() => {
@@ -546,6 +552,7 @@ const Login = () => {
                     <TurnstileWidget
                       siteKey={turnstileSiteKey}
                       onTokenChange={handleTurnstileToken}
+                      resetNonce={turnstileNonce}
                     />
                   )}
                   <Button

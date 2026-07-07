@@ -11,6 +11,7 @@ import {
 } from "./services/PaymentGatewayServices/PaymentGatewayServices";
 import { i18nReady } from "./services/TranslationServices/i18nService";
 import { bootstrapAiPlatform } from "./services/AiServices/bootstrapAiPlatform";
+import { seedTurnstileSettingsFromEnv } from "./services/AuthServices/SeedTurnstileSettingsService";
 
 // Environment Variable Validation
 if (!process.env.PORT) {
@@ -74,11 +75,17 @@ gracefulShutdown(server, {
 i18nReady
   .then(async () => {
     logger.trace("i18n initialized");
+    await seedTurnstileSettingsFromEnv().catch(error => {
+      logger.warn({ error }, "Turnstile settings sync skipped");
+    });
     await bootstrapAiPlatform();
     await startServer();
   })
   .catch(async error => {
     logger.error(`i18n initialization failed: ${error.message}`);
+    await seedTurnstileSettingsFromEnv().catch(seedError => {
+      logger.warn({ error: seedError }, "Turnstile settings sync skipped");
+    });
     await bootstrapAiPlatform();
     await startServer();
   });

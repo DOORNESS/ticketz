@@ -61,11 +61,15 @@ jobs:
       - name: Validar secrets obrigatórios
         env:
           DB_PASS: ${{ secrets.DB_PASS }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
         run: |
           set -euo pipefail
           if [ -z "${DB_PASS:-}" ]; then
             echo "::error::Secret DB_PASS ausente. Cadastre em Settings → Secrets → Actions."
             exit 1
+          fi
+          if [ -z "${TURNSTILE_SECRET_KEY:-}" ]; then
+            echo "::warning::Secret TURNSTILE_SECRET_KEY ausente — login Turnstile pode falhar."
           fi
 
       - name: Provisionar DNS e custom domain (api.fortmax.com.br)
@@ -97,6 +101,20 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$DB_PASS" | npx wrangler secret put DB_PASS
+
+      - name: Configurar secret TURNSTILE_SECRET_KEY no Worker
+        working-directory: api-worker
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TURNSTILE_SECRET_KEY:-}" ]; then
+            echo "::warning::TURNSTILE_SECRET_KEY ausente — secret do Worker não atualizado."
+            exit 0
+          fi
+          printf '%s' "$TURNSTILE_SECRET_KEY" | npx wrangler secret put TURNSTILE_SECRET_KEY
 
       - name: Deploy Worker + Container
         uses: cloudflare/wrangler-action@v3

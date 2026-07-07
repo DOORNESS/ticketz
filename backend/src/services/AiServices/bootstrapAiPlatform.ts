@@ -1,4 +1,7 @@
-import { initializeMigrations } from "../MigrationServices/MigrationService";
+import {
+  initializeMigrations,
+  isAiSchemaReady
+} from "../MigrationServices/MigrationService";
 import {
   setPlatformBootstrap,
   updateAiFeaturesEnabled,
@@ -9,16 +12,23 @@ import { logger } from "../../utils/logger";
 export const bootstrapAiPlatform = async (): Promise<void> => {
   try {
     const migrationState = await initializeMigrations();
+    const aiReady = await isAiSchemaReady();
 
     setPlatformBootstrap({
-      migrationsPending: migrationState.pending,
+      migrationsPending: migrationState.pending.filter(
+        name => name.startsWith("20260707") || name.startsWith("20260708")
+      ),
       autoMigrateEnabled: migrationState.autoMigrateEnabled,
-      aiFeaturesEnabled: migrationState.pending.length === 0,
+      aiFeaturesEnabled: aiReady,
       globalDiagnostics: null
     });
 
-    updateMigrationsPending(migrationState.pending);
-    updateAiFeaturesEnabled(migrationState.pending.length === 0);
+    updateMigrationsPending(
+      migrationState.pending.filter(
+        name => name.startsWith("20260707") || name.startsWith("20260708")
+      )
+    );
+    updateAiFeaturesEnabled(aiReady);
 
     if (migrationState.applied.length) {
       logger.info(
