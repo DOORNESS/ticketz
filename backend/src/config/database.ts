@@ -2,6 +2,15 @@ import "../bootstrap";
 
 const schema = process.env.DB_SCHEMA || "ticketz";
 
+function parsePoolInt(value: string | undefined, fallback: number): number {
+  if (value == null || value === "") {
+    return fallback;
+  }
+
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
 const sslDialectOptions =
   process.env.DB_SSL === "true"
     ? {
@@ -20,10 +29,10 @@ module.exports = {
   },
   schema,
   pool: {
-    max: parseInt(process.env.DB_MAX_CONNECTIONS, 10) || 60,
-    min: parseInt(process.env.DB_MIN_CONNECTIONS, 10) || 5,
-    acquire: parseInt(process.env.DB_ACQUIRE, 10) || 60000,
-    idle: parseInt(process.env.DB_IDLE, 10) || 10000
+    max: parsePoolInt(process.env.DB_MAX_CONNECTIONS, 60),
+    min: parsePoolInt(process.env.DB_MIN_CONNECTIONS, 5),
+    acquire: parsePoolInt(process.env.DB_ACQUIRE, 60000),
+    idle: parsePoolInt(process.env.DB_IDLE, 10000)
   },
   dialect: process.env.DB_DIALECT || "postgres",
   timezone: process.env.DB_TIMEZONE || "-03:00",
@@ -41,7 +50,7 @@ module.exports = {
   seederStorageTableSchema: schema,
   dialectOptions: {
     ...sslDialectOptions,
-    connectTimeout: parseInt(process.env.DB_CONNECT_TIMEOUT, 10) || 15000,
+    connectTimeout: parsePoolInt(process.env.DB_CONNECT_TIMEOUT, 15000),
     options: `-c search_path=${schema},public,extensions`
   }
 };
