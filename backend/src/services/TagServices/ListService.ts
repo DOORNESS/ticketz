@@ -29,7 +29,7 @@ const ListService = async ({
       companyId,
       [Op.and]: [
         Sequelize.literal(
-          `immutable_unaccent(LOWER("name")) LIKE immutable_unaccent(LOWER(${sequelize.escape(
+          `ticketz.immutable_unaccent(LOWER("name")) LIKE ticketz.immutable_unaccent(LOWER(${sequelize.escape(
             searchPattern
           )}))`
         )
@@ -39,7 +39,9 @@ const ListService = async ({
 
   const tags = await Tag.findAll({
     where,
-    order: [Sequelize.literal('immutable_unaccent(LOWER("name")) ASC')],
+    order: [
+      Sequelize.literal('ticketz.immutable_unaccent(LOWER("name")) ASC')
+    ],
     include: [
       {
         model: TicketTag,

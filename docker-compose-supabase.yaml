@@ -1,0 +1,63 @@
+# Stack Ticketz com PostgreSQL externo (Supabase) e Redis local.
+# Uso: cp .env-backend-supabase.example .env-backend-supabase  (e preencher credenciais)
+#      docker compose -f docker-compose-supabase.yaml up -d --build
+#
+# Migrations e seeds NÃO rodam automaticamente neste compose.
+# Execute manualmente somente quando autorizado.
+
+networks:
+  ticketz:
+
+volumes:
+  redis_data:
+  backend_public:
+  backend_private:
+
+services:
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ./Dockerfile
+    volumes:
+      - backend_public:/usr/src/app/public
+      - backend_private:/usr/src/app/private
+    env_file:
+      - .env-backend-supabase
+    restart: always
+    depends_on:
+      - redis
+    ports:
+      - ${BACKEND_PORT:-8080}:3000
+    command: >
+      sh -c "dockerize -wait tcp://$$DB_HOST:$${DB_PORT:-5432} -timeout 60s
+      && node dist/server.js"
+    networks:
+      - ticketz
+
+  frontend:
+    ports:
+      - ${FRONTEND_PORT:-3000}:80
+    build:
+      context: ./frontend
+      dockerfile: ./Dockerfile
+    env_file:
+      - .env-frontend-local
+    volumes:
+      - backend_public:/var/www/backend-public
+    restart: always
+    depends_on:
+      - backend
+    networks:
+      - ticketz
+
+  redis:
+    image: redis:alpine
+    command: redis-server --appendonly yes
+    expose:
+      - 6379
+    restart: always
+    volumes:
+      - redis_data:/data
+    networks:
+      - ticketz
