@@ -5,6 +5,7 @@ import KnowledgeBase from "../models/KnowledgeBase";
 import StorageService from "../services/StorageService/StorageService";
 import { ingestKnowledgeDocument } from "../services/AiServices/IngestKnowledgeDocumentService";
 import AppError from "../errors/AppError";
+import { safeAiQuery } from "../helpers/safeAiQuery";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
@@ -15,10 +16,14 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     where.knowledgeBaseId = Number(knowledgeBaseId);
   }
 
-  const documents = await KnowledgeDocument.findAll({
-    where,
-    order: [["createdAt", "DESC"]]
-  });
+  const documents = await safeAiQuery(
+    () =>
+      KnowledgeDocument.findAll({
+        where,
+        order: [["createdAt", "DESC"]]
+      }),
+    []
+  );
 
   return res.json(documents);
 };

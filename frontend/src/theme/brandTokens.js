@@ -13,7 +13,7 @@ export const brandTokens = {
   },
   layout: {
     appBarHeight: 40,
-    drawerWidth: 200,
+    drawerWidth: 228,
     drawerWidthCollapsed: 52
   },
   neutral: {

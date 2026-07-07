@@ -2,14 +2,19 @@ import { Request, Response } from "express";
 import AiAgent from "../models/AiAgent";
 import AiAgentQueue from "../models/AiAgentQueue";
 import AppError from "../errors/AppError";
+import { safeAiQuery } from "../helpers/safeAiQuery";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const agents = await AiAgent.findAll({
-    where: { companyId },
-    include: ["fallbackQueue", "agentQueues"],
-    order: [["name", "ASC"]]
-  });
+  const agents = await safeAiQuery(
+    () =>
+      AiAgent.findAll({
+        where: { companyId },
+        include: ["fallbackQueue", "agentQueues"],
+        order: [["name", "ASC"]]
+      }),
+    []
+  );
   return res.json(agents);
 };
 

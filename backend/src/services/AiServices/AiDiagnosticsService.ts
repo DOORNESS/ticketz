@@ -344,57 +344,75 @@ const checkEmbeddings = async (companyId: number): Promise<DiagnosticItem> => {
 };
 
 const checkActiveAgent = async (companyId: number): Promise<DiagnosticItem> => {
-  const count = await AiAgent.count({ where: { companyId, active: true } });
-  if (count > 0) {
+  try {
+    const count = await AiAgent.count({ where: { companyId, active: true } });
+    if (count > 0) {
+      return item(
+        "active_agent",
+        "Agente ativo",
+        "ok",
+        `${count} agente(s) ativo(s)`,
+        { count }
+      );
+    }
     return item(
       "active_agent",
       "Agente ativo",
-      "ok",
-      `${count} agente(s) ativo(s)`,
-      { count }
+      "error",
+      "Nenhum agente ativo — crie um em IA → Agentes"
+    );
+  } catch (error) {
+    return item(
+      "active_agent",
+      "Agente ativo",
+      "error",
+      error?.message || "Falha ao verificar agentes"
     );
   }
-  return item(
-    "active_agent",
-    "Agente ativo",
-    "error",
-    "Nenhum agente ativo — crie um em IA → Agentes"
-  );
 };
 
 const checkReadyBases = async (companyId: number): Promise<DiagnosticItem> => {
-  const bases = await KnowledgeBase.count({
-    where: { companyId, active: true }
-  });
-  const readyDocs = await KnowledgeDocument.count({
-    where: { companyId, status: "ready" }
-  });
+  try {
+    const bases = await KnowledgeBase.count({
+      where: { companyId, active: true }
+    });
+    const readyDocs = await KnowledgeDocument.count({
+      where: { companyId, status: "ready" }
+    });
 
-  if (bases > 0 && readyDocs > 0) {
+    if (bases > 0 && readyDocs > 0) {
+      return item(
+        "knowledge_ready",
+        "Bases prontas",
+        "ok",
+        `${bases} base(s) e ${readyDocs} documento(s) prontos`,
+        { bases, readyDocs }
+      );
+    }
+
+    if (!bases) {
+      return item(
+        "knowledge_ready",
+        "Bases prontas",
+        "error",
+        "Nenhuma base de conhecimento ativa"
+      );
+    }
+
     return item(
       "knowledge_ready",
       "Bases prontas",
-      "ok",
-      `${bases} base(s) e ${readyDocs} documento(s) prontos`,
-      { bases, readyDocs }
+      "warning",
+      "Base existe, mas nenhum documento está com status ready"
     );
-  }
-
-  if (!bases) {
+  } catch (error) {
     return item(
       "knowledge_ready",
       "Bases prontas",
       "error",
-      "Nenhuma base de conhecimento ativa"
+      error?.message || "Falha ao verificar bases de conhecimento"
     );
   }
-
-  return item(
-    "knowledge_ready",
-    "Bases prontas",
-    "warning",
-    "Base existe, mas nenhum documento está com status ready"
-  );
 };
 
 const checkWhatsapp = async (companyId: number): Promise<DiagnosticItem> => {
@@ -461,31 +479,40 @@ const checkAiQueue = async (): Promise<DiagnosticItem> => {
 const checkLastProcessing = async (
   companyId: number
 ): Promise<DiagnosticItem> => {
-  const lastLog = await AiConversationLog.findOne({
-    where: { companyId },
-    order: [["createdAt", "DESC"]]
-  });
+  try {
+    const lastLog = await AiConversationLog.findOne({
+      where: { companyId },
+      order: [["createdAt", "DESC"]]
+    });
 
-  if (!lastLog) {
+    if (!lastLog) {
+      return item(
+        "last_processing",
+        "Último processamento",
+        "warning",
+        "Nenhuma conversa processada pela IA ainda"
+      );
+    }
+
     return item(
       "last_processing",
       "Último processamento",
-      "warning",
-      "Nenhuma conversa processada pela IA ainda"
+      "ok",
+      `Última interação em ${lastLog.createdAt.toISOString()}`,
+      {
+        ticketId: lastLog.ticketId,
+        model: lastLog.model,
+        transferredToHuman: lastLog.transferredToHuman
+      }
+    );
+  } catch (error) {
+    return item(
+      "last_processing",
+      "Último processamento",
+      "error",
+      error?.message || "Falha ao verificar último processamento"
     );
   }
-
-  return item(
-    "last_processing",
-    "Último processamento",
-    "ok",
-    `Última interação em ${lastLog.createdAt.toISOString()}`,
-    {
-      ticketId: lastLog.ticketId,
-      model: lastLog.model,
-      transferredToHuman: lastLog.transferredToHuman
-    }
-  );
 };
 
 const buildResult = (
@@ -544,25 +571,32 @@ export const runCompanyDiagnostics = async (
     checkVectorIndex()
   ]);
 
-  const companyItems = await Promise.all([
-    checkProviderConfig(companyId),
-    checkProviderConnectivity(companyId, live),
-    checkStorage(companyId),
-    checkEmbeddings(companyId),
-    checkActiveAgent(companyId),
-    checkReadyBases(companyId),
-    checkWhatsapp(companyId),
-    checkAiQueue(),
-    checkLastProcessing(companyId)
-  ]);
-
-  const items = [...globalItems, ...companyItems];
   const migrationsOk =
     globalItems.find(i => i.key === "migrations")?.status === "ok";
   const tablesOk =
     globalItems.find(i => i.key === "ai_tables")?.status === "ok";
   const dbOk = globalItems.find(i => i.key === "database")?.status === "ok";
   const aiFeaturesEnabled = Boolean(dbOk && tablesOk && migrationsOk);
+
+  const companyChecks = [
+    checkProviderConfig(companyId),
+    checkProviderConnectivity(companyId, live),
+    checkStorage(companyId),
+    checkWhatsapp(companyId),
+    checkAiQueue()
+  ];
+
+  if (tablesOk) {
+    companyChecks.push(
+      checkEmbeddings(companyId),
+      checkActiveAgent(companyId),
+      checkReadyBases(companyId),
+      checkLastProcessing(companyId)
+    );
+  }
+
+  const companyItems = await Promise.all(companyChecks);
+  const items = [...globalItems, ...companyItems];
 
   return buildResult("company", items, aiFeaturesEnabled, companyId);
 };

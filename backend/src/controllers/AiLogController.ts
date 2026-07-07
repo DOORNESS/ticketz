@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import AiConversationLog from "../models/AiConversationLog";
+import { safeAiQuery } from "../helpers/safeAiQuery";
 
 const maskText = (value?: string): string => {
   if (!value) return "";
@@ -21,12 +22,16 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   const limitNum = Math.min(Math.max(Number(limit), 1), 100);
   const offset = (pageNum - 1) * limitNum;
 
-  const { rows, count } = await AiConversationLog.findAndCountAll({
-    where,
-    order: [["createdAt", "DESC"]],
-    limit: limitNum,
-    offset
-  });
+  const { rows, count } = await safeAiQuery(
+    () =>
+      AiConversationLog.findAndCountAll({
+        where,
+        order: [["createdAt", "DESC"]],
+        limit: limitNum,
+        offset
+      }),
+    { rows: [], count: 0 }
+  );
 
   const logs = rows.map(log => ({
     ...log.toJSON(),

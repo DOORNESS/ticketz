@@ -7,6 +7,7 @@ import {
 import { runCompanyDiagnostics } from "../services/AiServices/AiDiagnosticsService";
 import AiAgent from "../models/AiAgent";
 import KnowledgeDocument from "../models/KnowledgeDocument";
+import { safeAiQuery } from "../helpers/safeAiQuery";
 
 const summarizeHealth = async (companyId: number) => {
   const diagnostics = await runCompanyDiagnostics(companyId, { live: false });
@@ -16,12 +17,14 @@ const summarizeHealth = async (companyId: number) => {
     diagnostics.items.map(item => [item.key, item])
   );
 
-  const activeAgents = await AiAgent.count({
-    where: { companyId, active: true }
-  });
-  const readyDocuments = await KnowledgeDocument.count({
-    where: { companyId, status: "ready" }
-  });
+  const activeAgents = await safeAiQuery(
+    () => AiAgent.count({ where: { companyId, active: true } }),
+    0
+  );
+  const readyDocuments = await safeAiQuery(
+    () => KnowledgeDocument.count({ where: { companyId, status: "ready" } }),
+    0
+  );
 
   return {
     status: diagnostics.overall,

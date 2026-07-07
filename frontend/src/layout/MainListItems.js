@@ -99,10 +99,15 @@ const useStyles = makeStyles(theme => ({
   listItemText: {
     marginTop: 0,
     marginBottom: 0,
+    minWidth: 0,
+    flex: "1 1 auto",
     "& .MuiListItemText-primary": {
       fontSize: "0.75rem",
       fontWeight: 500,
-      lineHeight: 1.3
+      lineHeight: 1.3,
+      whiteSpace: "normal",
+      overflow: "visible",
+      textOverflow: "clip"
     }
   },
   divider: {
@@ -118,6 +123,30 @@ const useStyles = makeStyles(theme => ({
     opacity: 0.7
   }
 }));
+
+function AiSubmenuItem({ icon, label, onClick, selected = false }) {
+  const classes = useStyles();
+
+  return (
+    <ListItem
+      button
+      dense
+      onClick={onClick}
+      selected={selected}
+      classes={{
+        root: classes.listItem,
+        selected: classes.listItemSelected
+      }}
+    >
+      <ListItemIcon className={classes.listItemIcon}>{icon}</ListItemIcon>
+      <ListItemText
+        primary={label}
+        classes={{ root: classes.listItemText }}
+        primaryTypographyProps={{ noWrap: false }}
+      />
+    </ListItem>
+  );
+}
 
 function ListItemLink(props) {
   const { icon, primary, to, className } = props;
@@ -229,6 +258,7 @@ const MainListItems = props => {
 
   const [showCampaigns, setShowCampaigns] = useState(false);
   const history = useHistory();
+  const location = useLocation();
   const [invisible, setInvisible] = useState(true);
   const [pageNumber, setPageNumber] = useState(1);
   const [searchParam] = useState("");
@@ -513,60 +543,75 @@ const MainListItems = props => {
               {openAiSubmenu ? <ExpandLessIcon /> : <ExpandMoreIcon />}
             </ListItem>
             <Collapse
-              style={{ paddingLeft: 15 }}
+              style={{ paddingLeft: 8 }}
               in={openAiSubmenu}
               timeout="auto"
               unmountOnExit
             >
               <List component="div" disablePadding>
-                <ListItem onClick={() => history.push("/ai/dashboard")} button>
-                  <ListItemIcon>
-                    <DashboardOutlinedIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Dashboard" />
-                </ListItem>
-                <ListItem onClick={() => history.push("/ai/agents")} button>
-                  <ListItemIcon>
-                    <AndroidIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Agentes" />
-                </ListItem>
-                <ListItem
+                <AiSubmenuItem
+                  icon={<DashboardOutlinedIcon />}
+                  label="Dashboard"
+                  selected={
+                    location.pathname === "/ai/dashboard" ||
+                    location.pathname.startsWith("/ai/dashboard/")
+                  }
+                  onClick={() => history.push("/ai/dashboard")}
+                />
+                <AiSubmenuItem
+                  icon={<AndroidIcon />}
+                  label="Agentes"
+                  selected={
+                    location.pathname === "/ai/agents" ||
+                    location.pathname.startsWith("/ai/agents/")
+                  }
+                  onClick={() => history.push("/ai/agents")}
+                />
+                <AiSubmenuItem
+                  icon={<ListIcon />}
+                  label="Base de Conhecimento"
+                  selected={
+                    location.pathname === "/ai/knowledge-bases" ||
+                    location.pathname.startsWith("/ai/knowledge-bases/")
+                  }
                   onClick={() => history.push("/ai/knowledge-bases")}
-                  button
-                >
-                  <ListItemIcon>
-                    <ListIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Base de Conhecimento" />
-                </ListItem>
-                <ListItem onClick={() => history.push("/ai/documents")} button>
-                  <ListItemIcon>
-                    <ListIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Documentos" />
-                </ListItem>
-                <ListItem onClick={() => history.push("/ai/logs")} button>
-                  <ListItemIcon>
-                    <SettingsOutlinedIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Logs" />
-                </ListItem>
-                <ListItem
+                />
+                <AiSubmenuItem
+                  icon={<ListIcon />}
+                  label="Documentos"
+                  selected={
+                    location.pathname === "/ai/documents" ||
+                    location.pathname.startsWith("/ai/documents/")
+                  }
+                  onClick={() => history.push("/ai/documents")}
+                />
+                <AiSubmenuItem
+                  icon={<SettingsOutlinedIcon />}
+                  label="Logs"
+                  selected={
+                    location.pathname === "/ai/logs" ||
+                    location.pathname.startsWith("/ai/logs/")
+                  }
+                  onClick={() => history.push("/ai/logs")}
+                />
+                <AiSubmenuItem
+                  icon={<SettingsOutlinedIcon />}
+                  label="Diagnóstico"
+                  selected={
+                    location.pathname === "/ai/diagnostics" ||
+                    location.pathname.startsWith("/ai/diagnostics/")
+                  }
                   onClick={() => history.push("/ai/diagnostics")}
-                  button
-                >
-                  <ListItemIcon>
-                    <SettingsOutlinedIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Diagnóstico" />
-                </ListItem>
-                <ListItem onClick={() => history.push("/ai/playground")} button>
-                  <ListItemIcon>
-                    <AndroidIcon />
-                  </ListItemIcon>
-                  <ListItemText primary="Playground" />
-                </ListItem>
+                />
+                <AiSubmenuItem
+                  icon={<AndroidIcon />}
+                  label="Playground"
+                  selected={
+                    location.pathname === "/ai/playground" ||
+                    location.pathname.startsWith("/ai/playground/")
+                  }
+                  onClick={() => history.push("/ai/playground")}
+                />
               </List>
             </Collapse>
             <ListItemLink

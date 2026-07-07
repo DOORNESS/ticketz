@@ -1,13 +1,18 @@
 import { Request, Response } from "express";
 import KnowledgeBase from "../models/KnowledgeBase";
 import AppError from "../errors/AppError";
+import { safeAiQuery } from "../helpers/safeAiQuery";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const bases = await KnowledgeBase.findAll({
-    where: { companyId },
-    order: [["name", "ASC"]]
-  });
+  const bases = await safeAiQuery(
+    () =>
+      KnowledgeBase.findAll({
+        where: { companyId },
+        order: [["name", "ASC"]]
+      }),
+    []
+  );
   return res.json(bases);
 };
 
