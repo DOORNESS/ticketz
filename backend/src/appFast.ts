@@ -87,6 +87,50 @@ app.get("/public-settings/:settingKey", (req, res) => {
   return res.status(200).json(null);
 });
 
+app.post("/auth/login", async (req, res) => {
+  try {
+    const { email, password, turnstileToken } = req.body;
+    const { verifyTurnstileToken } = await import(
+      "./services/AuthServices/VerifyTurnstileService"
+    );
+    const { ensureAuthSecretsReady } = await import("./config/auth");
+    const { SendRefreshToken } = await import("./helpers/SendRefreshToken");
+    const AuthUserService = (
+      await import("./services/UserServices/AuthUserService")
+    ).default;
+
+    await verifyTurnstileToken(
+      turnstileToken,
+      req.ip || req.socket.remoteAddress
+    );
+    await ensureAuthSecretsReady();
+
+    const { token, serializedUser, refreshToken } = await AuthUserService({
+      email,
+      password,
+      language: null
+    });
+
+    SendRefreshToken(res, refreshToken);
+
+    return res.status(200).json({
+      token,
+      user: serializedUser
+    });
+  } catch (error) {
+    if (error instanceof AppError) {
+      logger[error.level](error);
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+
+    logger.error(error);
+    return res.status(500).json({
+      error: "Internal server error",
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
 export async function ensureCoreRoutes(): Promise<void> {
   if (coreRoutesReady) {
     return;
