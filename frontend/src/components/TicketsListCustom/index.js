@@ -205,7 +205,8 @@ const TicketsListCustom = props => {
   }, [ticketsList]);
   const [ticketsListUpdated, setTicketsListUpdated] = useState([]);
   const { user } = useContext(AuthContext);
-  const { profile, queues } = user;
+  const { profile, queues } = user || {};
+  const safeQueues = queues ?? [];
 
   const socketManager = useContext(SocketContext);
 
@@ -246,7 +247,7 @@ const TicketsListCustom = props => {
   });
 
   useEffect(() => {
-    const queueIds = queues.map(q => q.id);
+    const queueIds = safeQueues.map(q => q.id);
     const filteredTickets = tickets.filter(
       t => queueIds.indexOf(t.queueId) > -1
     );
@@ -256,7 +257,7 @@ const TicketsListCustom = props => {
     } else {
       dispatch({ type: "LOAD_TICKETS", payload: tickets });
     }
-  }, [tickets, queues, profile]);
+  }, [tickets, safeQueues, profile]);
 
   useEffect(() => {
     const companyId = localStorage.getItem("companyId");
@@ -338,7 +339,7 @@ const TicketsListCustom = props => {
         return;
       }
 
-      const queueIds = queues.map(q => q.id);
+      const queueIds = safeQueues.map(q => q.id);
       if (
         profile === "user" &&
         (queueIds.indexOf(data.ticket?.queue?.id) === -1 ||

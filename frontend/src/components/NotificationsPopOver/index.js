@@ -50,8 +50,9 @@ const NotificationsPopOver = props => {
   const [notifications, setNotifications] = useState([]);
   const [soundGroupNotifications, setSoundGroupNotifications] = useState(false);
   const [showTabGroups, setShowTabGroups] = useState(false);
-  const { profile, queues } = user;
-  const [queueIds, setQueueIds] = useState(queues.map(q => q.id));
+  const { profile, queues } = user || {};
+  const safeQueues = queues ?? [];
+  const [queueIds, setQueueIds] = useState(safeQueues.map(q => q.id));
 
   const [, setDesktopNotifications] = useState([]);
 
@@ -121,8 +122,8 @@ const NotificationsPopOver = props => {
   }, [ticketIdUrl]);
 
   useEffect(() => {
-    setQueueIds(queues.map(q => q.id));
-  }, [queues]);
+    setQueueIds(safeQueues.map(q => q.id));
+  }, [safeQueues]);
 
   useEffect(() => {
     const companyId = localStorage.getItem("companyId");

@@ -12,6 +12,7 @@ import {
   recordAiJobCompleted,
   recordAiJobStarted
 } from "./AiQueueMetricsService";
+import { persistAiDecisionLog } from "./AiDecisionLogger";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import formatBody from "../../helpers/Mustache";
 
@@ -187,9 +188,20 @@ const scheduleDebouncedJob = async (
 
 export const enqueueAiInboundMessage = async (
   payload: Omit<AiInboundPayload, "enqueuedAt">
-): Promise<void> => {
+): Promise<boolean> => {
   if (!isAiFeaturesEnabled()) {
-    return;
+    logger.warn(
+      { ticketId: payload.ticketId, companyId: payload.companyId },
+      "AI inbound message ignored because AI features are disabled"
+    );
+    await persistAiDecisionLog({
+      companyId: payload.companyId,
+      ticketId: payload.ticketId,
+      messageId: payload.messageId,
+      action: "enqueue_skipped",
+      reason: "ai_features_disabled"
+    });
+    return false;
   }
 
   const queue = getAiInboundQueue();
@@ -203,7 +215,8 @@ export const enqueueAiInboundMessage = async (
 
   const isProcessing = await redis.exists(lockKey(payload.ticketId));
   if (isProcessing) {
-    return;
+    await scheduleDebouncedJob(payload.companyId, payload.ticketId);
+    return true;
   }
 
   const ticket = await Ticket.findByPk(payload.ticketId);
@@ -216,6 +229,21 @@ export const enqueueAiInboundMessage = async (
   }
 
   await scheduleDebouncedJob(payload.companyId, payload.ticketId);
+
+  await persistAiDecisionLog({
+    companyId: payload.companyId,
+    ticketId: payload.ticketId,
+    messageId: payload.messageId,
+    action: "enqueue",
+    reason: "message_buffered_for_processing",
+    details: {
+      mediaType: payload.mediaType || "text",
+      hasMedia: Boolean(payload.mediaUrl)
+    },
+    userMessage: payload.messageBody
+  });
+
+  return true;
 };
 
 const rescheduleIfBuffered = async (
@@ -252,6 +280,12 @@ export const handleAiInboundJob = async (job: Job<AiInboundJobData>) => {
     );
 
     if (lockAcquired !== "OK") {
+      await persistAiDecisionLog({
+        companyId,
+        ticketId,
+        action: "job_cancelled",
+        reason: "lock_not_acquired"
+      });
       await recordAiJobCompleted(job, "cancelled");
       return;
     }
@@ -261,15 +295,35 @@ export const handleAiInboundJob = async (job: Job<AiInboundJobData>) => {
     const revalidated = await revalidateTicketForAi(ticketId, companyId);
     if (!revalidated) {
       await redis.del(bufferKey(ticketId));
+      await persistAiDecisionLog({
+        companyId,
+        ticketId,
+        action: "job_cancelled",
+        reason: "ticket_no_longer_eligible_for_ai"
+      });
       await recordAiJobCompleted(job, "cancelled");
       return;
     }
 
     const payloads = await drainBufferedMessages(ticketId);
     if (!payloads.length) {
+      await persistAiDecisionLog({
+        companyId,
+        ticketId,
+        action: "job_cancelled",
+        reason: "empty_buffer"
+      });
       await recordAiJobCompleted(job, "cancelled");
       return;
     }
+
+    await persistAiDecisionLog({
+      companyId,
+      ticketId,
+      action: "job_started",
+      reason: "processing_buffered_messages",
+      details: { messageCount: payloads.length }
+    });
 
     await ProcessInboundMessageService({
       ticket: revalidated.ticket,
@@ -289,6 +343,14 @@ export const handleAiInboundJob = async (job: Job<AiInboundJobData>) => {
       { error, ticketId, companyId, attemptsMade: job.attemptsMade },
       "AI inbound job failed with definitive error"
     );
+
+    await persistAiDecisionLog({
+      companyId,
+      ticketId,
+      action: "job_failed",
+      reason: error instanceof Error ? error.message : "ai_queue_error",
+      details: { attemptsMade: job.attemptsMade }
+    });
 
     try {
       const revalidated = await revalidateTicketForAi(ticketId, companyId);

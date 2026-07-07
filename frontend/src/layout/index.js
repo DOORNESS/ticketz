@@ -570,7 +570,7 @@ const LoggedInLayout = ({ children, themeToggle }) => {
     ? dateToClient(user.company.dueDate)
     : "-";
 
-  if (loading && !isAuth) {
+  if (loading || (isAuth && !user?.id)) {
     return <BackdropLoading />;
   }
 

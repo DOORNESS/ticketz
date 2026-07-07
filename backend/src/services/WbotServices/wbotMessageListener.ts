@@ -72,6 +72,7 @@ import saveMediaToFile from "../../helpers/saveMediaFile";
 import { resolveMediaAccessPath } from "../../helpers/mediaStorage";
 import { enqueueAiInboundMessage } from "../AiServices/AiInboundQueueService";
 import { getActiveAgent } from "../AiServices/AiHelpers";
+import { isAiFeaturesEnabled } from "../AiServices/AiPlatformState";
 import { _t } from "../TranslationServices/i18nService";
 import WhatsappLidMap from "../../models/WhatsappLidMap";
 import normalizePhone from "../../helpers/NormalizePhone";
@@ -1313,6 +1314,13 @@ const verifyQueue = async (
   const { queues, greetingMessage } = whatsapp;
 
   if (queues.length === 1) {
+    if (isAiFeaturesEnabled()) {
+      const activeAgent = await getActiveAgent(ticket.companyId, queues[0].id);
+      if (activeAgent) {
+        return;
+      }
+    }
+
     await startQueue(wbot, ticket, head(queues), false);
     return;
   }
@@ -1934,6 +1942,41 @@ const handleMessage = async (
       return;
     }
 
+    await ticket.reload();
+
+    if (!ticket.userId && !ticket.aiHandoff && isAiFeaturesEnabled()) {
+      const activeAgent = await getActiveAgent(companyId, ticket.queueId);
+      if (activeAgent) {
+        const rawMediaUrl = newMessage?.getDataValue("mediaUrl");
+
+        if (ticket.chatbot) {
+          await updateTicket(ticket, { chatbot: false });
+          await ticket.reload();
+        }
+
+        if (ticket.queueId) {
+          await updateTicket(ticket, { queueId: null });
+          await ticket.reload();
+        }
+
+        await enqueueAiInboundMessage({
+          companyId,
+          ticketId: ticket.id,
+          messageBody: newMessage?.body || bodyMessage || "",
+          messageId: newMessage?.id,
+          mediaType: newMessage?.mediaType,
+          mediaUrl: rawMediaUrl || undefined,
+          mediaFilename: rawMediaUrl?.split("/").pop()
+        });
+
+        if (justCreated && newMessage) {
+          await newMessage.reload();
+          websocketCreateMessage(newMessage);
+        }
+        return;
+      }
+    }
+
     try {
       if (scheduleType) {
         const isOpenOnline =
@@ -2007,34 +2050,6 @@ const handleMessage = async (
     } catch (e) {
       Sentry.captureException(e);
       console.log(e);
-    }
-
-    if (!ticket.userId && !ticket.aiHandoff) {
-      const activeAgent = await getActiveAgent(companyId, ticket.queueId);
-      if (activeAgent) {
-        const rawMediaUrl = newMessage?.getDataValue("mediaUrl");
-
-        if (ticket.chatbot) {
-          await updateTicket(ticket, { chatbot: false });
-          await ticket.reload();
-        }
-
-        await enqueueAiInboundMessage({
-          companyId,
-          ticketId: ticket.id,
-          messageBody: newMessage?.body || bodyMessage || "",
-          messageId: newMessage?.id,
-          mediaType: newMessage?.mediaType,
-          mediaUrl: rawMediaUrl || undefined,
-          mediaFilename: rawMediaUrl?.split("/").pop()
-        });
-
-        if (justCreated && newMessage) {
-          await newMessage.reload();
-          websocketCreateMessage(newMessage);
-        }
-        return;
-      }
     }
 
     if (

@@ -150,32 +150,35 @@ const useAuth = () => {
 
       api.defaults.headers.Authorization = `Bearer ${token}`;
 
-      if (!isAccessTokenExpired(token)) {
-        setIsAuth(true);
-        setLoading(false);
-
-        refreshSession()
-          .then(data => {
-            if (data?.user) {
-              setUser(data.user);
-            }
-          })
-          .catch(() => {});
-
-        return;
-      }
-
       try {
         const data = await refreshSession();
         setUser(data.user || {});
       } catch (err) {
-        clearAllCachedSettings();
-        localStorage.removeItem("token");
-        localStorage.removeItem("companyId");
-        api.defaults.headers.Authorization = undefined;
-        setIsAuth(false);
-        setUser({});
-        toastError(err);
+        if (!isAccessTokenExpired(token)) {
+          setIsAuth(true);
+          refreshSession()
+            .then(sessionData => {
+              if (sessionData?.user) {
+                setUser(sessionData.user);
+              }
+            })
+            .catch(() => {
+              clearAllCachedSettings();
+              localStorage.removeItem("token");
+              localStorage.removeItem("companyId");
+              api.defaults.headers.Authorization = undefined;
+              setIsAuth(false);
+              setUser({});
+            });
+        } else {
+          clearAllCachedSettings();
+          localStorage.removeItem("token");
+          localStorage.removeItem("companyId");
+          api.defaults.headers.Authorization = undefined;
+          setIsAuth(false);
+          setUser({});
+          toastError(err);
+        }
       } finally {
         setLoading(false);
       }
@@ -282,6 +285,7 @@ const useAuth = () => {
   };
 
   const handleLogin = async userData => {
+    setLoading(true);
     try {
       const { data } = await api.post("/auth/login", userData);
       posLogin(data);
@@ -289,6 +293,8 @@ const useAuth = () => {
     } catch (err) {
       toastError(err);
       return { ok: false, error: err };
+    } finally {
+      setLoading(false);
     }
   };
 

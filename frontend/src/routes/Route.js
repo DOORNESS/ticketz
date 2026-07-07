@@ -5,8 +5,9 @@ import { AuthContext } from "../context/Auth/AuthContext";
 import BackdropLoading from "../components/BackdropLoading";
 
 const Route = ({ component: Component, isPrivate = false, ...rest }) => {
-  const { isAuth, loading } = useContext(AuthContext);
-  const showLoading = loading && isPrivate && !isAuth;
+  const { isAuth, loading, user } = useContext(AuthContext);
+  const authReady = !isPrivate || (isAuth && Boolean(user?.id));
+  const showLoading = loading || (isPrivate && isAuth && !user?.id);
 
   if (!isAuth && isPrivate) {
     return (
@@ -24,6 +25,10 @@ const Route = ({ component: Component, isPrivate = false, ...rest }) => {
         <Redirect to={{ pathname: "/", state: { from: rest.location } }} />
       </>
     );
+  }
+
+  if (!authReady) {
+    return <BackdropLoading />;
   }
 
   return (

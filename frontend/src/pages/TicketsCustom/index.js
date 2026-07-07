@@ -9,12 +9,10 @@ import Ticket from "../../components/Ticket/";
 
 import { i18n } from "../../translate/i18n";
 
-import brandTokens from "../../theme/brandTokens";
-
 const useStyles = makeStyles(theme => ({
   chatContainer: {
     flex: 1,
-    height: `calc(100% - ${brandTokens.layout.appBarHeight}px)`,
+    height: "100%",
     overflowY: "hidden"
   },
 

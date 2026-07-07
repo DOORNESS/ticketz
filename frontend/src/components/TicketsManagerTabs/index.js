@@ -122,12 +122,13 @@ const TicketsManagerTabs = () => {
   const [showAllTickets, setShowAllTickets] = useState(false);
   const searchInputRef = useRef();
   const { user } = useContext(AuthContext);
-  const { profile } = user;
+  const { profile } = user || {};
+  const userQueues = user?.queues ?? [];
 
   const [openCount, setOpenCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
 
-  const userQueueIds = user.queues.map(q => q.id);
+  const userQueueIds = userQueues.map(q => q.id);
   const [selectedQueueIds, setSelectedQueueIds] = useState(userQueueIds || []);
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
@@ -147,7 +148,7 @@ const TicketsManagerTabs = () => {
   }, []);
 
   useEffect(() => {
-    if (user.profile.toUpperCase() === "ADMIN") {
+    if (user?.profile?.toUpperCase() === "ADMIN") {
       setShowAllTickets(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
