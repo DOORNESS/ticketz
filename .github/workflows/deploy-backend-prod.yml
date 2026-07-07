@@ -2,6 +2,7 @@ name: Deploy Ticketz API — Produção
 
 # Padrão Fortmax: Cloudflare Worker + Container → api.fortmax.com.br
 # NÃO usa Cloudflare Tunnel.
+# Re-run: 2026-07-07 — DB_PASS cadastrado
 on:
   push:
     branches: [main]
