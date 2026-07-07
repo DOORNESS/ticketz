@@ -159,13 +159,35 @@ async function startListenFirst() {
 
   setImmediate(async () => {
     try {
-      const { default: app } = await import("./app");
+      const { default: app } = await import("./appFast");
       const { initIO } = await import("./libs/socket");
 
       requestHandler = app as Application;
       appReady.value = true;
       initIO(server);
-      logger.info("[listen-first] Express app attached");
+      logger.info("[listen-first] Fast API attached (auth + public settings)");
+
+      setImmediate(() => {
+        import("./routes/heavyRoutes")
+          .then(({ default: heavyRoutes }) => {
+            app.use(heavyRoutes);
+            logger.info("[listen-first] Heavy routes attached");
+          })
+          .catch(error => {
+            logger.error(
+              { error },
+              "[listen-first] Heavy routes failed to attach"
+            );
+          });
+
+        import("./app")
+          .then(({ default: fullApp }) => {
+            app.set("queues", fullApp.get("queues"));
+          })
+          .catch(error => {
+            logger.warn({ error }, "[listen-first] Queue registry deferred");
+          });
+      });
 
       await runPostListenBootstrap(server);
     } catch (error) {

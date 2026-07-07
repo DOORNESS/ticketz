@@ -19,8 +19,6 @@ function buildContainerEnv(env) {
   const passthroughKeys = [
     "PORT",
     "HOST",
-    "GATEWAY_PORT",
-    "APP_PORT",
     "NODE_ENV",
     "LISTEN_FIRST",
     "FRONTEND_URL",
@@ -66,9 +64,7 @@ function buildContainerEnv(env) {
   ];
 
   const vars = {
-    GATEWAY_PORT: "3000",
-    APP_PORT: "3001",
-    PORT: "3001",
+    PORT: "3000",
     HOST: "0.0.0.0",
     NODE_ENV: "production",
     LISTEN_FIRST: "true"

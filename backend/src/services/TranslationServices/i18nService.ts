@@ -20,10 +20,14 @@ type ModelWithCompany = {
   company: Company;
 };
 
-GetCompanySetting(1, "defaultLanguage", "en").then(setting => {
-  defaultLanguage = setting || "en";
-  logger.trace({ defaultLanguage }, "i18n: Default language set");
-});
+GetCompanySetting(1, "defaultLanguage", "en")
+  .then(setting => {
+    defaultLanguage = setting || "en";
+    logger.trace({ defaultLanguage }, "i18n: Default language set");
+  })
+  .catch(error => {
+    logger.warn({ error }, "i18n: Default language lookup skipped");
+  });
 
 export function updateDefaultLanguage(newDefault: string) {
   defaultLanguage = newDefault;
@@ -57,10 +61,15 @@ export async function initializeI18n() {
 }
 
 const i18nReady = new Promise<void>(resolve => {
-  initializeI18n().then(() => {
-    resolve();
-    logger.trace("i18n initialized");
-  });
+  initializeI18n()
+    .then(() => {
+      resolve();
+      logger.trace("i18n initialized");
+    })
+    .catch(error => {
+      logger.error({ error }, "i18n initialization failed — using defaults");
+      resolve();
+    });
 });
 
 export async function reloadTranslations() {
@@ -69,7 +78,6 @@ export async function reloadTranslations() {
   });
 }
 
-// eslint-disable-next-line no-underscore-dangle
 export function _t(
   key: string,
   lngSource:

@@ -5,7 +5,7 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm ci
 COPY . .
-RUN npm run build && ln -sf src/server.js dist/server.js
+RUN npm run build
 
 FROM node:24-bookworm-slim
 WORKDIR /usr/src/app
@@ -18,16 +18,12 @@ COPY --from=build /usr/src/app/dist ./dist
 COPY --from=build /usr/src/app/node_modules ./node_modules
 COPY --from=build /usr/src/app/package.json ./package.json
 COPY docker/cloudflare/entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY docker/cloudflare/gateway.js /usr/src/app/docker/cloudflare/gateway.js
 
 RUN chmod +x /usr/local/bin/entrypoint.sh \
-  && chmod +x /usr/src/app/docker/cloudflare/gateway.js \
   && mkdir -p /data/redis /usr/src/app/public /usr/src/app/private
 
 ENV NODE_ENV=production
-ENV GATEWAY_PORT=3000
-ENV APP_PORT=3001
-ENV PORT=3001
+ENV PORT=3000
 ENV HOST=0.0.0.0
 ENV LISTEN_FIRST=true
 ENV REDIS_URI=redis://127.0.0.1:6379
