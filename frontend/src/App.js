@@ -473,8 +473,8 @@ const App = () => {
   }, [mode]);
 
   useEffect(() => {
-    document.title = appName || brandTokens.appTitle;
-  }, [appName]);
+    document.title = brandTokens.appTitle;
+  }, []);
 
   useEffect(() => {
     getPublicSetting("primaryColorLight")

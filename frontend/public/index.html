@@ -362,12 +362,6 @@
           const appLogoDiv = document.getElementById("app-logo-div");
           appLogoDiv.style.display = "block";
         });
-
-        fetch(settingsBaseUrl + "/appName")
-          .then(response => response.json())
-          .then(data => {
-            document.title = data || "Suporte Fortmax";
-          });
       };
 
       fetch("/config.json").then(async response => {

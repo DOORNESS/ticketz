@@ -22,8 +22,9 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import Favicon from "react-favicon";
 import useSettings from "../../hooks/useSettings";
+import brandTokens from "../../theme/brandTokens";
 
-const defaultLogoFavicon = "/vector/favicon.svg";
+const defaultLogoFavicon = brandTokens.logo.favicon;
 
 const useStyles = makeStyles(theme => ({
   tabContainer: {
@@ -274,18 +275,18 @@ const NotificationsPopOver = props => {
 
   const browserNotification = () => {
     const numbers = "⓿➊➋➌➍➎➏➐➑➒➓⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴";
+    const pageTitle = brandTokens.appTitle;
     if (notifications.length > 0) {
       if (notifications.length < 21) {
         document.title =
           numbers.substring(notifications.length, notifications.length + 1) +
           " - " +
-          (theme.appName || "...");
+          pageTitle;
       } else {
-        document.title =
-          "(" + notifications.length + ")" + (theme.appName || "...");
+        document.title = "(" + notifications.length + ")" + pageTitle;
       }
     } else {
-      document.title = theme.appName || "...";
+      document.title = pageTitle;
     }
     return (
       <>
