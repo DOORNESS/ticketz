@@ -69,11 +69,8 @@ import { verifyContact } from "./verifyContact";
 import { decryptMessageEdit } from "./decryptMessageEdit";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import saveMediaToFile from "../../helpers/saveMediaFile";
-import {
-  readMediaBuffer,
-  resolveMediaAccessPath
-} from "../../helpers/mediaStorage";
-import ProcessInboundMessageService from "../AiServices/ProcessInboundMessageService";
+import { resolveMediaAccessPath } from "../../helpers/mediaStorage";
+import { enqueueAiInboundMessage } from "../AiServices/AiInboundQueueService";
 import { getActiveAgent } from "../AiServices/AiHelpers";
 import { _t } from "../TranslationServices/i18nService";
 import WhatsappLidMap from "../../models/WhatsappLidMap";
@@ -2015,21 +2012,16 @@ const handleMessage = async (
     if (!ticket.userId && !ticket.aiHandoff) {
       const activeAgent = await getActiveAgent(companyId, ticket.queueId);
       if (activeAgent) {
-        let mediaBuffer: Buffer | undefined;
         const rawMediaUrl = newMessage?.getDataValue("mediaUrl");
-        if (rawMediaUrl) {
-          mediaBuffer =
-            (await readMediaBuffer(rawMediaUrl, companyId)) || undefined;
-        }
 
-        await ProcessInboundMessageService({
-          ticket,
+        await enqueueAiInboundMessage({
           companyId,
+          ticketId: ticket.id,
           messageBody: newMessage?.body || bodyMessage || "",
           messageId: newMessage?.id,
           mediaType: newMessage?.mediaType,
-          mediaBuffer,
-          mediaFilename: newMessage?.getDataValue("mediaUrl")?.split("/").pop()
+          mediaUrl: rawMediaUrl || undefined,
+          mediaFilename: rawMediaUrl?.split("/").pop()
         });
 
         if (justCreated && newMessage) {

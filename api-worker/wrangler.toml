@@ -42,6 +42,11 @@ CLOSED_SEND_BY_ME = "true"
 STORAGE_ROOT_PREFIX = "suporte"
 # AUTO_MIGRATE=false por padrão — habilite apenas se quiser aplicar migrations no boot
 # AUTO_MIGRATE = "true"
+AI_QUEUE_CONCURRENCY = "5"
+AI_QUEUE_DEBOUNCE_MS = "2000"
+AI_QUEUE_MAX_ATTEMPTS = "3"
+AI_QUEUE_BACKOFF_MS = "3000"
+AI_QUEUE_CONGESTION_THRESHOLD = "50"
 
 [[routes]]
 pattern = "api.fortmax.com.br/*"

@@ -74,6 +74,13 @@ class AiAgent extends Model<AiAgent> {
   @Column(DataType.TEXT)
   handoffMessage: string;
 
+  @Default(false)
+  @Column
+  ackEnabled: boolean;
+
+  @Column(DataType.TEXT)
+  ackMessage: string;
+
   @CreatedAt
   createdAt: Date;
 

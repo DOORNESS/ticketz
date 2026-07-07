@@ -27,6 +27,8 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     maxTokens,
     fallbackQueueId,
     handoffMessage,
+    ackEnabled,
+    ackMessage,
     queueLinks
   } = req.body;
 
@@ -42,7 +44,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     temperature: temperature ?? 0.3,
     maxTokens: maxTokens ?? 1024,
     fallbackQueueId: fallbackQueueId || null,
-    handoffMessage
+    handoffMessage,
+    ackEnabled: ackEnabled === true,
+    ackMessage: ackMessage || null
   });
 
   if (Array.isArray(queueLinks)) {

@@ -89,6 +89,25 @@ Quando há migrations pendentes e `AUTO_MIGRATE` está desligado:
 
 **Recomendação produção:** rode migrations uma vez com `AUTO_MIGRATE=true` no deploy, ou execute `npm run db:migrate` manualmente, depois mantenha `AUTO_MIGRATE` desligado.
 
+### Fila assíncrona de IA
+
+O processamento inbound da IA roda em `AiInboundQueue` (Bull + Redis). O listener do WhatsApp apenas persiste e enfileira.
+
+| Variável | Padrão | Descrição |
+|----------|--------|-----------|
+| `AI_QUEUE_CONCURRENCY` | `5` | Jobs processados em paralelo |
+| `AI_QUEUE_DEBOUNCE_MS` | `2000` | Agrupa mensagens rápidas do mesmo ticket |
+| `AI_QUEUE_MAX_ATTEMPTS` | `3` | Retries para falhas transitórias |
+| `AI_QUEUE_BACKOFF_MS` | `3000` | Backoff inicial entre retries |
+| `AI_QUEUE_CONGESTION_THRESHOLD` | `50` | Limite de jobs pendentes para alerta |
+| `AI_QUEUE_LOCK_TTL_SEC` | `300` | TTL do lock por ticket |
+
+Métricas da fila aparecem em **IA → Diagnóstico**.
+
+### ACK opcional por agente
+
+Em **IA → Agentes**, cada agente pode habilitar mensagem automática ao receber a mensagem do cliente (enviada antes do processamento da IA).
+
 ### Tabelas criadas
 
 A migration `20260707100000-create-ai-and-knowledge-tables` cria:

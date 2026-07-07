@@ -144,7 +144,14 @@ const AiDiagnostics = () => {
               {(data?.items || []).map(item => (
                 <ListItem key={item.key}>
                   <ListItemIcon>{statusIcon(item.status)}</ListItemIcon>
-                  <ListItemText primary={item.label} secondary={item.message} />
+                  <ListItemText
+                    primary={item.label}
+                    secondary={
+                      item.key === "ai_queue" && item.details
+                        ? `${item.message} | média: ${item.details.avgDurationMs || 0}ms | máx: ${item.details.maxDurationMs || 0}ms | retries: ${item.details.retries || 0}`
+                        : item.message
+                    }
+                  />
                   <Chip size="small" label={item.status} />
                 </ListItem>
               ))}

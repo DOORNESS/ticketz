@@ -1,5 +1,6 @@
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
+import AiAgent from "../../models/AiAgent";
 import MessageMediaFile from "../../models/MessageMediaFile";
 import AiConversationLog from "../../models/AiConversationLog";
 import {
@@ -21,18 +22,27 @@ import HandoffToHumanService from "./HandoffToHumanService";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import formatBody from "../../helpers/Mustache";
 import StorageService from "../StorageService/StorageService";
+import { readMediaBuffer } from "../../helpers/mediaStorage";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
+import { isTransientAiError } from "./isTransientAiError";
 import { logger } from "../../utils/logger";
+
+export type InboundMessageItem = {
+  messageBody: string;
+  messageId?: string;
+  mediaType?: string;
+  mediaUrl?: string;
+  mediaFilename?: string;
+  mediaMimeType?: string;
+};
 
 type ProcessInboundParams = {
   ticket: Ticket;
   companyId: number;
-  messageBody: string;
-  messageId?: string;
-  mediaType?: string;
-  mediaBuffer?: Buffer;
-  mediaFilename?: string;
-  mediaMimeType?: string;
+  messages: InboundMessageItem[];
+  agent?: AiAgent;
+  forceHandoff?: boolean;
+  handoffReason?: string;
 };
 
 const DEFAULT_SYSTEM_RULES = `
@@ -70,15 +80,120 @@ const maskSensitiveLog = (text: string): string => {
     .replace(/\b\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}\b/g, "[MASKED_CNPJ]");
 };
 
+const resolveInboundText = async ({
+  companyId,
+  ticket,
+  agent,
+  messages
+}: {
+  companyId: number;
+  ticket: Ticket;
+  agent: AiAgent;
+  messages: InboundMessageItem[];
+}): Promise<string> => {
+  await StorageService.ensureReady(companyId);
+
+  const resolvedParts = await Promise.all(
+    messages.map(async message => {
+      let messageText = message.messageBody?.trim() || "";
+      const mediaBuffer = message.mediaUrl
+        ? (await readMediaBuffer(message.mediaUrl, companyId)) || undefined
+        : undefined;
+
+      if (mediaBuffer && message.mediaType === "audio") {
+        const upload = await StorageService.uploadBuffer(mediaBuffer, {
+          companyId,
+          ticketId: ticket.id,
+          messageId: message.messageId,
+          filename: message.mediaFilename || "audio.ogg",
+          contentType: message.mediaMimeType,
+          folder: "media/audio"
+        });
+
+        const transcription = await transcribeAudio(
+          companyId,
+          mediaBuffer,
+          message.mediaFilename || "audio.ogg",
+          agent.transcriptionModel,
+          agent.provider
+        );
+
+        await MessageMediaFile.create({
+          companyId,
+          ticketId: ticket.id,
+          messageId: message.messageId,
+          mediaType: "audio",
+          mimeType: message.mediaMimeType,
+          originalFilename: message.mediaFilename,
+          sizeBytes: upload.sizeBytes,
+          storageProvider: upload.provider,
+          storageKey: upload.key,
+          bucket: upload.bucket,
+          publicUrl: upload.publicUrl,
+          hash: upload.hash,
+          transcriptionText: transcription
+        });
+
+        messageText = transcription || messageText;
+      }
+
+      if (mediaBuffer && message.mediaType === "image") {
+        const upload = await StorageService.uploadBuffer(mediaBuffer, {
+          companyId,
+          ticketId: ticket.id,
+          messageId: message.messageId,
+          filename: message.mediaFilename || "image.jpg",
+          contentType: message.mediaMimeType,
+          folder: "media/images"
+        });
+
+        const imageUrl = upload.publicUrl.startsWith("http")
+          ? upload.publicUrl
+          : `${process.env.BACKEND_URL || "http://localhost:8080"}${upload.publicUrl}`;
+
+        const visionSummary = await analyzeImage(
+          companyId,
+          imageUrl,
+          agent.visionModel,
+          undefined,
+          agent.provider
+        );
+
+        await MessageMediaFile.create({
+          companyId,
+          ticketId: ticket.id,
+          messageId: message.messageId,
+          mediaType: "image",
+          mimeType: message.mediaMimeType,
+          originalFilename: message.mediaFilename,
+          sizeBytes: upload.sizeBytes,
+          storageProvider: upload.provider,
+          storageKey: upload.key,
+          bucket: upload.bucket,
+          publicUrl: upload.publicUrl,
+          hash: upload.hash,
+          visionSummary
+        });
+
+        messageText = messageText
+          ? `${messageText}\n\n[Imagem enviada pelo cliente]: ${visionSummary}`
+          : `[Imagem enviada pelo cliente]: ${visionSummary}`;
+      }
+
+      return messageText;
+    })
+  );
+
+  return resolvedParts.filter(Boolean).join("\n\n");
+};
+
 const ProcessInboundMessageService = async ({
   ticket,
   companyId,
-  messageBody,
-  messageId,
-  mediaType,
-  mediaBuffer,
-  mediaFilename,
-  mediaMimeType
+  messages,
+  agent: providedAgent,
+  forceHandoff = false,
+  handoffReason
 }: ProcessInboundParams): Promise<void> => {
   if (!isAiFeaturesEnabled()) {
     logger.warn(
@@ -94,107 +209,39 @@ const ProcessInboundMessageService = async ({
     return;
   }
 
-  const agent = await getActiveAgent(companyId, ticket.queueId);
+  const agent =
+    providedAgent || (await getActiveAgent(companyId, ticket.queueId));
   if (!agent) {
     return;
   }
 
-  let userText = messageBody?.trim() || "";
+  const primaryMessageId = messages[messages.length - 1]?.messageId;
+
+  let userText = "";
 
   try {
-    await StorageService.ensureReady(companyId);
-
-    if (mediaBuffer && mediaType === "audio") {
-      const upload = await StorageService.uploadBuffer(mediaBuffer, {
-        companyId,
-        ticketId: ticket.id,
-        messageId,
-        filename: mediaFilename || "audio.ogg",
-        contentType: mediaMimeType,
-        folder: "media/audio"
-      });
-
-      const transcription = await transcribeAudio(
-        companyId,
-        mediaBuffer,
-        mediaFilename || "audio.ogg",
-        agent.transcriptionModel,
-        agent.provider
-      );
-
-      await MessageMediaFile.create({
-        companyId,
-        ticketId: ticket.id,
-        messageId,
-        mediaType: "audio",
-        mimeType: mediaMimeType,
-        originalFilename: mediaFilename,
-        sizeBytes: upload.sizeBytes,
-        storageProvider: upload.provider,
-        storageKey: upload.key,
-        bucket: upload.bucket,
-        publicUrl: upload.publicUrl,
-        hash: upload.hash,
-        transcriptionText: transcription
-      });
-
-      userText = transcription || userText;
-    }
-
-    if (mediaBuffer && mediaType === "image") {
-      const upload = await StorageService.uploadBuffer(mediaBuffer, {
-        companyId,
-        ticketId: ticket.id,
-        messageId,
-        filename: mediaFilename || "image.jpg",
-        contentType: mediaMimeType,
-        folder: "media/images"
-      });
-
-      const imageUrl = upload.publicUrl.startsWith("http")
-        ? upload.publicUrl
-        : `${process.env.BACKEND_URL || "http://localhost:8080"}${upload.publicUrl}`;
-
-      const visionSummary = await analyzeImage(
-        companyId,
-        imageUrl,
-        agent.visionModel,
-        undefined,
-        agent.provider
-      );
-
-      await MessageMediaFile.create({
-        companyId,
-        ticketId: ticket.id,
-        messageId,
-        mediaType: "image",
-        mimeType: mediaMimeType,
-        originalFilename: mediaFilename,
-        sizeBytes: upload.sizeBytes,
-        storageProvider: upload.provider,
-        storageKey: upload.key,
-        bucket: upload.bucket,
-        publicUrl: upload.publicUrl,
-        hash: upload.hash,
-        visionSummary
-      });
-
-      userText = userText
-        ? `${userText}\n\n[Imagem enviada pelo cliente]: ${visionSummary}`
-        : `[Imagem enviada pelo cliente]: ${visionSummary}`;
-    }
+    userText = await resolveInboundText({
+      companyId,
+      ticket,
+      agent,
+      messages
+    });
 
     if (!userText) {
       return;
     }
 
-    if (detectHumanHandoffRequest(userText) || detectSensitiveTopic(userText)) {
+    if (
+      forceHandoff ||
+      detectHumanHandoffRequest(userText) ||
+      detectSensitiveTopic(userText)
+    ) {
       await HandoffToHumanService({
         ticket,
         agent,
         userMessage: maskSensitiveLog(userText),
-        messageId,
-        reason: "handoff_requested_or_sensitive"
+        messageId: primaryMessageId,
+        reason: handoffReason || "handoff_requested_or_sensitive"
       });
       return;
     }
@@ -242,7 +289,7 @@ const ProcessInboundMessageService = async ({
         ticket,
         agent,
         userMessage: maskSensitiveLog(userText),
-        messageId,
+        messageId: primaryMessageId,
         reason: "no_reliable_knowledge",
         usedChunks
       });
@@ -275,7 +322,7 @@ const ProcessInboundMessageService = async ({
         ticket,
         agent,
         userMessage: maskSensitiveLog(userText),
-        messageId,
+        messageId: primaryMessageId,
         reason: "low_confidence_response",
         usedChunks,
         model: completion.model
@@ -293,7 +340,7 @@ const ProcessInboundMessageService = async ({
     await AiConversationLog.create({
       companyId,
       ticketId: ticket.id,
-      messageId,
+      messageId: primaryMessageId,
       direction: "outbound",
       userMessage: maskSensitiveLog(userText),
       aiResponse: maskSensitiveLog(aiResponse),
@@ -304,6 +351,10 @@ const ProcessInboundMessageService = async ({
       transferredToHuman: false
     });
   } catch (error) {
+    if (isTransientAiError(error)) {
+      throw error;
+    }
+
     logger.error(
       { error, ticketId: ticket.id },
       "AI processing failed, handing off to human"
@@ -312,9 +363,11 @@ const ProcessInboundMessageService = async ({
     await HandoffToHumanService({
       ticket,
       agent,
-      userMessage: maskSensitiveLog(userText),
-      messageId,
-      reason: error?.message || "ai_error"
+      userMessage: maskSensitiveLog(
+        userText || messages.map(m => m.messageBody).join(" ")
+      ),
+      messageId: primaryMessageId,
+      reason: error instanceof Error ? error.message : "ai_error"
     });
   }
 };

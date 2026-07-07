@@ -9,6 +9,7 @@ import KnowledgeChunk from "../../models/KnowledgeChunk";
 import AiConversationLog from "../../models/AiConversationLog";
 import Whatsapp from "../../models/Whatsapp";
 import { getPendingMigrations } from "../MigrationServices/MigrationService";
+import { getAiQueueMetrics } from "./AiQueueMetricsService";
 import { createEmbedding } from "./ModelGateway";
 import { logger } from "../../utils/logger";
 
@@ -432,6 +433,31 @@ const checkWhatsapp = async (companyId: number): Promise<DiagnosticItem> => {
   );
 };
 
+const checkAiQueue = async (): Promise<DiagnosticItem> => {
+  try {
+    const metrics = await getAiQueueMetrics();
+    const pending = metrics.waiting + metrics.delayed;
+    const status: DiagnosticStatus = metrics.congested
+      ? "warning"
+      : metrics.failed > 0 && metrics.active > 0
+        ? "warning"
+        : "ok";
+
+    const message = metrics.congested
+      ? `Fila congestionada: ${pending} pendente(s), ${metrics.active} em execução`
+      : `${pending} pendente(s), ${metrics.active} em execução, ${metrics.completed} concluído(s), ${metrics.failed} com erro`;
+
+    return item("ai_queue", "Fila de IA", status, message, metrics);
+  } catch (error) {
+    return item(
+      "ai_queue",
+      "Fila de IA",
+      "warning",
+      error?.message || "Não foi possível consultar a fila de IA"
+    );
+  }
+};
+
 const checkLastProcessing = async (
   companyId: number
 ): Promise<DiagnosticItem> => {
@@ -526,6 +552,7 @@ export const runCompanyDiagnostics = async (
     checkActiveAgent(companyId),
     checkReadyBases(companyId),
     checkWhatsapp(companyId),
+    checkAiQueue(),
     checkLastProcessing(companyId)
   ]);
 

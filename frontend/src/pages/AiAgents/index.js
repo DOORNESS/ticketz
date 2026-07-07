@@ -37,7 +37,9 @@ const defaultAgent = {
   maxTokens: 1024,
   fallbackQueueId: "",
   handoffMessage:
-    "Vou transferir você para um atendente humano. Por favor, aguarde."
+    "Vou transferir você para um atendente humano. Por favor, aguarde.",
+  ackEnabled: false,
+  ackMessage: ""
 };
 
 const AiAgents = () => {
@@ -104,7 +106,9 @@ const AiAgents = () => {
       temperature: agent.temperature,
       maxTokens: agent.maxTokens,
       fallbackQueueId: agent.fallbackQueueId || "",
-      handoffMessage: agent.handoffMessage || defaultAgent.handoffMessage
+      handoffMessage: agent.handoffMessage || defaultAgent.handoffMessage,
+      ackEnabled: !!agent.ackEnabled,
+      ackMessage: agent.ackMessage || ""
     });
     setOpen(true);
   };
@@ -267,6 +271,29 @@ const AiAgents = () => {
             rows={2}
             value={form.handoffMessage}
             onChange={e => setForm({ ...form, handoffMessage: e.target.value })}
+          />
+          <FormControlLabel
+            control={
+              <Switch
+                checked={form.ackEnabled}
+                onChange={e =>
+                  setForm({ ...form, ackEnabled: e.target.checked })
+                }
+                color="primary"
+              />
+            }
+            label="Enviar mensagem automática ao receber (ACK)"
+          />
+          <TextField
+            label="Mensagem automática (ACK)"
+            fullWidth
+            margin="dense"
+            multiline
+            rows={2}
+            disabled={!form.ackEnabled}
+            placeholder="Recebi sua mensagem. Estou analisando e já vou responder."
+            value={form.ackMessage}
+            onChange={e => setForm({ ...form, ackMessage: e.target.value })}
           />
         </DialogContent>
         <DialogActions>
