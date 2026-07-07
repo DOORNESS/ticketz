@@ -285,10 +285,10 @@ const useAuth = () => {
     try {
       const { data } = await api.post("/auth/login", userData);
       posLogin(data);
-      return true;
+      return { ok: true };
     } catch (err) {
       toastError(err);
-      return false;
+      return { ok: false, error: err };
     }
   };
 

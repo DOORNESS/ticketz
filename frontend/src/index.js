@@ -7,9 +7,22 @@ import { i18n } from "./translate/i18n";
 import axios from "axios";
 
 const BACKEND_RETRY_INTERVAL_SECONDS = 15;
-const BACKEND_PROBE_TIMEOUT_MS = 3000;
+const BACKEND_PROBE_TIMEOUT_MS = 8000;
 let backendRetryTimeout = null;
 let backendProbeStarted = false;
+let appMounted = false;
+
+function isBackendHealthy(response) {
+  if (!response) {
+    return false;
+  }
+
+  if (response.status >= 200 && response.status < 500) {
+    return true;
+  }
+
+  return response.data?.ok === true;
+}
 
 function clearBackendRetryTimers() {
   if (backendRetryTimeout) {
@@ -40,6 +53,14 @@ function getRetryMessage(error) {
 }
 
 function showRetryMessage(message, onRetry) {
+  if (appMounted) {
+    clearBackendRetryTimers();
+    backendRetryTimeout = setTimeout(() => {
+      onRetry();
+    }, BACKEND_RETRY_INTERVAL_SECONDS * 1000);
+    return;
+  }
+
   window.renderError(
     `${message}<br><br><button type="button" onclick="window.__retryBackend && window.__retryBackend()" style="margin-top:12px;padding:8px 16px;border:none;border-radius:6px;background:#d32f2f;color:#fff;cursor:pointer;">Tentar novamente</button>`
   );
@@ -58,6 +79,7 @@ function showRetryMessage(message, onRetry) {
 
 function renderApp() {
   clearBackendRetryTimers();
+  appMounted = true;
   ReactDOM.render(
     <CssBaseline>
       <App />
@@ -79,10 +101,30 @@ function probeBackendInBackground(config, attempt = 1) {
   const healthUrl = `${backendBase}/health?cb=${Date.now()}`;
 
   axios
-    .get(healthUrl, { timeout: BACKEND_PROBE_TIMEOUT_MS })
+    .get(healthUrl, {
+      timeout: BACKEND_PROBE_TIMEOUT_MS,
+      validateStatus: () => true
+    })
+    .then(response => {
+      if (isBackendHealthy(response)) {
+        return response;
+      }
+
+      throw new Error("ERR_BACKEND_UNREACHABLE");
+    })
     .catch(() => {
       const fallbackUrl = `${backendBase}/?cb=${Date.now()}`;
-      return axios.get(fallbackUrl, { timeout: BACKEND_PROBE_TIMEOUT_MS });
+      return axios.get(fallbackUrl, {
+        timeout: BACKEND_PROBE_TIMEOUT_MS,
+        validateStatus: () => true
+      });
+    })
+    .then(response => {
+      if (isBackendHealthy(response)) {
+        return;
+      }
+
+      throw new Error("ERR_BACKEND_UNREACHABLE");
     })
     .catch(error => {
       const retryMessage = getRetryMessage(error);

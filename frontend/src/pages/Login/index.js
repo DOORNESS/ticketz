@@ -29,6 +29,7 @@ import { loadJSON } from "../../helpers/loadJSON";
 import brandTokens from "../../theme/brandTokens";
 import TurnstileWidget from "../../components/TurnstileWidget";
 import { resolveTurnstileSiteKey } from "../../helpers/turnstileConfig";
+import { resolveErrorMessage } from "../../errors/toastError";
 
 const gitinfo = loadJSON("/gitinfo.json");
 
@@ -268,6 +269,21 @@ const useStyles = makeStyles(theme => ({
       fontWeight: 500
     }
   },
+  loginError: {
+    width: "100%",
+    marginTop: theme.spacing(1),
+    marginBottom: theme.spacing(0.5),
+    padding: theme.spacing(1, 1.25),
+    borderRadius: brandTokens.shape.borderRadiusSm,
+    backgroundColor:
+      theme.mode === "light"
+        ? "rgba(211, 47, 47, 0.08)"
+        : "rgba(239, 83, 80, 0.12)",
+    border: `1px solid ${theme.palette.error.main}`,
+    color: theme.palette.error.main,
+    fontSize: "0.8125rem",
+    lineHeight: 1.4
+  },
   linksContainer: {
     width: "100%",
     maxWidth: 420,
@@ -339,6 +355,8 @@ const Login = () => {
   );
   const [turnstileToken, setTurnstileToken] = useState("");
   const [turnstileNonce, setTurnstileNonce] = useState(0);
+  const [loginError, setLoginError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const { handleLogin } = useContext(AuthContext);
 
@@ -355,18 +373,31 @@ const Login = () => {
 
   const handlSubmit = async event => {
     event.preventDefault();
-    if (turnstileSiteKey && !turnstileToken) {
+    if (submitting) {
       return;
     }
 
-    const ok = await handleLogin({
-      ...user,
-      turnstileToken: turnstileSiteKey ? turnstileToken : undefined
-    });
+    if (turnstileSiteKey && !turnstileToken) {
+      setLoginError(i18n.t("backendErrors.ERR_TURNSTILE_REQUIRED"));
+      return;
+    }
 
-    if (!ok) {
-      setTurnstileToken("");
-      setTurnstileNonce(current => current + 1);
+    setLoginError("");
+    setSubmitting(true);
+
+    try {
+      const result = await handleLogin({
+        ...user,
+        turnstileToken: turnstileSiteKey ? turnstileToken : undefined
+      });
+
+      if (!result?.ok) {
+        setLoginError(resolveErrorMessage(result?.error));
+        setTurnstileToken("");
+        setTurnstileNonce(current => current + 1);
+      }
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -555,15 +586,24 @@ const Login = () => {
                       resetNonce={turnstileNonce}
                     />
                   )}
+                  {loginError && (
+                    <Typography className={classes.loginError} role="alert">
+                      {loginError}
+                    </Typography>
+                  )}
                   <Button
                     type="submit"
                     fullWidth
                     variant="contained"
                     color="primary"
                     className={classes.submit}
-                    disabled={turnstileSiteKey && !turnstileToken}
+                    disabled={
+                      submitting || (turnstileSiteKey && !turnstileToken)
+                    }
                   >
-                    {i18n.t("login.buttons.submit")}
+                    {submitting
+                      ? i18n.t("login.buttons.submitting") || "Entrando..."
+                      : i18n.t("login.buttons.submit")}
                   </Button>
                   {allowSignup && (
                     <Grid container justifyContent="center">
