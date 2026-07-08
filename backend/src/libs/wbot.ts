@@ -387,7 +387,15 @@ export const initWASocket = async (
             );
 
             if (connection === "close") {
-              if ((lastDisconnect?.error as Boom)?.output?.statusCode === 403) {
+              const disconnectError = lastDisconnect?.error as Boom | undefined;
+              const statusCode = disconnectError?.output?.statusCode;
+              const isConflict =
+                statusCode === 440 ||
+                JSON.stringify(lastDisconnect?.error ?? "")
+                  .toLowerCase()
+                  .includes("conflict");
+
+              if (statusCode === 403) {
                 // disconnected from whatsapp
                 await removeWbot(id);
                 await whatsapp.update({
@@ -403,11 +411,41 @@ export const initWASocket = async (
                     session: whatsapp
                   }
                 );
+                return;
               }
-              if (
-                (lastDisconnect?.error as Boom)?.output?.statusCode !==
-                DisconnectReason.loggedOut
-              ) {
+
+              if (isConflict) {
+                logger.warn(
+                  { whatsappId: id, statusCode },
+                  `Session conflict — clearing creds and restarting QR for ${name}`
+                );
+                await removeWbot(id);
+                await DeleteBaileysService(whatsapp.id);
+                await whatsapp.update({
+                  status: "OPENING",
+                  session: "",
+                  qrcode: "",
+                  retries: 0
+                });
+                io.to(`company-${whatsapp.companyId}-admin`).emit(
+                  `company-${whatsapp.companyId}-whatsappSession`,
+                  {
+                    action: "update",
+                    session: whatsapp
+                  }
+                );
+                setTimeout(async () => {
+                  await whatsapp.reload();
+                  await StartWhatsAppSession(
+                    whatsapp,
+                    whatsapp.companyId,
+                    true
+                  );
+                }, 3000);
+                return;
+              }
+
+              if (statusCode !== DisconnectReason.loggedOut) {
                 // connection dropped without logging out
                 await whatsapp.update({ status: "PENDING" });
                 io.to(`company-${whatsapp.companyId}-admin`).emit(
