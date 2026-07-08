@@ -4,6 +4,7 @@
  *   node scripts/reset-whatsapp-session.js [whatsappId]
  */
 require("../dist/bootstrap");
+require("../dist/database");
 
 const Whatsapp = require("../dist/models/Whatsapp").default;
 const BaileysKeys = require("../dist/models/BaileysKeys").default;

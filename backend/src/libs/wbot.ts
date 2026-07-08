@@ -228,6 +228,7 @@ export const initWASocket = async (
         logger.info(`isLegacy: ${isLegacy}`);
         logger.info(`Starting session ${name}`);
         let retriesQrCode = 0;
+        let initResolved = false;
 
         let wsocket: Session = null;
         const store = new NodeCache({
@@ -391,6 +392,7 @@ export const initWASocket = async (
               const statusCode = disconnectError?.output?.statusCode;
               const isConflict =
                 statusCode === 440 ||
+                statusCode === 428 ||
                 JSON.stringify(lastDisconnect?.error ?? "")
                   .toLowerCase()
                   .includes("conflict");
@@ -604,6 +606,7 @@ export const initWASocket = async (
                   status: "qrcode",
                   retries: 0
                 });
+                await whatsapp.reload();
                 const sessionIndex = sessions.findIndex(
                   s => s.id === whatsapp.id
                 );
@@ -620,6 +623,11 @@ export const initWASocket = async (
                     session: whatsapp
                   }
                 );
+
+                if (!initResolved) {
+                  initResolved = true;
+                  resolve(wsocket);
+                }
               }
             }
           }

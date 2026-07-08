@@ -47,6 +47,10 @@ const markStartFailedIfStillOpening = async (
 ): Promise<void> => {
   await whatsapp.reload();
 
+  if (whatsapp.status === "qrcode" && whatsapp.qrcode) {
+    return;
+  }
+
   if (!["OPENING", "PENDING"].includes(whatsapp.status)) {
     return;
   }
@@ -97,7 +101,7 @@ export const StartWhatsAppSession = async (
       })
       .finally(() => {
         openingSessions.delete(whatsapp.id);
-    });
+      });
 
     try {
       await withTimeout(initPromise, getStartTimeoutMs());

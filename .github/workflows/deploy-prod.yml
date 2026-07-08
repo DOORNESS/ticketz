@@ -75,6 +75,25 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Build backend
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Deploy backend na VPS Contabo
+        env:
+          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CONTABO_PASSWORD:-}" ]; then
+            echo "::warning::CONTABO_PASSWORD ausente — deploy VPS ignorado (health check only)."
+          else
+            pip install pywinrm
+            python3 scripts/deploy-vps-backend.py
+          fi
+
       - name: Garantir DNS produção → VPS Contabo
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
