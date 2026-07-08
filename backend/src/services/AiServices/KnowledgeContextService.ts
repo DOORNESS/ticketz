@@ -133,6 +133,16 @@ export const buildKnowledgeContextForQuery = async ({
     );
   }
 
+  if (readyCount > 0 && readyCount <= 4) {
+    const usedChunks = await loadAllReadyChunkTexts(companyId, knowledgeBaseIds);
+    return {
+      contextBlock: buildContextBlock(usedChunks),
+      usedChunks,
+      hasReadyDocuments: usedChunks.length > 0,
+      reingestedDocuments
+    };
+  }
+
   let merged: RetrievedChunk[] = [];
 
   try {

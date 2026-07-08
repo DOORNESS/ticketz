@@ -22,6 +22,10 @@ CHUNK = 2000
 PATCH_PATHS = [
     "libs/wbot.js",
     "services/WbotServices/StartWhatsAppSession.js",
+    "services/WbotServices/wbotMessageListener.js",
+    "services/AiServices/ProcessInboundMessageService.js",
+    "services/AiServices/AiScheduleContextService.js",
+    "services/AiServices/KnowledgeContextService.js",
 ]
 
 

@@ -46,6 +46,8 @@ type ProcessInboundParams = {
 
 const DEFAULT_SYSTEM_RULES = `
 Você é o primeiro atendente virtual da Fortmax Sistemas. Mantenha conversa contínua: responda TODA mensagem do cliente.
+Mensagens de áudio do cliente são transcritas automaticamente — trate o texto transcrito como a pergunta dela e responda normalmente.
+Nunca diga que não entende áudio; se a transcrição vier vazia, peça para repetir ou enviar por texto.
 Quando o cliente fizer uma pergunta objetiva, responda o fato na primeira frase (ex.: anos no mercado, produtos, o que a empresa faz).
 Use a base de conhecimento abaixo como fonte principal — se o dado estiver lá, cite-o.
 Não repita saudações genéricas se o cliente já fez uma pergunta; responda a pergunta.
@@ -130,40 +132,51 @@ const resolveInboundText = async ({
         : undefined;
 
       if (mediaBuffer && message.mediaType === "audio") {
-        const upload = await StorageService.uploadBuffer(mediaBuffer, {
-          companyId,
-          ticketId: ticket.id,
-          messageId: message.messageId,
-          filename: message.mediaFilename || "audio.ogg",
-          contentType: message.mediaMimeType,
-          folder: "media/audio"
-        });
+        if (!messageText) {
+          messageText = await transcribeAudio(
+            companyId,
+            mediaBuffer,
+            message.mediaFilename || "audio.ogg",
+            agent.transcriptionModel,
+            agent.provider
+          );
+        }
 
-        const transcription = await transcribeAudio(
-          companyId,
-          mediaBuffer,
-          message.mediaFilename || "audio.ogg",
-          agent.transcriptionModel,
-          agent.provider
-        );
+        void (async () => {
+          try {
+            const upload = await StorageService.uploadBuffer(mediaBuffer, {
+              companyId,
+              ticketId: ticket.id,
+              messageId: message.messageId,
+              filename: message.mediaFilename || "audio.ogg",
+              contentType: message.mediaMimeType,
+              folder: "media/audio"
+            });
 
-        await MessageMediaFile.create({
-          companyId,
-          ticketId: ticket.id,
-          messageId: message.messageId,
-          mediaType: "audio",
-          mimeType: message.mediaMimeType,
-          originalFilename: message.mediaFilename,
-          sizeBytes: upload.sizeBytes,
-          storageProvider: upload.provider,
-          storageKey: upload.key,
-          bucket: upload.bucket,
-          publicUrl: upload.publicUrl,
-          hash: upload.hash,
-          transcriptionText: transcription
-        });
+            await MessageMediaFile.create({
+              companyId,
+              ticketId: ticket.id,
+              messageId: message.messageId,
+              mediaType: "audio",
+              mimeType: message.mediaMimeType,
+              originalFilename: message.mediaFilename,
+              sizeBytes: upload.sizeBytes,
+              storageProvider: upload.provider,
+              storageKey: upload.key,
+              bucket: upload.bucket,
+              publicUrl: upload.publicUrl,
+              hash: upload.hash,
+              transcriptionText: messageText
+            });
+          } catch (error) {
+            logger.warn(
+              { error, messageId: message.messageId },
+              "Deferred audio storage upload failed"
+            );
+          }
+        })();
 
-        messageText = transcription || messageText;
+        return messageText;
       }
 
       if (mediaBuffer && message.mediaType === "image") {
@@ -331,22 +344,23 @@ const ProcessInboundMessageService = async ({
       ticket.queueId
     );
 
-    const scheduleContext = await getAiScheduleContext(ticket);
+    const [scheduleContext, knowledgeContext, history] = await Promise.all([
+      getAiScheduleContext(ticket),
+      buildKnowledgeContextForQuery({
+        companyId,
+        knowledgeBaseIds,
+        userText,
+        provider: agent.provider
+      }),
+      buildConversationHistory(ticket.id, 6)
+    ]);
+
     const schedulePrompt = buildAiSchedulePromptBlock(scheduleContext);
-
-    const knowledgeContext = await buildKnowledgeContextForQuery({
-      companyId,
-      knowledgeBaseIds,
-      userText,
-      provider: agent.provider
-    });
-
     const usedChunks = knowledgeContext.usedChunks;
     const contextBlock = knowledgeContext.contextBlock;
     const hasReliableContext =
       usedChunks.length > 0 && usedChunks[0].similarity >= 0.25;
 
-    const history = await buildConversationHistory(ticket.id, 12);
     const contextHint = contextBlock
       ? contextBlock
       : knowledgeContext.hasReadyDocuments

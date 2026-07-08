@@ -62,6 +62,7 @@ import { getPublicPath } from "../../helpers/GetPublicPath";
 import { Session } from "../../libs/wbot";
 import { checkCompanyCompliant } from "../../helpers/CheckCompanyCompliant";
 import { transcriber } from "../../helpers/transcriber";
+import { readMediaBuffer } from "../../helpers/mediaStorage";
 import { parseToMilliseconds } from "../../helpers/parseToMilliseconds";
 import { randomValue } from "../../helpers/randomValue";
 import { getJidOf } from "./getJidOf";
@@ -751,16 +752,19 @@ export const verifyMediaMessage = async (
 
     if (apiKey && storedMediaUrl) {
       try {
-        const audioSource = storedMediaUrl.startsWith("http")
-          ? storedMediaUrl
-          : `${getPublicPath()}/${storedMediaUrl}`;
-        const audioTranscription = await transcriber(
-          audioSource,
-          { apiKey, provider },
-          filename
+        const audioBuffer = await readMediaBuffer(
+          storedMediaUrl,
+          ticket.companyId
         );
-        if (audioTranscription) {
-          body = audioTranscription;
+        if (audioBuffer) {
+          const audioTranscription = await transcriber(
+            audioBuffer,
+            { apiKey, provider },
+            filename
+          );
+          if (audioTranscription) {
+            body = audioTranscription;
+          }
         }
       } catch (error) {
         logger.error(
