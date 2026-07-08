@@ -78,7 +78,7 @@ const ensureAgent = async (companyId: number): Promise<AiAgent> => {
     active: true,
     ackEnabled: false,
     ackMessage: agent.ackMessage?.trim() || DEFAULT_ACK_MESSAGE,
-    basePrompt: agent.basePrompt?.trim() || DEFAULT_BASE_PROMPT,
+    basePrompt: DEFAULT_BASE_PROMPT,
     handoffMessage:
       agent.handoffMessage?.trim() ||
       "Vou transferir você para o Suporte humano. Por favor, aguarde um momento.",

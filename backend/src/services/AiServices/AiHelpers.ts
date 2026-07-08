@@ -4,14 +4,20 @@ import AiAgentQueue from "../../models/AiAgentQueue";
 import KnowledgeBase from "../../models/KnowledgeBase";
 
 const HANDOFF_KEYWORDS = [
+  "quero atendente",
+  "quero um atendente",
+  "chamar atendente",
+  "falar com atendente",
+  "atendente humano",
   "humano",
-  "atendente",
-  "pessoa",
-  "gerente",
-  "financeiro",
-  "suporte humano",
+  "pessoa real",
   "falar com alguem",
-  "falar com alguém"
+  "falar com alguém",
+  "transferir para atendente",
+  "transferir para humano",
+  "suporte humano",
+  "me transfere",
+  "me transferir"
 ];
 
 const SENSITIVE_KEYWORDS = [
@@ -101,8 +107,16 @@ export const getKnowledgeBaseIdsForAgent = async (
 };
 
 export const detectHumanHandoffRequest = (message: string): boolean => {
-  const lower = message.toLowerCase();
-  return HANDOFF_KEYWORDS.some(keyword => lower.includes(keyword));
+  const lower = message
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return HANDOFF_KEYWORDS.some(keyword => {
+    const normalizedKeyword = keyword
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    return lower.includes(normalizedKeyword);
+  });
 };
 
 export const detectSensitiveTopic = (message: string): boolean => {

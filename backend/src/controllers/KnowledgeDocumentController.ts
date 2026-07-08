@@ -66,12 +66,17 @@ export const storeText = async (
     status: "pending"
   });
 
-  ingestKnowledgeDocument(document.id, companyId, content).catch(error => {
+  try {
+    await ingestKnowledgeDocument(document.id, companyId, content);
+  } catch (error) {
     logger.error(
       { error, documentId: document.id, companyId },
       "Failed to ingest knowledge text document"
     );
-  });
+    throw new AppError("ERR_KNOWLEDGE_INGEST_FAILED", 500);
+  }
+
+  await document.reload();
 
   return res.status(201).json(document);
 };
@@ -121,12 +126,17 @@ export const storeFile = async (
     status: "pending"
   });
 
-  ingestKnowledgeDocument(document.id, companyId).catch(error => {
+  try {
+    await ingestKnowledgeDocument(document.id, companyId);
+  } catch (error) {
     logger.error(
       { error, documentId: document.id, companyId },
       "Failed to ingest knowledge file document"
     );
-  });
+    throw new AppError("ERR_KNOWLEDGE_INGEST_FAILED", 500);
+  }
+
+  await document.reload();
 
   return res.status(201).json(document);
 };
