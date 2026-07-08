@@ -15,6 +15,14 @@ const PROVIDER_BASE_URLS: Partial<Record<AIProviderId, string>> = {
   openrouter: "https://openrouter.ai/api/v1"
 };
 
+const parsePositiveInt = (
+  value: string | undefined,
+  fallback: number
+): number => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
 export class OpenAIProvider implements AIProvider {
   readonly id: AIProviderId;
 
@@ -24,7 +32,9 @@ export class OpenAIProvider implements AIProvider {
     this.id = id;
     this.client = new OpenAI({
       apiKey,
-      baseURL
+      baseURL,
+      maxRetries: parsePositiveInt(process.env.AI_PROVIDER_MAX_RETRIES, 1),
+      timeout: parsePositiveInt(process.env.AI_PROVIDER_TIMEOUT_MS, 45000)
     });
   }
 

@@ -39,7 +39,12 @@ export const bootstrapAiPlatform = async (): Promise<void> => {
     }
 
     if (aiReady) {
-      await ensureAiFirstResponderForAllCompanies();
+      ensureAiFirstResponderForAllCompanies().catch(error => {
+        logger.error(
+          { error },
+          "Failed to ensure AI first responder configuration"
+        );
+      });
     }
   } catch (error) {
     logger.error({ error }, "AI platform bootstrap failed");

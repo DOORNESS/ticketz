@@ -29,7 +29,9 @@ const store = async (req: Request, res: Response): Promise<Response> => {
     throw new AppError("ERR_NO_WAPP_FOUND", 404);
   }
 
-  await StartWhatsAppSession(whatsapp, companyId);
+  StartWhatsAppSession(whatsapp, companyId).catch(error => {
+    logger.error({ error, whatsappId: whatsapp.id }, "Failed to start session");
+  });
 
   return res.status(200).json({ message: "Starting session." });
 };
@@ -45,7 +47,12 @@ const update = async (req: Request, res: Response): Promise<Response> => {
   });
 
   if (whatsapp.channel === "whatsapp") {
-    await StartWhatsAppSession(whatsapp, companyId);
+    StartWhatsAppSession(whatsapp, companyId).catch(error => {
+      logger.error(
+        { error, whatsappId: whatsapp.id },
+        "Failed to restart session"
+      );
+    });
   }
 
   return res.status(200).json({ message: "Starting session." });

@@ -1,7 +1,7 @@
 import { Container } from "@cloudflare/containers";
 
 const FRONTEND_ORIGIN = "https://suporte.fortmax.com.br";
-const CONTAINER_INSTANCE_NAME = "prod-turnstile-enabled";
+const CONTAINER_INSTANCE_NAME = "prod-session-ai-stability";
 const MAX_PROXY_ATTEMPTS = 4;
 const PROXY_TIMEOUT_MS = 90000;
 const RETRYABLE_ERROR_MARKERS = [
@@ -63,7 +63,10 @@ function buildContainerEnv(env) {
     "AI_QUEUE_DEBOUNCE_MS",
     "AI_QUEUE_MAX_ATTEMPTS",
     "AI_QUEUE_BACKOFF_MS",
-    "AI_QUEUE_CONGESTION_THRESHOLD"
+    "AI_QUEUE_CONGESTION_THRESHOLD",
+    "AI_PROVIDER_TIMEOUT_MS",
+    "AI_PROVIDER_MAX_RETRIES",
+    "WHATSAPP_START_TIMEOUT_MS"
   ];
 
   const vars = {
