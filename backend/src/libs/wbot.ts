@@ -79,6 +79,28 @@ export type Session = WASocket & {
 const sessions: Session[] = [];
 
 const retriesQrCodeMap = new Map<number, number>();
+const sessionRestartAt = new Map<number, number>();
+
+const MIN_SESSION_RESTART_MS = 8000;
+
+const scheduleSessionRestart = (
+  whatsapp: Whatsapp,
+  delayMs: number,
+  isRefresh = true
+): void => {
+  const now = Date.now();
+  const lastRestart = sessionRestartAt.get(whatsapp.id) || 0;
+  const waitMs = Math.max(
+    delayMs,
+    MIN_SESSION_RESTART_MS - (now - lastRestart)
+  );
+
+  sessionRestartAt.set(whatsapp.id, now + waitMs);
+  setTimeout(async () => {
+    await whatsapp.reload();
+    await StartWhatsAppSession(whatsapp, whatsapp.companyId, isRefresh);
+  }, waitMs);
+};
 
 export const getWbot = (whatsappId: number): Session => {
   const sessionIndex = sessions.findIndex(s => s.id === whatsappId);
@@ -392,7 +414,6 @@ export const initWASocket = async (
               const statusCode = disconnectError?.output?.statusCode;
               const isConflict =
                 statusCode === 440 ||
-                statusCode === 428 ||
                 JSON.stringify(lastDisconnect?.error ?? "")
                   .toLowerCase()
                   .includes("conflict");
@@ -416,6 +437,29 @@ export const initWASocket = async (
                 return;
               }
 
+              if (statusCode === 428) {
+                logger.info(
+                  { whatsappId: id, statusCode },
+                  `Session QR expired — refreshing QR for ${name}`
+                );
+                await removeWbot(id, false);
+                await whatsapp.update({
+                  status: "OPENING",
+                  qrcode: "",
+                  retries: 0
+                });
+                await whatsapp.reload();
+                io.to(`company-${whatsapp.companyId}-admin`).emit(
+                  `company-${whatsapp.companyId}-whatsappSession`,
+                  {
+                    action: "update",
+                    session: whatsapp
+                  }
+                );
+                scheduleSessionRestart(whatsapp, 5000, true);
+                return;
+              }
+
               if (isConflict) {
                 logger.warn(
                   { whatsappId: id, statusCode },
@@ -436,20 +480,14 @@ export const initWASocket = async (
                     session: whatsapp
                   }
                 );
-                setTimeout(async () => {
-                  await whatsapp.reload();
-                  await StartWhatsAppSession(
-                    whatsapp,
-                    whatsapp.companyId,
-                    true
-                  );
-                }, 3000);
+                scheduleSessionRestart(whatsapp, 3000, true);
                 return;
               }
 
               if (statusCode !== DisconnectReason.loggedOut) {
                 // connection dropped without logging out
                 await whatsapp.update({ status: "PENDING" });
+                await whatsapp.reload();
                 io.to(`company-${whatsapp.companyId}-admin`).emit(
                   `company-${whatsapp.companyId}-whatsappSession`,
                   {
@@ -459,14 +497,7 @@ export const initWASocket = async (
                 );
                 removeWbot(id, false).then(() => {
                   logger.info(`Reconnecting ${name} in 1 second`);
-                  setTimeout(async () => {
-                    await whatsapp.reload();
-                    await StartWhatsAppSession(
-                      whatsapp,
-                      whatsapp.companyId,
-                      true
-                    );
-                  }, 1000);
+                  scheduleSessionRestart(whatsapp, 1000, true);
                 });
               } else {
                 // logged out
