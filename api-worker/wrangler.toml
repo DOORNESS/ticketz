@@ -67,6 +67,7 @@ TURNSTILE_SITE_KEY = "0x4AAAAAADhSILt9PsBiVeID"
 # [triggers]
 # crons = ["* * * * *"]
 
-[[routes]]
-pattern = "api.fortmax.com.br/*"
-zone_name = "fortmax.com.br"
+# Produção na VPS Contabo — rotas Worker desativadas (não usar wrangler deploy em prod)
+# [[routes]]
+# pattern = "api.fortmax.com.br/*"
+# zone_name = "fortmax.com.br"

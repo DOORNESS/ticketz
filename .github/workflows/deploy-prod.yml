@@ -42,146 +42,71 @@ jobs:
               - 'backend/**'
               - 'api-worker/**'
               - 'scripts/setup-cloudflare-api.mjs'
+              - 'scripts/migrate-prod-to-vps.mjs'
+              - '.github/workflows/deploy-prod.yml'
             frontend:
               - 'frontend/**'
               - 'functions/**'
               - 'scripts/setup-cloudflare-prod.mjs'
 
   deploy-api:
-    name: API → api.fortmax.com.br
+    name: API → VPS Contabo (api.fortmax.com.br)
     needs: detect-changes
     if: github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Validar secrets obrigatórios
-        env:
-          DB_PASS: ${{ secrets.DB_PASS }}
-          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${DB_PASS:-}" ]; then
-            echo "::error::Secret DB_PASS ausente. Cadastre em Settings → Secrets → Actions."
-            exit 1
-          fi
-          if [ -z "${TURNSTILE_SECRET_KEY:-}" ]; then
-            echo "::warning::Secret TURNSTILE_SECRET_KEY ausente — login Turnstile pode falhar."
-          fi
-
-      - name: Provisionar DNS e custom domain (api.fortmax.com.br)
+      - name: Validar secrets Cloudflare (DNS)
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          API_HOST: ${{ env.API_HOST }}
-          WORKER_NAME: ${{ env.WORKER_NAME }}
         run: |
           set -euo pipefail
-          node scripts/setup-cloudflare-api.mjs
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::Secret CLOUDFLARE_API_TOKEN ausente."
+            exit 1
+          fi
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Install api-worker dependencies
-        working-directory: api-worker
-        run: npm install --no-audit --no-fund
-
-      - name: Configurar secret DB_PASS no Worker
-        working-directory: api-worker
+      - name: Garantir DNS produção → VPS Contabo
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          DB_PASS: ${{ secrets.DB_PASS }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          VPS_IP: ${{ secrets.CONTABO_VPS_IP }}
+          API_HOST: ${{ env.API_HOST }}
         run: |
           set -euo pipefail
-          printf '%s' "$DB_PASS" | npx wrangler secret put DB_PASS
+          node scripts/setup-cloudflare-api.mjs
 
-      - name: Configurar secret TURNSTILE_SECRET_KEY no Worker
-        working-directory: api-worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          TURNSTILE_SECRET_KEY: ${{ secrets.TURNSTILE_SECRET_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${TURNSTILE_SECRET_KEY:-}" ]; then
-            echo "::warning::TURNSTILE_SECRET_KEY ausente — secret do Worker não atualizado."
-            exit 0
-          fi
-          printf '%s' "$TURNSTILE_SECRET_KEY" | npx wrangler secret put TURNSTILE_SECRET_KEY
-
-      - name: Configurar secret OPENAI_API_KEY no Worker
-        working-directory: api-worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          set -euo pipefail
-          if [ -z "${OPENAI_API_KEY:-}" ]; then
-            echo "::warning::OPENAI_API_KEY ausente — transcrição/IA dependem da chave em Settings."
-            exit 0
-          fi
-          printf '%s' "$OPENAI_API_KEY" | npx wrangler secret put OPENAI_API_KEY
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
-
-      - name: Configurar Docker wrapper para Wrangler
-        run: |
-          set -euo pipefail
-          cat > "${RUNNER_TEMP}/docker-wrangler" <<'EOF'
-          #!/usr/bin/env bash
-          set -euo pipefail
-          if [[ "${1:-}" == "build" ]]; then
-            shift
-            exec docker buildx build --load "$@"
-          fi
-          exec docker "$@"
-          EOF
-          chmod +x "${RUNNER_TEMP}/docker-wrangler"
-          echo "WRANGLER_DOCKER_BIN=${RUNNER_TEMP}/docker-wrangler" >> "$GITHUB_ENV"
-
-      - name: Validar build do container (API)
-        working-directory: backend
-        run: docker build -f Dockerfile.cloudflare .
-
-      - name: Deploy Worker + Container
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: api-worker
-          command: deploy
-
-      - name: Aguardar API ficar pronta
+      - name: Aguardar API ficar pronta (VPS)
         run: |
           set -euo pipefail
           API_URL="https://${{ env.API_HOST }}"
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 18); do
             if curl -fsS --max-time 20 "${API_URL}/health" >/dev/null 2>&1; then
               echo "API health OK on attempt ${attempt}"
+              curl -fsS --max-time 10 "${API_URL}/health" || true
               exit 0
             fi
-            echo "Attempt ${attempt}/30: API ainda aquecendo..."
+            echo "Attempt ${attempt}/18: API ainda aquecendo..."
             sleep 10
           done
-          echo "::warning::API /health não respondeu em 5 minutos — verifique logs do container."
-          curl -fsS --max-time 10 "${API_URL}/__worker_health" || true
+          echo "::error::API /health não respondeu — verifique backend na VPS Contabo."
+          exit 1
 
       - name: Summary API
         run: |
-          echo "## Ticketz API publicada" >> $GITHUB_STEP_SUMMARY
+          echo "## Ticketz API (VPS Contabo)" >> $GITHUB_STEP_SUMMARY
           echo "- Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
           echo "- URL: https://${{ env.API_HOST }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deploy Worker/Container: **desativado** (produção na VPS)" >> $GITHUB_STEP_SUMMARY
 
   deploy-spa:
     name: SPA → suporte.fortmax.com.br

@@ -1,34 +1,25 @@
 #!/usr/bin/env node
 /**
- * Provisiona DNS + custom domain do Worker API Ticketz Fortmax.
- * Padrão Nível Cashback / WebG3 / Cortex (api.*.fortmax.com.br).
+ * DNS de produção Ticketz — api.fortmax.com.br → VPS Contabo.
+ * Não deploya Worker/Container (produção nativa na VPS).
  *
  * Uso:
- *   CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ACCOUNT_ID=... \
- *   CLOUDFLARE_ZONE_ID=... API_HOST=api.fortmax.com.br \
- *   WORKER_NAME=fortmax-ticketz-api \
+ *   CLOUDFLARE_API_TOKEN=... CLOUDFLARE_ZONE_ID=... \
+ *   VPS_IP=31.220.103.226 \
  *   node scripts/setup-cloudflare-api.mjs
  */
 
 const CF_TOKEN = process.env.CLOUDFLARE_API_TOKEN;
-const ACCOUNT_ID = process.env.CLOUDFLARE_ACCOUNT_ID;
 const ZONE_ID = process.env.CLOUDFLARE_ZONE_ID;
+const ZONE_NAME = process.env.CLOUDFLARE_ZONE_NAME || "fortmax.com.br";
+const VPS_IP = process.env.VPS_IP || "31.220.103.226";
 const API_HOST = process.env.API_HOST || "api.fortmax.com.br";
-const WORKER_NAME = process.env.WORKER_NAME || "fortmax-ticketz-api";
 const API_SUBDOMAIN = API_HOST.split(".")[0];
 
-const missing = [];
-if (!CF_TOKEN) missing.push("CLOUDFLARE_API_TOKEN");
-if (!ACCOUNT_ID) missing.push("CLOUDFLARE_ACCOUNT_ID");
-if (missing.length) {
-  console.error(`❌ Variáveis ausentes: ${missing.join(", ")}`);
+if (!CF_TOKEN) {
+  console.error("❌ CLOUDFLARE_API_TOKEN é obrigatório.");
   process.exit(1);
 }
-
-const ACCOUNT_API = `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}`;
-const ZONE_API = ZONE_ID
-  ? `https://api.cloudflare.com/client/v4/zones/${ZONE_ID}`
-  : null;
 
 async function cf(url, init = {}) {
   const res = await fetch(url, {
@@ -43,91 +34,77 @@ async function cf(url, init = {}) {
   return { ok: res.ok, status: res.status, data };
 }
 
-async function ensureDnsRecord() {
-  if (!ZONE_API) {
-    console.log("⚠️  CLOUDFLARE_ZONE_ID ausente — DNS manual necessário.");
-    return;
+async function resolveZoneId() {
+  if (ZONE_ID) return ZONE_ID;
+  const res = await cf(`https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}`);
+  if (!res.data?.success || !res.data.result?.length) {
+    throw new Error(`Zone não encontrada: ${ZONE_NAME}`);
   }
+  return res.data.result[0].id;
+}
 
-  const list = await cf(`${ZONE_API}/dns_records?name=${API_HOST}`);
-  if (!list.data?.success) throw new Error(`list dns failed: ${JSON.stringify(list.data)}`);
+async function removeWorkerRoutes(zoneId) {
+  const res = await cf(
+    `https://api.cloudflare.com/client/v4/zones/${zoneId}/workers/routes`
+  );
+  if (!res.data?.success) return;
+  for (const route of res.data.result || []) {
+    if (!route.pattern?.includes("api.fortmax.com.br")) continue;
+    await cf(
+      `https://api.cloudflare.com/client/v4/zones/${zoneId}/workers/routes/${route.id}`,
+      { method: "DELETE" }
+    );
+    console.log(`✅ Rota Worker removida: ${route.pattern}`);
+  }
+}
 
-  const existing = (list.data.result || []).find(r => r.name === API_HOST);
+async function ensureDnsRecord(zoneId) {
+  const zoneApi = `https://api.cloudflare.com/client/v4/zones/${zoneId}`;
+  const list = await cf(`${zoneApi}/dns_records?name=${API_HOST}`);
+  if (!list.data?.success) throw new Error(JSON.stringify(list.data));
+
   const desired = {
-    type: "AAAA",
+    type: "A",
     name: API_SUBDOMAIN,
-    content: "100::",
+    content: VPS_IP,
     proxied: true,
-    comment: "Ticketz Fortmax API (Cloudflare Worker)"
+    comment: "Ticketz produção VPS Contabo"
   };
 
+  const existing = (list.data.result || []).find(r => r.name === API_HOST);
   if (existing) {
-    if (existing.type === "AAAA" && existing.content === "100::" && existing.proxied) {
-      console.log(`✅ DNS já configurado: ${API_HOST}`);
-      return;
-    }
-
-    const updated = await cf(`${ZONE_API}/dns_records/${existing.id}`, {
+    const updated = await cf(`${zoneApi}/dns_records/${existing.id}`, {
       method: "PATCH",
       body: JSON.stringify(desired)
     });
-    if (!updated.data?.success) throw new Error(`update dns failed: ${JSON.stringify(updated.data)}`);
-    console.log(`✅ DNS atualizado: ${API_HOST} → 100:: (proxied)`);
+    if (!updated.data?.success) throw new Error(JSON.stringify(updated.data));
+    console.log(`✅ DNS atualizado: ${API_HOST} → ${VPS_IP}`);
     return;
   }
 
-  const created = await cf(`${ZONE_API}/dns_records`, {
+  const created = await cf(`${zoneApi}/dns_records`, {
     method: "POST",
     body: JSON.stringify(desired)
   });
-  if (!created.data?.success) throw new Error(`create dns failed: ${JSON.stringify(created.data)}`);
-  console.log(`✅ DNS criado: ${API_HOST} → 100:: (proxied)`);
+  if (!created.data?.success) throw new Error(JSON.stringify(created.data));
+  console.log(`✅ DNS criado: ${API_HOST} → ${VPS_IP}`);
 }
 
-async function ensureWorkerCustomDomain() {
-  const list = await cf(`${ACCOUNT_API}/workers/domains`);
-  if (!list.data?.success) {
-    console.log(`⚠️  workers/domains list failed (${list.status}) — rota via wrangler.toml`);
-    return;
-  }
-
-  const exists = (list.data.result || []).some(
-    d => d.hostname === API_HOST && d.service === WORKER_NAME
+async function ensureSslFull(zoneId) {
+  const res = await cf(
+    `https://api.cloudflare.com/client/v4/zones/${zoneId}/settings/ssl`,
+    { method: "PATCH", body: JSON.stringify({ value: "full" }) }
   );
-  if (exists) {
-    console.log(`✅ Custom domain Worker já configurado: ${API_HOST}`);
-    return;
-  }
-
-  const created = await cf(`${ACCOUNT_API}/workers/domains`, {
-    method: "POST",
-    body: JSON.stringify({
-      hostname: API_HOST,
-      service: WORKER_NAME,
-      environment: "production"
-    })
-  });
-
-  if (!created.data?.success) {
-    const msg = JSON.stringify(created.data);
-    if (msg.includes("already exists") || msg.includes("duplicate")) {
-      console.log(`✅ Custom domain Worker já existe: ${API_HOST}`);
-      return;
-    }
-    console.log(`⚠️  custom domain create failed: ${msg}`);
-    console.log("   O deploy wrangler com routes no wrangler.toml deve registrar a rota.");
-    return;
-  }
-
-  console.log(`✅ Custom domain Worker criado: ${API_HOST} → ${WORKER_NAME}`);
+  if (res.data?.success) console.log("✅ SSL mode: Full");
 }
 
 async function main() {
-  console.log("→ Provisionando Cloudflare Worker API (Ticketz Fortmax)...");
-  await ensureDnsRecord();
-  await ensureWorkerCustomDomain();
-  console.log(`\n🎯 API pronta: https://${API_HOST}`);
-  console.log(`   Worker: ${WORKER_NAME}`);
+  const zoneId = await resolveZoneId();
+  console.log(`→ DNS produção VPS: ${API_HOST} → ${VPS_IP}`);
+  await removeWorkerRoutes(zoneId);
+  await ensureDnsRecord(zoneId);
+  await ensureSslFull(zoneId);
+  console.log(`\n🎯 API produção (VPS): https://${API_HOST}`);
 }
 
 main().catch(err => {
