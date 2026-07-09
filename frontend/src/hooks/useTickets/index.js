@@ -19,7 +19,9 @@ const useTickets = ({
   queueIds,
   withUnreadMessages,
   notClosed,
-  all
+  all,
+  aiFilter,
+  supervision
 }) => {
   const [loading, setLoading] = useState(true);
   const [tickets, setTickets] = useState([]);
@@ -47,7 +49,9 @@ const useTickets = ({
               queueIds,
               withUnreadMessages,
               notClosed,
-              all
+              all,
+              aiFilter,
+              supervision
             }
           });
           setTickets(data.tickets);
@@ -80,6 +84,8 @@ const useTickets = ({
     isSearch,
     notClosed,
     all,
+    aiFilter,
+    supervision,
     refreshTrigger
   ]);
 
@@ -105,7 +111,9 @@ const useTickets = ({
           withUnreadMessages,
           notClosed,
           all,
-          minUpdatedAt
+          minUpdatedAt,
+          aiFilter,
+          supervision
         }
       });
       return data.tickets;
@@ -124,7 +132,9 @@ const useTickets = ({
       queueIds,
       withUnreadMessages,
       notClosed,
-      all
+      all,
+      aiFilter,
+      supervision
     ]
   );
 

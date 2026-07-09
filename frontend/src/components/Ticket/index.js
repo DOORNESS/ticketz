@@ -18,6 +18,7 @@ import { EditMessageProvider } from "../../context/EditingMessage/EditingMessage
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { TagsContainer } from "../TagsContainer";
+import AiTicketContextBanner from "../AiTicketContextBanner";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import useSettings from "../../hooks/useSettings";
 import { i18n } from "../../translate/i18n";
@@ -226,6 +227,7 @@ const Ticket = () => {
           {renderTicketInfo()}
           <TicketActionButtons ticket={ticket} showTabGroups={showTabGroups} />
         </TicketHeader>
+        <AiTicketContextBanner ticket={ticket} />
         <Paper>
           <TagsContainer
             ticket={["ticket", "both"].includes(tagsMode) && ticket}

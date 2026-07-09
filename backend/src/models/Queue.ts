@@ -87,6 +87,12 @@ class Queue extends Model {
   @Column
   mediaName: string;
 
+  @Column
+  slaSeconds: number;
+
+  @Column
+  slaSupervisorEscalationSeconds: number;
+
   @HasMany(() => Ticket)
   tickets: Ticket[];
 }

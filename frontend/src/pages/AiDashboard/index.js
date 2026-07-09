@@ -57,6 +57,10 @@ const AiDashboard = () => {
   }
 
   const totals = data?.totals || {};
+  const operational = data?.operational || {};
+
+  const formatWaitSeconds = value =>
+    value === null || value === undefined ? "—" : `${value}s`;
 
   return (
     <MainContainer>
@@ -107,6 +111,110 @@ const AiDashboard = () => {
             />
           </div>
         </AiSectionPaper>
+
+        <AiSectionPaper
+          title="Operação IA ↔ Humano"
+          subtitle="Métricas do fluxo híbrido de atendimento."
+        >
+          <div className={classes.metricsGrid}>
+            <AiMetricCard
+              label="Iniciados pela IA"
+              value={operational.startedByAi || 0}
+            />
+            <AiMetricCard
+              label="Resolvidos pela IA"
+              value={operational.resolvedByAiTickets || 0}
+            />
+            <AiMetricCard
+              label="Transferidos"
+              value={operational.transferredTickets || 0}
+            />
+            <AiMetricCard
+              label="Handoff pendente"
+              value={operational.handoffPending || 0}
+            />
+            <AiMetricCard
+              label="Taxa resolução IA"
+              value={`${operational.aiResolutionRate || 0}%`}
+            />
+            <AiMetricCard
+              label="Tempo médio até humano"
+              value={formatWaitSeconds(operational.avgHandoffWaitSeconds)}
+            />
+            <AiMetricCard
+              label="Humano atendendo"
+              value={operational.humanHandling || 0}
+            />
+            <AiMetricCard
+              label="Encerrados por humano"
+              value={operational.closedByHuman || 0}
+            />
+          </div>
+        </AiSectionPaper>
+
+        <Grid container spacing={2}>
+          <Grid item xs={12} md={6}>
+            <AiSectionPaper title="Handoffs por setor">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Fila</TableCell>
+                    <TableCell align="right">Qtd.</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(operational.handoffsByQueue || []).length ? (
+                    operational.handoffsByQueue.map(item => (
+                      <TableRow key={item.queueName}>
+                        <TableCell>{item.queueName}</TableCell>
+                        <TableCell align="right">{item.count}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={2}>
+                        <Typography variant="body2" color="textSecondary">
+                          Nenhum handoff registrado.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </AiSectionPaper>
+          </Grid>
+
+          <Grid item xs={12} md={6}>
+            <AiSectionPaper title="Motivos de handoff">
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Motivo</TableCell>
+                    <TableCell align="right">Qtd.</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {(operational.handoffsByReason || []).length ? (
+                    operational.handoffsByReason.map(item => (
+                      <TableRow key={item.reason}>
+                        <TableCell>{item.label}</TableCell>
+                        <TableCell align="right">{item.count}</TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={2}>
+                        <Typography variant="body2" color="textSecondary">
+                          Nenhum motivo registrado.
+                        </Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </AiSectionPaper>
+          </Grid>
+        </Grid>
 
         <Grid container spacing={2}>
           <Grid item xs={12} md={6}>

@@ -9,6 +9,8 @@ import {
   getKnowledgeBaseIdsForAgent,
   detectHumanHandoffRequest,
   detectSensitiveTopic,
+  detectLowConfidenceResponse,
+  detectCustomerResolution,
   canAiEngageTicket
 } from "./AiHelpers";
 import {
@@ -25,6 +27,9 @@ import { isAiFeaturesEnabled } from "./AiPlatformState";
 import { isTransientAiError } from "./isTransientAiError";
 import { logger } from "../../utils/logger";
 import { persistAiDecisionLog } from "./AiDecisionLogger";
+import { AI_HANDOFF_REASONS } from "./AiOperationalTypes";
+import { logAiOperationalEvent } from "./AiOperationalLogService";
+import UpdateTicketService from "../TicketServices/UpdateTicketService";
 
 export type InboundMessageItem = {
   messageBody: string;
@@ -327,13 +332,57 @@ const ProcessInboundMessageService = async ({
       detectHumanHandoffRequest(userText) ||
       detectSensitiveTopic(userText)
     ) {
+      const resolvedHandoffReason = detectSensitiveTopic(userText)
+        ? AI_HANDOFF_REASONS.sensitive_subject
+        : detectHumanHandoffRequest(userText)
+          ? AI_HANDOFF_REASONS.customer_requested_human
+          : (handoffReason as any) || AI_HANDOFF_REASONS.customer_requested_human;
+
       await HandoffToHumanService({
         ticket,
         agent,
         userMessage: maskSensitiveLog(userText),
         messageId: primaryMessageId,
         reason: handoffReason || "handoff_requested_or_sensitive",
+        handoffReason: resolvedHandoffReason,
         conversationText
+      });
+      return;
+    }
+
+    if (detectCustomerResolution(userText)) {
+      await SendWhatsAppMessage({
+        body: formatBody(
+          "Fico feliz em ter ajudado! Se precisar de algo mais, é só chamar.",
+          ticket
+        ),
+        ticket
+      });
+
+      await UpdateTicketService({
+        ticketId: ticket.id,
+        companyId,
+        ticketData: {
+          status: "closed",
+          aiResolvedByAi: true,
+          aiHandoff: false,
+          justClose: true
+        } as any
+      });
+
+      await logAiOperationalEvent({
+        companyId,
+        ticketId: ticket.id,
+        event: "ai_resolved",
+        messageId: primaryMessageId,
+        details: { trigger: "customer_resolution_keywords" }
+      });
+
+      await logAiOperationalEvent({
+        companyId,
+        ticketId: ticket.id,
+        event: "ticket_closed_by_ai",
+        messageId: primaryMessageId
       });
       return;
     }
@@ -361,11 +410,29 @@ const ProcessInboundMessageService = async ({
     const hasReliableContext =
       usedChunks.length > 0 && usedChunks[0].similarity >= 0.25;
 
+    if (
+      knowledgeContext.hasReadyDocuments &&
+      !hasReliableContext &&
+      userText.length > 20
+    ) {
+      await HandoffToHumanService({
+        ticket,
+        agent,
+        userMessage: maskSensitiveLog(userText),
+        messageId: primaryMessageId,
+        handoffReason: AI_HANDOFF_REASONS.no_knowledge_found,
+        reason: "no_knowledge_found",
+        conversationText,
+        usedChunks
+      });
+      return;
+    }
     const contextHint = contextBlock
       ? contextBlock
       : knowledgeContext.hasReadyDocuments
         ? "Documentos existem na base, mas nenhum trecho foi recuperado. Responda com base no histórico e peça detalhes se necessário."
         : "Base de conhecimento ainda sem documentos prontos. Responda com cordialidade e peça detalhes.";
+
     const systemPrompt = [
       agent.basePrompt || "",
       DEFAULT_SYSTEM_RULES,
@@ -388,17 +455,55 @@ const ProcessInboundMessageService = async ({
     });
 
     const aiResponse = completion.content?.trim();
-    const outboundText = aiResponse || EMPTY_RESPONSE_FALLBACK;
+
+    if (!aiResponse || detectLowConfidenceResponse(aiResponse)) {
+      await HandoffToHumanService({
+        ticket,
+        agent,
+        userMessage: maskSensitiveLog(userText),
+        messageId: primaryMessageId,
+        handoffReason: AI_HANDOFF_REASONS.low_confidence,
+        reason: "low_confidence",
+        conversationText,
+        usedChunks,
+        model: completion.model
+      });
+      return;
+    }
+
+    const outboundText = aiResponse;
 
     await SendWhatsAppMessage({
       body: formatBody(outboundText, ticket),
       ticket
     });
 
+    if (!ticket.aiStartedAt) {
+      await logAiOperationalEvent({
+        companyId,
+        ticketId: ticket.id,
+        event: "ai_started",
+        messageId: primaryMessageId
+      });
+    }
+
     await ticket.update({
       aiAgentId: agent.id,
       aiHandoff: false,
-      chatbot: false
+      aiPaused: false,
+      chatbot: false,
+      aiStartedAt: ticket.aiStartedAt || new Date()
+    });
+
+    await logAiOperationalEvent({
+      companyId,
+      ticketId: ticket.id,
+      event: "ai_responded",
+      messageId: primaryMessageId,
+      details: {
+        hasReliableContext,
+        chunksUsed: usedChunks.length
+      }
     });
 
     await AiConversationLog.create({
@@ -437,6 +542,22 @@ const ProcessInboundMessageService = async ({
     }
 
     logger.error({ error, ticketId: ticket.id }, "AI processing failed");
+
+    const agent =
+      providedAgent || (await getActiveAgent(companyId, ticket.queueId));
+
+    if (agent) {
+      await HandoffToHumanService({
+        ticket,
+        agent,
+        userMessage: maskSensitiveLog(userText),
+        messageId: primaryMessageId,
+        handoffReason: AI_HANDOFF_REASONS.provider_error,
+        reason: "provider_error",
+        conversationText: userText
+      });
+      return;
+    }
 
     await SendWhatsAppMessage({
       body: formatBody(TRANSIENT_ERROR_FALLBACK, ticket),

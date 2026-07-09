@@ -17,6 +17,7 @@ import { incrementCounter } from "../CounterServices/IncrementCounter";
 import { getJidOf } from "../WbotServices/getJidOf";
 import Queue from "../../models/Queue";
 import { _t } from "../TranslationServices/i18nService";
+import { logAiOperationalEvent } from "../AiServices/AiOperationalLogService";
 
 export interface UpdateTicketData {
   status?: string;
@@ -27,6 +28,13 @@ export interface UpdateTicketData {
   justClose?: boolean;
   aiHandoff?: boolean;
   aiAgentId?: number | null;
+  aiHandoffReason?: string | null;
+  aiPaused?: boolean;
+  aiResolvedByAi?: boolean;
+  aiHandoffAt?: Date | null;
+  aiWaitingSince?: Date | null;
+  aiStartedAt?: Date | null;
+  aiSlaBreached?: boolean;
 }
 
 interface Request {
@@ -107,6 +115,13 @@ const UpdateTicketService = async ({
     let queueOptionId: number | null = ticketData.queueOptionId || null;
     let aiHandoff = ticketData.aiHandoff;
     let aiAgentId = ticketData.aiAgentId;
+    const aiHandoffReason = ticketData.aiHandoffReason;
+    const aiPaused = ticketData.aiPaused;
+    const aiResolvedByAi = ticketData.aiResolvedByAi;
+    const aiHandoffAt = ticketData.aiHandoffAt;
+    const aiWaitingSince = ticketData.aiWaitingSince;
+    const aiStartedAt = ticketData.aiStartedAt;
+    const aiSlaBreached = ticketData.aiSlaBreached;
 
     const io = getIO();
 
@@ -289,6 +304,12 @@ const UpdateTicketService = async ({
       aiHandoff = true;
     }
 
+    const humanAccepted =
+      status === "open" &&
+      userId &&
+      userId !== oldUserId &&
+      (ticket.aiAgentId || ticket.aiHandoff);
+
     await ticket.update({
       status,
       queueId,
@@ -297,7 +318,20 @@ const UpdateTicketService = async ({
       chatbot,
       queueOptionId,
       aiHandoff: aiHandoff !== undefined ? aiHandoff : ticket.aiHandoff,
-      aiAgentId: aiAgentId !== undefined ? aiAgentId : ticket.aiAgentId
+      aiAgentId: aiAgentId !== undefined ? aiAgentId : ticket.aiAgentId,
+      aiHandoffReason:
+        aiHandoffReason !== undefined
+          ? aiHandoffReason
+          : ticket.aiHandoffReason,
+      aiPaused: aiPaused !== undefined ? aiPaused : ticket.aiPaused,
+      aiResolvedByAi:
+        aiResolvedByAi !== undefined ? aiResolvedByAi : ticket.aiResolvedByAi,
+      aiHandoffAt: aiHandoffAt !== undefined ? aiHandoffAt : ticket.aiHandoffAt,
+      aiWaitingSince:
+        aiWaitingSince !== undefined ? aiWaitingSince : ticket.aiWaitingSince,
+      aiStartedAt: aiStartedAt !== undefined ? aiStartedAt : ticket.aiStartedAt,
+      aiSlaBreached:
+        aiSlaBreached !== undefined ? aiSlaBreached : ticket.aiSlaBreached
     });
 
     if (oldStatus !== status) {
@@ -313,6 +347,30 @@ const UpdateTicketService = async ({
     }
 
     await ticket.reload();
+
+    if (humanAccepted) {
+      await logAiOperationalEvent({
+        companyId,
+        ticketId: ticket.id,
+        event: "human_assumed",
+        details: { userId, previousStatus: oldStatus }
+      });
+    }
+
+    const humanClosed =
+      ticket.status === "closed" &&
+      oldStatus !== "closed" &&
+      !ticket.aiResolvedByAi &&
+      (ticket.aiStartedAt || ticket.aiAgentId);
+
+    if (humanClosed) {
+      await logAiOperationalEvent({
+        companyId,
+        ticketId: ticket.id,
+        event: "ticket_closed_by_human",
+        details: { userId: ticket.userId || userId }
+      });
+    }
 
     status = ticket.status;
 

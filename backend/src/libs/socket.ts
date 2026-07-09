@@ -284,16 +284,24 @@ export const initIO = (httpServer: Server): SocketIO => {
       if (c === 1) {
         if (user.profile === "admin") {
           socket.join(`company-${user.companyId}-notification`);
+          socket.join(`company-${user.companyId}-handoff`);
         } else {
           user.queues.forEach(queue => {
             logger.debug(
               `User ${user.id} of company ${user.companyId} joined queue ${queue.id} channel.`
             );
             socket.join(`queue-${queue.id}-notification`);
+            socket.join(`queue-${queue.id}-handoff`);
           });
         }
       }
       logger.debug(`joinNotification[${c}]: User: ${user.id}`);
+    });
+
+    socket.on("joinHandoff", () => {
+      user.queues.forEach(queue => {
+        socket.join(`queue-${queue.id}-handoff`);
+      });
     });
 
     socket.on("leaveNotification", async () => {

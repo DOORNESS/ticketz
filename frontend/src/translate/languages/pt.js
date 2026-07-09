@@ -490,6 +490,43 @@ const messages = {
           accept: "Aceitar"
         }
       },
+      aiSupervision: {
+        tabTitle: "IA",
+        waiting: "Aguardando",
+        filters: {
+          all: "Todos",
+          aiHandling: "IA atendendo",
+          aiResolved: "Resolvidos pela IA",
+          aiTransferred: "IA transferiu",
+          handoffPending: "Handoff pendente",
+          humanHandling: "Humano atendendo",
+          aiPaused: "IA pausada",
+          closed: "Encerrados"
+        },
+        banner: {
+          handoffTitle: "IA transferiu para humano",
+          aiHandlingTitle: "Atendimento conduzido pela IA",
+          aiHandlingHint:
+            "A IA está respondendo automaticamente. Alertas humanos estão suprimidos.",
+          startedByAi: "Este atendimento foi iniciado pela IA.",
+          handoffReason: "Motivo da transferência",
+          queue: "Fila",
+          reviewHistory: "Revise o histórico antes de responder."
+        },
+        actions: {
+          assumeFromBot: "Assumir do robô",
+          pauseAi: "Pausar IA",
+          resumeAi: "Retomar IA",
+          pauseSuccess: "IA pausada com sucesso.",
+          resumeSuccess: "IA retomada com sucesso."
+        },
+        handoffAlert: {
+          title: "🔴 IA TRANSFERIU PARA HUMANO",
+          body: "Atendimento aguardando humano",
+          queue: "Fila",
+          reason: "Motivo"
+        }
+      },
       newTicketModal: {
         title: "Criar Ticket",
         fieldLabel: "Digite para pesquisar o contato",

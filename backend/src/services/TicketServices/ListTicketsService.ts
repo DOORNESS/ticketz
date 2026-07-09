@@ -22,6 +22,10 @@ import TicketTag from "../../models/TicketTag";
 import Whatsapp from "../../models/Whatsapp";
 import { GetCompanySetting } from "../../helpers/CheckSettings";
 import ContactTag from "../../models/ContactTag";
+import {
+  AI_TICKET_FILTERS,
+  AiTicketFilter
+} from "../AiServices/AiOperationalTypes";
 
 interface Request {
   isSearch?: boolean;
@@ -42,6 +46,8 @@ interface Request {
   tags: number[];
   users: number[];
   companyId: number;
+  aiFilter?: string;
+  supervision?: boolean | string;
 }
 
 interface Response {
@@ -67,7 +73,9 @@ const ListTicketsService = async ({
   withUnreadMessages,
   notClosed,
   all,
-  companyId
+  companyId,
+  aiFilter,
+  supervision
 }: Request): Promise<Response> => {
   let ticketId: number;
 
@@ -97,22 +105,35 @@ const ListTicketsService = async ({
 
   const user = await ShowUserService(userId);
 
-  const andedOrs: WhereOptions<Ticket>[] = [
-    {
+  const isSupervision =
+    supervision === true ||
+    supervision === "true" ||
+    (aiFilter && aiFilter !== AI_TICKET_FILTERS.all);
+
+  const canSupervise = user.profile === "admin" || user.super === true;
+
+  const andedOrs: WhereOptions<Ticket>[] = [];
+
+  if (isSupervision && canSupervise) {
+    andedOrs.push({});
+  } else {
+    andedOrs.push({
       [Op.or]: [{ userId }, { status: "pending" }]
-    }
-  ];
-
-  let whereCondition: Filterable["where"] = {
-    [Op.and]: andedOrs,
-    queueId: {
-      [Op.or]: user.profile === "admin" ? [queueIds, null] : [queueIds]
-    }
-  };
-
-  if (groupsTab) {
-    whereCondition.isGroup = groups === "true";
+    });
   }
+
+  const queueFilter =
+    isSupervision && canSupervise && queueIds.length
+      ? { [Op.or]: [queueIds, null] }
+      : {
+          [Op.or]: user.profile === "admin" ? [queueIds, null] : [queueIds]
+        };
+
+  let whereCondition: WhereOptions<Ticket> = {
+    [Op.and]: andedOrs,
+    queueId: queueFilter,
+    ...(groupsTab ? { isGroup: groups === "true" } : {})
+  };
   let includeCondition: Includeable[];
 
   includeCondition = [
@@ -148,11 +169,9 @@ const ListTicketsService = async ({
     andedOrs.length = 0;
     whereCondition = {
       [Op.and]: andedOrs,
-      queueId: { [Op.or]: [queueIds, null] }
+      queueId: { [Op.or]: [queueIds, null] },
+      ...(groupsTab ? { isGroup: groups === "true" } : {})
     };
-    if (groupsTab) {
-      whereCondition.isGroup = groups === "true";
-    }
   }
 
   if (status) {
@@ -160,6 +179,79 @@ const ListTicketsService = async ({
       ...whereCondition,
       status
     };
+  }
+
+  const applyAiFilter = (filter?: string) => {
+    if (!filter || filter === AI_TICKET_FILTERS.all) {
+      return;
+    }
+
+    const aiConditions: WhereOptions<Ticket> = {};
+
+    switch (filter as AiTicketFilter) {
+      case AI_TICKET_FILTERS.ai_handling:
+        Object.assign(aiConditions, {
+          aiAgentId: { [Op.ne]: null },
+          aiHandoff: false,
+          aiPaused: false,
+          userId: null,
+          status: { [Op.ne]: "closed" }
+        });
+        break;
+      case AI_TICKET_FILTERS.ai_resolved:
+        Object.assign(aiConditions, {
+          aiResolvedByAi: true,
+          status: "closed"
+        });
+        break;
+      case AI_TICKET_FILTERS.ai_transferred:
+        Object.assign(aiConditions, {
+          aiHandoff: true,
+          status: "pending",
+          userId: null
+        });
+        break;
+      case AI_TICKET_FILTERS.handoff_pending:
+        Object.assign(aiConditions, {
+          aiHandoff: true,
+          status: "pending",
+          userId: null,
+          queueId: { [Op.ne]: null }
+        });
+        break;
+      case AI_TICKET_FILTERS.human_handling:
+        Object.assign(aiConditions, {
+          userId: { [Op.ne]: null },
+          status: "open"
+        });
+        break;
+      case AI_TICKET_FILTERS.ai_paused:
+        Object.assign(aiConditions, {
+          aiPaused: true,
+          status: { [Op.ne]: "closed" }
+        });
+        break;
+      case AI_TICKET_FILTERS.closed:
+        Object.assign(aiConditions, {
+          status: "closed"
+        });
+        break;
+      default:
+        break;
+    }
+
+    whereCondition = {
+      ...whereCondition,
+      ...aiConditions
+    };
+  };
+
+  applyAiFilter(aiFilter);
+
+  if (!isSupervision && !aiFilter && status === "pending") {
+    andedOrs.push({
+      [Op.or]: [{ aiHandoff: true }, { aiAgentId: null }, { aiPaused: true }]
+    });
   }
 
   if (searchParam) {

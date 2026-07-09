@@ -24,6 +24,12 @@ import Tooltip from "@material-ui/core/Tooltip";
 import { green } from "@material-ui/core/colors";
 import { PhoneCallContext } from "../../context/PhoneCall/PhoneCallContext";
 import { wavoipAvailable, wavoipCall } from "../../helpers/wavoipCallManager";
+import {
+  canSuperviseAi,
+  isAiHandlingTicket,
+  isHandoffPendingTicket
+} from "../../helpers/aiTicketStatus";
+import { toast } from "react-toastify";
 
 const useStyles = makeStyles(theme => ({
   actionButtons: {
@@ -100,6 +106,63 @@ const TicketActionButtonsCustom = ({ ticket, showTabGroups }) => {
         toastError(err);
       });
   };
+
+  const handleAssumeFromBot = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.post(`/tickets/${ticket.id}/ai/assume`, {
+        notifyCustomer: true
+      });
+      setCurrentTicket({ ...data, code: "#open" });
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePauseAi = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.post(`/tickets/${ticket.id}/ai/pause`);
+      setCurrentTicket({ ...data, code: "#paused" });
+      toast.success(i18n.t("aiSupervision.actions.pauseSuccess"));
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResumeAi = async () => {
+    setLoading(true);
+    try {
+      const { data } = await api.post(`/tickets/${ticket.id}/ai/resume`);
+      setCurrentTicket({ ...data, code: "#resumed" });
+      toast.success(i18n.t("aiSupervision.actions.resumeSuccess"));
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const showAssumeFromBot =
+    (isAiHandlingTicket(ticket) || isHandoffPendingTicket(ticket)) &&
+    !ticket.userId;
+
+  const showPauseAi =
+    canSuperviseAi(user) &&
+    ticket.aiAgentId &&
+    !ticket.userId &&
+    !ticket.aiPaused &&
+    ticket.status !== "closed";
+
+  const showResumeAi =
+    canSuperviseAi(user) &&
+    ticket.aiPaused &&
+    ticket.aiHandoff &&
+    !ticket.userId;
 
   return (
     <div className={classes.actionButtons}>
@@ -190,6 +253,39 @@ const TicketActionButtonsCustom = ({ ticket, showTabGroups }) => {
             showTabGroups={showTabGroups}
           />
         </>
+      )}
+      {showAssumeFromBot && (
+        <ButtonWithSpinner
+          loading={loading}
+          size="small"
+          variant="contained"
+          color="secondary"
+          onClick={handleAssumeFromBot}
+        >
+          {i18n.t("aiSupervision.actions.assumeFromBot")}
+        </ButtonWithSpinner>
+      )}
+      {showPauseAi && (
+        <ButtonWithSpinner
+          loading={loading}
+          size="small"
+          variant="outlined"
+          color="default"
+          onClick={handlePauseAi}
+        >
+          {i18n.t("aiSupervision.actions.pauseAi")}
+        </ButtonWithSpinner>
+      )}
+      {showResumeAi && (
+        <ButtonWithSpinner
+          loading={loading}
+          size="small"
+          variant="outlined"
+          color="primary"
+          onClick={handleResumeAi}
+        >
+          {i18n.t("aiSupervision.actions.resumeAi")}
+        </ButtonWithSpinner>
       )}
       {ticket.status === "pending" && (!showTabGroups || !ticket.isGroup) && (
         <ButtonWithSpinner

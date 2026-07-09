@@ -23,6 +23,7 @@ import { SocketContext } from "../../context/Socket/SocketContext";
 import Favicon from "react-favicon";
 import useSettings from "../../hooks/useSettings";
 import brandTokens from "../../theme/brandTokens";
+import { getHandoffReasonLabel } from "../../helpers/aiTicketStatus";
 
 const defaultLogoFavicon = brandTokens.logo.favicon;
 
@@ -131,6 +132,7 @@ const NotificationsPopOver = props => {
 
     const onConnectNotificationsPopover = () => {
       socket.emit("joinNotification");
+      socket.emit("joinHandoff");
     };
 
     const onCompanyTicketNotificationsPopover = data => {
@@ -144,6 +146,10 @@ const NotificationsPopOver = props => {
     };
 
     const onCompanyAppMessageNotificationsPopover = data => {
+      if (data.suppressHumanAlert) {
+        return;
+      }
+
       if (
         data.action === "create" &&
         !data.message.read &&
@@ -173,6 +179,43 @@ const NotificationsPopOver = props => {
       }
     };
 
+    const onCompanyHandoffNotificationsPopover = data => {
+      if (data.action !== "handoff_alert" || !data.ticket) {
+        return;
+      }
+
+      const ticket = data.ticket;
+      const belongsToQueue =
+        profile === "admin" ||
+        queueIds.includes(ticket.queueId) ||
+        !ticket.queueId;
+
+      if (!belongsToQueue) {
+        return;
+      }
+
+      setNotifications(prevState => {
+        const ticketIndex = prevState.findIndex(t => t.id === ticket.id);
+        if (ticketIndex !== -1) {
+          prevState[ticketIndex] = ticket;
+          return [...prevState];
+        }
+        return [ticket, ...prevState];
+      });
+
+      const reasonLabel =
+        data.reasonLabel ||
+        getHandoffReasonLabel(data.reason || ticket.aiHandoffReason);
+
+      const shouldNotNotificate =
+        ticket.id === ticketIdRef.current &&
+        document.visibilityState === "visible";
+
+      if (shouldNotNotificate) return;
+
+      handleHandoffNotification(ticket, reasonLabel);
+    };
+
     const onCompanyContactNotificationsPopover = data => {
       if (data.action !== "update") {
         return;
@@ -199,6 +242,10 @@ const NotificationsPopOver = props => {
     socket.on(
       `company-${companyId}-contact`,
       onCompanyContactNotificationsPopover
+    );
+    socket.on(
+      `company-${companyId}-handoff`,
+      onCompanyHandoffNotificationsPopover
     );
     socket.on("wsRefreshRequired", refreshRequired => {
       if (refreshRequired) {
@@ -257,6 +304,48 @@ const NotificationsPopOver = props => {
       });
     } catch (e) {
       console.error("Failed to push browser notification");
+    }
+
+    soundAlertRef.current();
+  };
+
+  const handleHandoffNotification = (ticket, reasonLabel) => {
+    const queueName = ticket.queue?.name || i18n.t("common.noqueue");
+    const options = {
+      body: `${i18n.t("aiSupervision.handoffAlert.body")}\n${i18n.t(
+        "aiSupervision.handoffAlert.queue"
+      )}: ${queueName}\n${i18n.t("aiSupervision.handoffAlert.reason")}: ${
+        reasonLabel || "—"
+      }`,
+      icon: ticket.contact?.profilePicUrl,
+      tag: `handoff-${ticket.id}`,
+      renotify: true
+    };
+
+    try {
+      const notification = new Notification(
+        i18n.t("aiSupervision.handoffAlert.title"),
+        options
+      );
+
+      notification.onclick = e => {
+        e.preventDefault();
+        window.focus();
+        historyRef.current.push(`/tickets/${ticket.uuid}`);
+      };
+
+      setDesktopNotifications(prevState => {
+        const notfiticationIndex = prevState.findIndex(
+          n => n.tag === notification.tag
+        );
+        if (notfiticationIndex !== -1) {
+          prevState[notfiticationIndex] = notification;
+          return [...prevState];
+        }
+        return [notification, ...prevState];
+      });
+    } catch (e) {
+      console.error("Failed to push handoff browser notification");
     }
 
     soundAlertRef.current();

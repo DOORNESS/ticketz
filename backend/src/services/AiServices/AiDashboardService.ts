@@ -1,6 +1,9 @@
 import { Op, fn, col, literal, QueryTypes } from "sequelize";
 import sequelize from "../../database";
 import AiConversationLog from "../../models/AiConversationLog";
+import Ticket from "../../models/Ticket";
+import Queue from "../../models/Queue";
+import { AI_HANDOFF_REASON_LABELS } from "./AiOperationalTypes";
 
 const TOKEN_COST_PER_MILLION = {
   "gpt-4o-mini": { input: 0.15, output: 0.6 },
@@ -88,6 +91,18 @@ export type AiDashboardData = {
     ticketId: number | null;
     error: string;
   }>;
+  operational: {
+    startedByAi: number;
+    resolvedByAiTickets: number;
+    transferredTickets: number;
+    handoffPending: number;
+    humanHandling: number;
+    closedByHuman: number;
+    aiResolutionRate: number;
+    avgHandoffWaitSeconds: number | null;
+    handoffsByQueue: Array<{ queueName: string; count: number }>;
+    handoffsByReason: Array<{ reason: string; label: string; count: number }>;
+  };
 };
 
 const buildCostFromLogs = (
@@ -237,6 +252,94 @@ export const getAiDashboard = async (
   const tokensInput = Number(summary?.tokensInput) || 0;
   const tokensOutput = Number(summary?.tokensOutput) || 0;
 
+  const [
+    startedByAi,
+    resolvedByAiTickets,
+    transferredTickets,
+    handoffPending,
+    humanHandling,
+    closedByHuman
+  ] = await Promise.all([
+    Ticket.count({
+      where: { companyId, aiStartedAt: { [Op.ne]: null } }
+    }),
+    Ticket.count({
+      where: { companyId, aiResolvedByAi: true, status: "closed" }
+    }),
+    Ticket.count({
+      where: { companyId, aiHandoff: true }
+    }),
+    Ticket.count({
+      where: {
+        companyId,
+        aiHandoff: true,
+        status: "pending",
+        userId: null
+      }
+    }),
+    Ticket.count({
+      where: { companyId, status: "open", userId: { [Op.ne]: null } }
+    }),
+    Ticket.count({
+      where: {
+        companyId,
+        status: "closed",
+        aiResolvedByAi: false,
+        aiStartedAt: { [Op.ne]: null }
+      }
+    })
+  ]);
+
+  const handoffsByQueue = (await Ticket.findAll({
+    attributes: [
+      [col("queue.name"), "queueName"],
+      [fn("COUNT", col("Ticket.id")), "count"]
+    ],
+    where: { companyId, aiHandoff: true },
+    include: [{ model: Queue, as: "queue", attributes: [] }],
+    group: ["queue.id", "queue.name"],
+    raw: true
+  })) as unknown as Array<{ queueName: string; count: string }>;
+
+  const handoffsByReasonRaw = (await Ticket.findAll({
+    attributes: ["aiHandoffReason", [fn("COUNT", col("id")), "count"]],
+    where: {
+      companyId,
+      aiHandoff: true,
+      aiHandoffReason: { [Op.ne]: null }
+    },
+    group: ["aiHandoffReason"],
+    raw: true
+  })) as unknown as Array<{ aiHandoffReason: string; count: string }>;
+
+  const waitingTickets = await Ticket.findAll({
+    attributes: ["aiWaitingSince"],
+    where: {
+      companyId,
+      aiHandoff: true,
+      status: "pending",
+      userId: null,
+      aiWaitingSince: { [Op.ne]: null }
+    },
+    raw: true
+  });
+
+  const avgHandoffWaitSeconds =
+    waitingTickets.length > 0
+      ? Math.round(
+          waitingTickets.reduce((sum, ticket) => {
+            const waitingMs =
+              Date.now() - new Date(ticket.aiWaitingSince).getTime();
+            return sum + waitingMs / 1000;
+          }, 0) / waitingTickets.length
+        )
+      : null;
+
+  const aiResolutionRate =
+    startedByAi > 0
+      ? Math.round((resolvedByAiTickets / startedByAi) * 1000) / 10
+      : 0;
+
   return {
     totals: {
       totalAttendances,
@@ -273,6 +376,26 @@ export const getAiDashboard = async (
       createdAt: row.createdAt,
       ticketId: row.ticketId,
       error: row.error
-    }))
+    })),
+    operational: {
+      startedByAi,
+      resolvedByAiTickets,
+      transferredTickets,
+      handoffPending,
+      humanHandling,
+      closedByHuman,
+      aiResolutionRate,
+      avgHandoffWaitSeconds,
+      handoffsByQueue: handoffsByQueue.map(row => ({
+        queueName: row.queueName || "Sem fila",
+        count: Number(row.count) || 0
+      })),
+      handoffsByReason: handoffsByReasonRaw.map(row => ({
+        reason: row.aiHandoffReason,
+        label:
+          AI_HANDOFF_REASON_LABELS[row.aiHandoffReason] || row.aiHandoffReason,
+        count: Number(row.count) || 0
+      }))
+    }
   };
 };

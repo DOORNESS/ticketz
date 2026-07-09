@@ -18,6 +18,7 @@ import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import toastError from "../../errors/toastError";
+import { isAiHandlingTicket } from "../../helpers/aiTicketStatus";
 
 const useStyles = makeStyles(theme => ({
   ticketsListWrapper: {
@@ -190,7 +191,9 @@ const TicketsListCustom = props => {
     updateCount,
     style,
     setTabOpen,
-    showTabGroups
+    showTabGroups,
+    aiFilter,
+    supervision
   } = props;
   const classes = useStyles();
   const [paginationCursor, setPaginationCursor] = useState({
@@ -221,7 +224,9 @@ const TicketsListCustom = props => {
     contactId,
     tags,
     users,
-    selectedQueueIds
+    selectedQueueIds,
+    aiFilter,
+    supervision
   ]);
 
   const {
@@ -243,7 +248,9 @@ const TicketsListCustom = props => {
     contactId,
     tags: JSON.stringify(tags),
     users: JSON.stringify(users),
-    queueIds: JSON.stringify(selectedQueueIds)
+    queueIds: JSON.stringify(selectedQueueIds),
+    aiFilter,
+    supervision: supervision ? "true" : undefined
   });
 
   useEffect(() => {
@@ -263,7 +270,17 @@ const TicketsListCustom = props => {
     const companyId = localStorage.getItem("companyId");
     const socket = socketManager.GetSocket(companyId);
 
+    const shouldIncludeTicket = ticket => {
+      if (!supervision && status === "pending" && isAiHandlingTicket(ticket)) {
+        return false;
+      }
+      return true;
+    };
+
     const shouldUpdateTicket = ticket => {
+      if (!shouldIncludeTicket(ticket)) {
+        return false;
+      }
       return (
         (!isSearch || !searchParam) &&
         (!contactId || ticket.contactId === contactId) &&
@@ -335,6 +352,10 @@ const TicketsListCustom = props => {
     };
 
     const onCompanyAppMessage = data => {
+      if (data.suppressHumanAlert && !supervision) {
+        return;
+      }
+
       if (showTabGroups && !!data.ticket?.isGroup !== !!groups) {
         return;
       }
@@ -431,7 +452,10 @@ const TicketsListCustom = props => {
     profile,
     queues,
     socketManager,
-    refetchTickets
+    refetchTickets,
+    fetchSince,
+    aiFilter,
+    supervision
   ]);
 
   useEffect(() => {

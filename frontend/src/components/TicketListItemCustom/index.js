@@ -37,6 +37,12 @@ import { generateColor } from "../../helpers/colorGenerator";
 import { getInitials } from "../../helpers/getInitials";
 import pastRelativeDate from "../../helpers/pastRelativeDate";
 import TagsLine from "../TagsLine";
+import {
+  formatWaitingTime,
+  getAiTicketBadge,
+  getHandoffReasonLabel,
+  isHandoffPendingTicket
+} from "../../helpers/aiTicketStatus";
 
 const useStyles = makeStyles(theme => ({
   ticket: {
@@ -152,6 +158,25 @@ const useStyles = makeStyles(theme => ({
   presence: {
     color: theme.mode === "light" ? "green" : "lightgreen",
     fontWeight: "bold"
+  },
+
+  ticketContainer: {
+    position: "relative"
+  },
+
+  handoffHighlight: {
+    backgroundColor:
+      theme.palette.type === "dark"
+        ? "rgba(198, 40, 40, 0.15)"
+        : "rgba(255, 235, 238, 0.9)",
+    borderLeft: "4px solid #c62828"
+  },
+
+  aiBadgeRow: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 2
   }
 }));
 
@@ -467,8 +492,69 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
     }
   };
 
+  const renderAiBadges = () => {
+    const badge = getAiTicketBadge(ticket);
+    if (!badge) return null;
+
+    const waiting = formatWaitingTime(ticket.aiWaitingSince);
+    const reasonLabel = getHandoffReasonLabel(ticket.aiHandoffReason);
+
+    return (
+      <Box className={classes.aiBadgeRow}>
+        <Badge
+          className={classes.Radiusdot}
+          badgeContent={badge.label}
+          style={{
+            backgroundColor: badge.color,
+            height: 18,
+            padding: 5,
+            position: "inherit",
+            borderRadius: 7,
+            color: "#fff",
+            marginRight: 3
+          }}
+        />
+        {waiting && isHandoffPendingTicket(ticket) && (
+          <Badge
+            className={classes.Radiusdot}
+            badgeContent={`${i18n.t("aiSupervision.waiting")}: ${waiting}`}
+            style={{
+              backgroundColor: "#b71c1c",
+              height: 18,
+              padding: 5,
+              position: "inherit",
+              borderRadius: 7,
+              color: "#fff",
+              marginRight: 3
+            }}
+          />
+        )}
+        {reasonLabel && ticket.aiHandoff && (
+          <Badge
+            className={classes.Radiusdot}
+            badgeContent={reasonLabel}
+            style={{
+              backgroundColor: "#5d4037",
+              height: 18,
+              padding: 5,
+              position: "inherit",
+              borderRadius: 7,
+              color: "#fff",
+              marginRight: 3
+            }}
+          />
+        )}
+      </Box>
+    );
+  };
+
   return (
-    <div key={`ticket-${ticket.id}`} className={classes.ticketContainer}>
+    <div
+      key={`ticket-${ticket.id}`}
+      className={clsx(classes.ticketContainer, {
+        [classes.handoffHighlight]: isHandoffPendingTicket(ticket)
+      })}
+    >
       <TicketMessagesDialog
         open={openTicketMessageDialog}
         handleClose={() => setOpenTicketMessageDialog(false)}
@@ -563,6 +649,7 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
                 )}
               </Typography>
               <TagsLine ticket={ticket} />
+              {renderAiBadges()}
               <ListItemSecondaryAction style={{ left: 73 }}>
                 <Box className={classes.ticketInfo1}>{renderTicketInfo()}</Box>
               </ListItemSecondaryAction>

@@ -117,6 +117,30 @@ class Ticket extends Model<Ticket> {
   @Column
   aiAgentId: number;
 
+  @Column
+  aiHandoffReason: string;
+
+  @Default(false)
+  @Column
+  aiPaused: boolean;
+
+  @Default(false)
+  @Column
+  aiResolvedByAi: boolean;
+
+  @Column
+  aiHandoffAt: Date;
+
+  @Column
+  aiWaitingSince: Date;
+
+  @Column
+  aiStartedAt: Date;
+
+  @Default(false)
+  @Column
+  aiSlaBreached: boolean;
+
   @Default(uuidv4())
   @Column
   uuid: string;

@@ -35,11 +35,23 @@ const SENSITIVE_KEYWORDS = [
 
 export const canAiEngageTicket = (ticket: Ticket): boolean => {
   if (ticket.userId) return false;
+  if (ticket.aiHandoff) return false;
+  if (ticket.aiPaused) return false;
   if (ticket.isGroup) return false;
   if (ticket.status === "closed") return false;
   if (ticket.contact?.disableBot) return false;
   return true;
 };
+
+export const isAiHandlingTicket = (ticket: Ticket): boolean =>
+  !!ticket.aiAgentId &&
+  !ticket.aiHandoff &&
+  !ticket.aiPaused &&
+  !ticket.userId &&
+  ticket.status !== "closed";
+
+export const shouldSuppressHumanNotification = (ticket: Ticket): boolean =>
+  isAiHandlingTicket(ticket);
 
 export const shouldAiHandleTicket = async (
   ticket: Ticket
@@ -138,4 +150,27 @@ export const detectLowConfidenceResponse = (response: string): boolean => {
     "não possuo essa informação"
   ];
   return markers.some(marker => lower.includes(marker));
+};
+
+const RESOLUTION_KEYWORDS = [
+  "obrigado",
+  "obrigada",
+  "valeu",
+  "resolvido",
+  "resolvi",
+  "perfeito",
+  "era isso",
+  "pode encerrar",
+  "pode finalizar",
+  "tudo certo",
+  "ajudou",
+  "ajudou muito"
+];
+
+export const detectCustomerResolution = (message: string): boolean => {
+  const lower = message
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return RESOLUTION_KEYWORDS.some(keyword => lower.includes(keyword));
 };

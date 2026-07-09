@@ -2,57 +2,7 @@ import Ticket from "../../models/Ticket";
 import { canAiEngageTicket, getActiveAgent } from "./AiHelpers";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
 import { enqueueAiInboundMessage } from "./AiInboundQueueService";
-import { persistAiDecisionLog } from "./AiDecisionLogger";
 import { logger } from "../../utils/logger";
-
-const isReengagementEnabled = (): boolean =>
-  process.env.AI_REENGAGEMENT_ENABLED !== "false";
-
-export { canAiEngageTicket };
-
-export const resetTicketForAiEngagement = async (
-  ticket: Ticket,
-  reason: string
-): Promise<void> => {
-  const hadHandoff = ticket.aiHandoff;
-
-  await ticket.update({
-    aiHandoff: false,
-    chatbot: false,
-    queueId: null
-  });
-
-  if (hadHandoff) {
-    await persistAiDecisionLog({
-      companyId: ticket.companyId,
-      ticketId: ticket.id,
-      action: "enqueue",
-      reason: "reengage_after_handoff",
-      details: { trigger: reason }
-    });
-
-    logger.info(
-      { ticketId: ticket.id, companyId: ticket.companyId, reason },
-      "AI re-engaged ticket after previous handoff"
-    );
-  }
-};
-
-export const shouldAiBypassLegacyBotMessages = async (
-  ticket: Ticket,
-  companyId: number
-): Promise<boolean> => {
-  if (!isAiFeaturesEnabled() || !isReengagementEnabled()) {
-    return false;
-  }
-
-  if (!canAiEngageTicket(ticket)) {
-    return false;
-  }
-
-  const agent = await getActiveAgent(companyId, ticket.queueId);
-  return !!agent;
-};
 
 export type EngageAiInboundParams = {
   companyId: number;
@@ -75,11 +25,17 @@ export const tryEngageAiOnInboundMessage = async ({
   mediaFilename,
   trigger = "inbound_message"
 }: EngageAiInboundParams): Promise<boolean> => {
-  if (!isAiFeaturesEnabled() || !isReengagementEnabled()) {
+  if (!isAiFeaturesEnabled()) {
     return false;
   }
 
   if (!canAiEngageTicket(ticket)) {
+    if (ticket.aiHandoff) {
+      logger.debug(
+        { ticketId: ticket.id, trigger },
+        "AI blocked after handoff — waiting for human"
+      );
+    }
     return false;
   }
 
@@ -88,17 +44,20 @@ export const tryEngageAiOnInboundMessage = async ({
     return false;
   }
 
-  if (ticket.aiHandoff) {
-    await resetTicketForAiEngagement(ticket, trigger);
+  if (!ticket.aiStartedAt) {
+    await ticket.update({
+      aiStartedAt: new Date(),
+      aiAgentId: activeAgent.id,
+      chatbot: false,
+      queueId: null
+    });
     await ticket.reload();
-  } else {
-    if (ticket.chatbot || ticket.queueId) {
-      await ticket.update({
-        chatbot: false,
-        queueId: null
-      });
-      await ticket.reload();
-    }
+  } else if (ticket.chatbot || ticket.queueId) {
+    await ticket.update({
+      chatbot: false,
+      queueId: null
+    });
+    await ticket.reload();
   }
 
   const enqueued = await enqueueAiInboundMessage({
@@ -135,4 +94,20 @@ export const tryEngageAiFromStoredMessage = async (
     mediaFilename: payload.mediaFilename,
     trigger
   });
+};
+
+export const shouldAiBypassLegacyBotMessages = async (
+  ticket: Ticket,
+  companyId: number
+): Promise<boolean> => {
+  if (!isAiFeaturesEnabled()) {
+    return false;
+  }
+
+  if (!canAiEngageTicket(ticket)) {
+    return false;
+  }
+
+  const agent = await getActiveAgent(companyId, ticket.queueId);
+  return !!agent;
 };

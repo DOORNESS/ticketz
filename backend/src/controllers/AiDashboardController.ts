@@ -19,7 +19,19 @@ const emptyDashboard = {
   topTopics: [],
   topDocuments: [],
   unansweredQuestions: [],
-  recentErrors: []
+  recentErrors: [],
+  operational: {
+    startedByAi: 0,
+    resolvedByAiTickets: 0,
+    transferredTickets: 0,
+    handoffPending: 0,
+    humanHandling: 0,
+    closedByHuman: 0,
+    aiResolutionRate: 0,
+    avgHandoffWaitSeconds: null,
+    handoffsByQueue: [],
+    handoffsByReason: []
+  }
 };
 
 export const index = async (req: Request, res: Response): Promise<Response> => {

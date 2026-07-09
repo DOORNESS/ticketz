@@ -10,6 +10,8 @@ import Tab from "@material-ui/core/Tab";
 import Badge from "@material-ui/core/Badge";
 import MoveToInboxIcon from "@material-ui/icons/MoveToInbox";
 import CheckBoxIcon from "@material-ui/icons/CheckBox";
+import AndroidIcon from "@material-ui/icons/Android";
+import Chip from "@material-ui/core/Chip";
 
 import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Switch from "@material-ui/core/Switch";
@@ -29,6 +31,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPeopleGroup } from "@fortawesome/free-solid-svg-icons";
 import useSettings from "../../hooks/useSettings";
 import { ContactSelect } from "../ContactSelect";
+import {
+  AI_SUPERVISION_FILTERS,
+  canSuperviseAi
+} from "../../helpers/aiTicketStatus";
 
 const useStyles = makeStyles(theme => ({
   ticketsWrapper: {
@@ -108,6 +114,14 @@ const useStyles = makeStyles(theme => ({
   icon24: {
     width: 24,
     height: 24
+  },
+
+  aiFilterBar: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6,
+    padding: theme.spacing(1),
+    borderBottom: `1px solid ${theme.palette.divider}`
   }
 }));
 
@@ -133,6 +147,9 @@ const TicketsManagerTabs = () => {
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
+  const [aiSupervisionFilter, setAiSupervisionFilter] = useState("all");
+
+  const canViewAiSupervision = canSuperviseAi(user);
 
   const { getSetting } = useSettings();
   const [showTabGroups, setShowTabGroups] = useState(false);
@@ -260,6 +277,17 @@ const TicketsManagerTabs = () => {
               root: showTabGroups ? classes.tabWithGroups : classes.tab
             }}
           />
+
+          {canViewAiSupervision && (
+            <Tab
+              value={"ai"}
+              icon={<AndroidIcon />}
+              label={i18n.t("aiSupervision.tabTitle")}
+              classes={{
+                root: showTabGroups ? classes.tabWithGroups : classes.tab
+              }}
+            />
+          )}
         </Tabs>
       </Paper>
       <Paper square elevation={0} className={classes.ticketOptionsBox}>
@@ -384,6 +412,30 @@ const TicketsManagerTabs = () => {
           showAll={true}
           selectedQueueIds={selectedQueueIds}
           showTabGroups={showTabGroups}
+        />
+      </TabPanel>
+      <TabPanel value={tab} name="ai" className={classes.ticketsWrapper}>
+        <Paper square elevation={0} className={classes.aiFilterBar}>
+          {AI_SUPERVISION_FILTERS.map(filter => (
+            <Chip
+              key={filter.value}
+              size="small"
+              label={i18n.t(filter.labelKey)}
+              color={
+                aiSupervisionFilter === filter.value ? "primary" : "default"
+              }
+              onClick={() => setAiSupervisionFilter(filter.value)}
+            />
+          ))}
+        </Paper>
+        <TicketsList
+          showAll={true}
+          selectedQueueIds={selectedQueueIds}
+          showTabGroups={showTabGroups}
+          aiFilter={
+            aiSupervisionFilter === "all" ? undefined : aiSupervisionFilter
+          }
+          supervision={true}
         />
       </TabPanel>
       <TabPanel value={tab} name="search" className={classes.ticketsWrapper}>

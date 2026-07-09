@@ -6,6 +6,7 @@ import OldMessage from "../../models/OldMessage";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import { logger } from "../../utils/logger";
+import { shouldSuppressHumanNotification } from "../AiServices/AiHelpers";
 
 interface MessageData {
   id: string;
@@ -27,19 +28,45 @@ interface Request {
   skipWebsocket?: boolean;
 }
 
-export const websocketCreateMessage = (message: Message) => {
+export const websocketCreateMessage = (
+  message: Message,
+  options?: { forceHumanAlert?: boolean }
+) => {
   const io = getIO();
-  io.to(message.ticketId.toString())
-    .to(`company-${message.companyId}-${message.ticket.status}`)
-    .to(`company-${message.companyId}-notification`)
-    .to(`queue-${message.ticket.queueId}-${message.ticket.status}`)
-    .to(`queue-${message.ticket.queueId}-notification`)
-    .emit(`company-${message.companyId}-appMessage`, {
-      action: "create",
-      message,
-      ticket: message.ticket,
-      contact: message.ticket.contact
-    });
+  const ticket = message.ticket;
+  const suppressHumanAlert =
+    shouldSuppressHumanNotification(ticket) && !options?.forceHumanAlert;
+
+  const payload = {
+    action: "create",
+    message,
+    ticket,
+    contact: ticket.contact,
+    suppressHumanAlert
+  };
+
+  io.to(message.ticketId.toString()).emit(
+    `company-${message.companyId}-appMessage`,
+    payload
+  );
+
+  if (!suppressHumanAlert) {
+    io.to(`company-${message.companyId}-${message.ticket.status}`)
+      .to(`company-${message.companyId}-notification`)
+      .to(`queue-${message.ticket.queueId}-${message.ticket.status}`)
+      .to(`queue-${message.ticket.queueId}-notification`)
+      .emit(`company-${message.companyId}-appMessage`, payload);
+  }
+
+  if (ticket.aiHandoff && ticket.queueId && !message.fromMe) {
+    io.to(`queue-${ticket.queueId}-handoff`)
+      .to(`queue-${ticket.queueId}-notification`)
+      .emit(`company-${message.companyId}-handoff`, {
+        action: "handoff_alert",
+        ticket,
+        message
+      });
+  }
 };
 
 const CreateMessageService = async ({
