@@ -12,6 +12,7 @@ export type EngageAiInboundParams = {
   mediaType?: string;
   mediaUrl?: string;
   mediaFilename?: string;
+  mediaMimeType?: string;
   trigger?: string;
 };
 
@@ -23,6 +24,7 @@ export const tryEngageAiOnInboundMessage = async ({
   mediaType,
   mediaUrl,
   mediaFilename,
+  mediaMimeType,
   trigger = "inbound_message"
 }: EngageAiInboundParams): Promise<boolean> => {
   if (!isAiFeaturesEnabled()) {
@@ -67,7 +69,8 @@ export const tryEngageAiOnInboundMessage = async ({
     messageId,
     mediaType,
     mediaUrl,
-    mediaFilename
+    mediaFilename,
+    mediaMimeType
   });
 
   return enqueued;

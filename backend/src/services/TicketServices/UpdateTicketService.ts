@@ -18,6 +18,7 @@ import { getJidOf } from "../WbotServices/getJidOf";
 import Queue from "../../models/Queue";
 import { _t } from "../TranslationServices/i18nService";
 import { logAiOperationalEvent } from "../AiServices/AiOperationalLogService";
+import { generateKnowledgeSuggestion } from "../AiServices/AiKnowledgeSuggestionService";
 
 export interface UpdateTicketData {
   status?: string;
@@ -35,6 +36,10 @@ export interface UpdateTicketData {
   aiWaitingSince?: Date | null;
   aiStartedAt?: Date | null;
   aiSlaBreached?: boolean;
+  aiEndedAt?: Date | null;
+  aiHandoffSummary?: string | null;
+  aiPriority?: string | null;
+  aiLastConfidence?: number | null;
 }
 
 interface Request {
@@ -212,10 +217,13 @@ const UpdateTicketService = async ({
       ) {
         if (!ticketTraking.ratingAt && !justClose) {
           if (ticket.channel === "whatsapp") {
+            const satisfactionQuestion = ticket.aiResolvedByAi
+              ? "Sua dúvida foi resolvida pela IA?"
+              : "Sua dúvida foi resolvida?";
             const ratingTxt =
               ticket.whatsapp.ratingMessage?.trim() ||
               _t("Please rate our service", ticket);
-            const rateInstructions = _t("Send a rating from 1 to 5", ticket);
+            const rateInstructions = `${satisfactionQuestion}\n⭐⭐⭐⭐⭐\n${_t("Send a rating from 1 to 5", ticket)}`;
             const rateReturn = _t(
               "Send *`!`* to return to the service",
               ticket
@@ -370,6 +378,14 @@ const UpdateTicketService = async ({
         event: "ticket_closed_by_human",
         details: { userId: ticket.userId || userId }
       });
+
+      if (ticket.aiStartedAt) {
+        void generateKnowledgeSuggestion(ticket).catch(() => undefined);
+      }
+    }
+
+    if (ticket.status === "closed" && ticket.aiStartedAt && !ticket.aiEndedAt) {
+      await ticket.update({ aiEndedAt: new Date() });
     }
 
     status = ticket.status;

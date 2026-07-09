@@ -511,7 +511,10 @@ const messages = {
           startedByAi: "Este atendimento foi iniciado pela IA.",
           handoffReason: "Motivo da transferência",
           queue: "Fila",
-          reviewHistory: "Revise o histórico antes de responder."
+          reviewHistory: "Revise o histórico antes de responder.",
+          confidence: "Confiança da resposta",
+          lowConfidence: "Transferido por baixa confiança",
+          priority: "Prioridade"
         },
         actions: {
           assumeFromBot: "Assumir do robô",
@@ -526,6 +529,17 @@ const messages = {
           queue: "Fila",
           reason: "Motivo"
         }
+      },
+      aiCopilot: {
+        title: "Sugestão da IA",
+        rationale: "Justificativa",
+        confidence: "Confiança",
+        copy: "Copiar",
+        send: "Enviar",
+        ignore: "Ignorar",
+        copied: "Sugestão copiada.",
+        sent: "Sugestão enviada ao cliente.",
+        empty: "A IA está analisando a conversa para sugerir uma resposta."
       },
       newTicketModal: {
         title: "Criar Ticket",

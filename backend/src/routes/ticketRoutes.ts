@@ -53,6 +53,34 @@ ticketRoutes.post(
   TicketAiController.resume
 );
 
+ticketRoutes.get(
+  "/tickets/:ticketId/ai/copilot",
+  isAuth,
+  isCompliant,
+  TicketAiController.copilot
+);
+
+ticketRoutes.post(
+  "/tickets/:ticketId/ai/copilot/action",
+  isAuth,
+  isCompliant,
+  TicketAiController.copilotAction
+);
+
+ticketRoutes.get(
+  "/tickets/:ticketId/ai/knowledge-suggestion",
+  isAuth,
+  isCompliant,
+  TicketAiController.knowledgeSuggestion
+);
+
+ticketRoutes.post(
+  "/tickets/:ticketId/ai/knowledge-suggestion/approve",
+  isAuth,
+  isCompliant,
+  TicketAiController.approveKnowledge
+);
+
 ticketRoutes.delete(
   "/tickets/:ticketId",
   isAuth,

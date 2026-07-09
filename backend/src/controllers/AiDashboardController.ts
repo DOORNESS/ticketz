@@ -30,7 +30,15 @@ const emptyDashboard = {
     aiResolutionRate: 0,
     avgHandoffWaitSeconds: null,
     handoffsByQueue: [],
-    handoffsByReason: []
+    handoffsByReason: [],
+    avgAiHandlingSeconds: null,
+    estimatedHoursSaved: 0,
+    estimatedCostSavedUsd: 0,
+    audioCount: 0,
+    imageCount: 0,
+    documentCount: 0,
+    aiSatisfactionAvg: null,
+    humanSatisfactionAvg: null
   }
 };
 

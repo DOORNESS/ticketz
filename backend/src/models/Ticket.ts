@@ -141,6 +141,40 @@ class Ticket extends Model<Ticket> {
   @Column
   aiSlaBreached: boolean;
 
+  @Column
+  aiHandoffSummary: string;
+
+  @Column
+  aiPriority: string;
+
+  @Column
+  aiLastConfidence: number;
+
+  @Column
+  aiEndedAt: Date;
+
+  @Default(0)
+  @Column
+  aiResponseCount: number;
+
+  @Default(0)
+  @Column
+  aiTotalTokensInput: number;
+
+  @Default(0)
+  @Column
+  aiTotalTokensOutput: number;
+
+  @Default(0)
+  @Column
+  aiEstimatedCostUsd: number;
+
+  @Column
+  aiSatisfactionRating: number;
+
+  @Column
+  aiSatisfactionSource: string;
+
   @Default(uuidv4())
   @Column
   uuid: string;

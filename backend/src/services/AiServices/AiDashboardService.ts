@@ -3,6 +3,7 @@ import sequelize from "../../database";
 import AiConversationLog from "../../models/AiConversationLog";
 import Ticket from "../../models/Ticket";
 import Queue from "../../models/Queue";
+import MessageMediaFile from "../../models/MessageMediaFile";
 import { AI_HANDOFF_REASON_LABELS } from "./AiOperationalTypes";
 
 const TOKEN_COST_PER_MILLION = {
@@ -102,6 +103,14 @@ export type AiDashboardData = {
     avgHandoffWaitSeconds: number | null;
     handoffsByQueue: Array<{ queueName: string; count: number }>;
     handoffsByReason: Array<{ reason: string; label: string; count: number }>;
+    avgAiHandlingSeconds: number | null;
+    estimatedHoursSaved: number;
+    estimatedCostSavedUsd: number;
+    audioCount: number;
+    imageCount: number;
+    documentCount: number;
+    aiSatisfactionAvg: number | null;
+    humanSatisfactionAvg: number | null;
   };
 };
 
@@ -340,6 +349,66 @@ export const getAiDashboard = async (
       ? Math.round((resolvedByAiTickets / startedByAi) * 1000) / 10
       : 0;
 
+  const aiDurationTickets = await Ticket.findAll({
+    attributes: ["aiStartedAt", "aiEndedAt", "aiResponseCount"],
+    where: {
+      companyId,
+      aiStartedAt: { [Op.ne]: null }
+    },
+    raw: true
+  });
+
+  const handlingDurations = aiDurationTickets
+    .map(ticket => {
+      if (!ticket.aiStartedAt) return null;
+      const end = ticket.aiEndedAt
+        ? new Date(ticket.aiEndedAt).getTime()
+        : Date.now();
+      return (end - new Date(ticket.aiStartedAt).getTime()) / 1000;
+    })
+    .filter((value): value is number => value !== null);
+
+  const avgAiHandlingSeconds =
+    handlingDurations.length > 0
+      ? Math.round(
+          handlingDurations.reduce((sum, value) => sum + value, 0) /
+            handlingDurations.length
+        )
+      : null;
+
+  const estimatedMinutesSaved = resolvedByAiTickets * 8;
+  const estimatedHoursSaved = Math.round((estimatedMinutesSaved / 60) * 10) / 10;
+  const estimatedCostSavedUsd = Math.round(estimatedHoursSaved * 25 * 100) / 100;
+
+  const [audioCount, imageCount, documentCount] = await Promise.all([
+    MessageMediaFile.count({ where: { companyId, mediaType: "audio" } }),
+    MessageMediaFile.count({ where: { companyId, mediaType: "image" } }),
+    MessageMediaFile.count({ where: { companyId, mediaType: "document" } })
+  ]);
+
+  const satisfactionRows = await Ticket.findAll({
+    attributes: ["aiSatisfactionRating", "aiSatisfactionSource"],
+    where: {
+      companyId,
+      aiSatisfactionRating: { [Op.ne]: null }
+    },
+    raw: true
+  });
+
+  const aiRatings = satisfactionRows
+    .filter(row => row.aiSatisfactionSource === "ai_resolved")
+    .map(row => Number(row.aiSatisfactionRating));
+  const humanRatings = satisfactionRows
+    .filter(row => row.aiSatisfactionSource === "human_resolved")
+    .map(row => Number(row.aiSatisfactionRating));
+
+  const avg = (values: number[]): number | null =>
+    values.length
+      ? Math.round(
+          (values.reduce((sum, value) => sum + value, 0) / values.length) * 10
+        ) / 10
+      : null;
+
   return {
     totals: {
       totalAttendances,
@@ -395,7 +464,15 @@ export const getAiDashboard = async (
         label:
           AI_HANDOFF_REASON_LABELS[row.aiHandoffReason] || row.aiHandoffReason,
         count: Number(row.count) || 0
-      }))
+      })),
+      avgAiHandlingSeconds,
+      estimatedHoursSaved,
+      estimatedCostSavedUsd,
+      audioCount,
+      imageCount,
+      documentCount,
+      aiSatisfactionAvg: avg(aiRatings),
+      humanSatisfactionAvg: avg(humanRatings)
     }
   };
 };

@@ -1,0 +1,190 @@
+import React, { useCallback, useContext, useEffect, useState } from "react";
+import {
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Paper,
+  Typography,
+  makeStyles
+} from "@material-ui/core";
+import { toast } from "react-toastify";
+import api from "../../services/api";
+import { i18n } from "../../translate/i18n";
+import toastError from "../../errors/toastError";
+import { SocketContext } from "../../context/Socket/SocketContext";
+import { formatConfidencePercent } from "../../helpers/aiTicketStatus";
+
+const useStyles = makeStyles(theme => ({
+  root: {
+    margin: theme.spacing(1),
+    padding: theme.spacing(1.5),
+    borderLeft: `4px solid ${theme.palette.primary.main}`,
+    backgroundColor: theme.palette.type === "dark" ? "#1b2a41" : "#f3f8ff"
+  },
+  title: {
+    fontWeight: 700,
+    marginBottom: theme.spacing(1)
+  },
+  actions: {
+    display: "flex",
+    gap: theme.spacing(1),
+    marginTop: theme.spacing(1),
+    flexWrap: "wrap"
+  },
+  rationale: {
+    marginTop: theme.spacing(1),
+    color: theme.palette.text.secondary,
+    fontSize: "0.875rem"
+  },
+  docs: {
+    marginTop: theme.spacing(1),
+    display: "flex",
+    flexWrap: "wrap",
+    gap: 6
+  }
+}));
+
+const AiCopilotPanel = ({ ticket }) => {
+  const classes = useStyles();
+  const [loading, setLoading] = useState(false);
+  const [suggestion, setSuggestion] = useState(null);
+  const socketManager = useContext(SocketContext);
+
+  const loadSuggestion = useCallback(async () => {
+    if (!ticket?.id || !ticket?.userId || ticket.status !== "open") {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const { data } = await api.get(`/tickets/${ticket.id}/ai/copilot`);
+      setSuggestion(data?.suggestion || null);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [ticket?.id, ticket?.userId, ticket?.status]);
+
+  useEffect(() => {
+    loadSuggestion();
+  }, [loadSuggestion]);
+
+  useEffect(() => {
+    const companyId = localStorage.getItem("companyId");
+    const socket = socketManager.GetSocket(companyId);
+
+    const onCopilotUpdate = data => {
+      if (data.ticketId === ticket?.id) {
+        setSuggestion(data.suggestion);
+      }
+    };
+
+    socket.on(`company-${companyId}-ai-copilot`, onCopilotUpdate);
+
+    return () => {
+      socket.off(`company-${companyId}-ai-copilot`, onCopilotUpdate);
+    };
+  }, [ticket?.id, socketManager]);
+
+  const runAction = async action => {
+    if (!suggestion?.id) return;
+
+    try {
+      if (action === "copy") {
+        await navigator.clipboard.writeText(suggestion.suggestedResponse);
+        toast.success(i18n.t("aiCopilot.copied"));
+      }
+
+      await api.post(`/tickets/${ticket.id}/ai/copilot/action`, {
+        suggestionId: suggestion.id,
+        action
+      });
+
+      if (action === "send") {
+        toast.success(i18n.t("aiCopilot.sent"));
+      }
+
+      if (action !== "copy") {
+        setSuggestion(null);
+      }
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  if (!ticket?.userId || ticket.status !== "open") {
+    return null;
+  }
+
+  return (
+    <Paper elevation={0} className={classes.root}>
+      <Typography className={classes.title}>
+        {i18n.t("aiCopilot.title")}
+      </Typography>
+
+      {loading ? (
+        <Box display="flex" justifyContent="center" p={1}>
+          <CircularProgress size={22} />
+        </Box>
+      ) : suggestion ? (
+        <>
+          <Typography variant="body2">
+            {suggestion.suggestedResponse}
+          </Typography>
+          {suggestion.rationale && (
+            <Typography className={classes.rationale}>
+              {i18n.t("aiCopilot.rationale")}: {suggestion.rationale}
+            </Typography>
+          )}
+          {suggestion.confidence !== null &&
+            suggestion.confidence !== undefined && (
+              <Typography className={classes.rationale}>
+                {i18n.t("aiCopilot.confidence")}:{" "}
+                {formatConfidencePercent(suggestion.confidence)}
+              </Typography>
+            )}
+          {Array.isArray(suggestion.usedChunks) &&
+            suggestion.usedChunks.length > 0 && (
+              <Box className={classes.docs}>
+                {suggestion.usedChunks.slice(0, 3).map((chunk, index) => (
+                  <Chip
+                    key={`${chunk.documentTitle || "doc"}-${index}`}
+                    size="small"
+                    label={chunk.documentTitle || chunk.topic || "Documento"}
+                  />
+                ))}
+              </Box>
+            )}
+          <Box className={classes.actions}>
+            <Button
+              size="small"
+              variant="outlined"
+              onClick={() => runAction("copy")}
+            >
+              {i18n.t("aiCopilot.copy")}
+            </Button>
+            <Button
+              size="small"
+              variant="contained"
+              color="primary"
+              onClick={() => runAction("send")}
+            >
+              {i18n.t("aiCopilot.send")}
+            </Button>
+            <Button size="small" onClick={() => runAction("ignore")}>
+              {i18n.t("aiCopilot.ignore")}
+            </Button>
+          </Box>
+        </>
+      ) : (
+        <Typography variant="body2" color="textSecondary">
+          {i18n.t("aiCopilot.empty")}
+        </Typography>
+      )}
+    </Paper>
+  );
+};
+
+export default AiCopilotPanel;

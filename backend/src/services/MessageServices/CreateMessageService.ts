@@ -6,6 +6,7 @@ import OldMessage from "../../models/OldMessage";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import { logger } from "../../utils/logger";
+import { generateCopilotSuggestion, shouldRunCopilot } from "../AiServices/AiCopilotService";
 import { shouldSuppressHumanNotification } from "../AiServices/AiHelpers";
 
 interface MessageData {
@@ -159,6 +160,20 @@ const CreateMessageService = async ({
     },
     "sending appMessage event"
   );
+
+  if (
+    !message.fromMe &&
+    message.ticket &&
+    shouldRunCopilot(message.ticket)
+  ) {
+    void generateCopilotSuggestion({ ticket: message.ticket }).catch(error => {
+      logger.warn(
+        { error, ticketId: message.ticketId },
+        "Copilot suggestion generation failed"
+      );
+    });
+  }
+
   return message;
 };
 

@@ -16,6 +16,8 @@ import {
 } from "./AiOperationalTypes";
 import { logAiOperationalEvent } from "./AiOperationalLogService";
 import { getIO } from "../../libs/socket";
+import { generateHandoffSummary } from "./AiHandoffSummaryService";
+import { classifyTicketPriority } from "./AiPriorityClassifierService";
 
 type HandoffParams = {
   ticket: Ticket;
@@ -128,6 +130,24 @@ const HandoffToHumanService = async ({
   });
 
   const updatedTicket = await ticket.reload({
+    include: ["contact", "queue", "whatsapp", "user"]
+  });
+
+  const handoffReasonLabel = getHandoffReasonLabel(resolvedReason);
+  const summary = await generateHandoffSummary({
+    ticket: updatedTicket,
+    conversationText,
+    handoffReasonLabel
+  });
+  const priority =
+    updatedTicket.aiPriority || classifyTicketPriority(userMessage);
+
+  await updatedTicket.update({
+    aiHandoffSummary: summary,
+    aiPriority: priority,
+    aiEndedAt: new Date()
+  });
+  await updatedTicket.reload({
     include: ["contact", "queue", "whatsapp", "user"]
   });
 

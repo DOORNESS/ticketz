@@ -1,5 +1,6 @@
 import { getAIProvider } from "./providers/ProviderFactory";
 import { ChatCompletionResult, ChatMessage } from "./providers/AIProvider";
+import { transcribeAudioBuffer } from "./AudioTranscriptionService";
 
 export type { ChatMessage, ChatCompletionResult };
 
@@ -44,8 +45,19 @@ export const transcribeAudio = async (
   model = "gpt-4o-mini-transcribe",
   providerId?: string
 ): Promise<string> => {
-  const provider = await getAIProvider(companyId, providerId);
-  return provider.transcribeAudio(audioBuffer, filename, model);
+  const result = await transcribeAudioBuffer({
+    companyId,
+    audioBuffer,
+    filename,
+    model,
+    providerId
+  });
+
+  if (!result.success || !result.text) {
+    throw new Error(result.errorReason || "audio_transcription_failed");
+  }
+
+  return result.text;
 };
 
 export const analyzeImage = async (

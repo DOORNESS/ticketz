@@ -73,6 +73,35 @@ export const formatWaitingTime = waitingSince => {
   return `${pad(minutes)}:${pad(seconds)}`;
 };
 
+export const formatConfidencePercent = confidence => {
+  if (confidence === null || confidence === undefined) {
+    return "—";
+  }
+  return `${Math.round(confidence * 100)}%`;
+};
+
+const PRIORITY_LABELS = {
+  low: "Baixa",
+  medium: "Média",
+  high: "Alta",
+  urgent: "Urgente"
+};
+
+const PRIORITY_COLORS = {
+  low: "#4caf50",
+  medium: "#ff9800",
+  high: "#f44336",
+  urgent: "#b71c1c"
+};
+
+export const getPriorityBadge = priority => {
+  if (!priority) return null;
+  return {
+    label: PRIORITY_LABELS[priority] || priority,
+    color: PRIORITY_COLORS[priority] || "#757575"
+  };
+};
+
 export const canSuperviseAi = user =>
   user?.profile === "admin" || user?.super === true;
 

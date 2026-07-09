@@ -3,7 +3,9 @@ import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
 import MessageMediaFile from "../../models/MessageMediaFile";
 import AiConversationLog from "../../models/AiConversationLog";
-import { chatCompletion, analyzeImage, transcribeAudio } from "./ModelGateway";
+import { chatCompletion, analyzeImage } from "./ModelGateway";
+import { transcribeAudioBuffer } from "./AudioTranscriptionService";
+import { isAudioPlaceholder } from "../../helpers/mediaPlaceholders";
 import {
   getActiveAgent,
   getKnowledgeBaseIdsForAgent,
@@ -30,6 +32,8 @@ import { persistAiDecisionLog } from "./AiDecisionLogger";
 import { AI_HANDOFF_REASONS } from "./AiOperationalTypes";
 import { logAiOperationalEvent } from "./AiOperationalLogService";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
+import { classifyTicketPriority } from "./AiPriorityClassifierService";
+import { computeConfidenceScore, estimateAiCostUsd } from "./AiMetricsHelper";
 
 export type InboundMessageItem = {
   messageBody: string;
@@ -62,14 +66,11 @@ Nunca invente preços, prazos ou políticas que não estejam no contexto.
 Responda em português do Brasil.
 `;
 
-const EMPTY_RESPONSE_FALLBACK =
-  "Recebi sua mensagem. Pode me contar um pouco mais do que você precisa para eu ajudar melhor?";
-
 const TRANSIENT_ERROR_FALLBACK =
   "Desculpe, tive uma instabilidade momentânea. Pode repetir sua pergunta?";
 
-const EMPTY_INPUT_FALLBACK =
-  "Recebi sua mensagem, mas não consegui entender o conteúdo. Pode enviar por texto ou tentar novamente?";
+const AUDIO_USER_FALLBACK =
+  "Não consegui compreender este áudio. Poderia reenviá-lo ou escrever sua mensagem?";
 
 const buildConversationHistory = async (
   ticketId: number,
@@ -137,99 +138,141 @@ const resolveInboundText = async ({
         : undefined;
 
       if (mediaBuffer && message.mediaType === "audio") {
-        if (!messageText) {
-          messageText = await transcribeAudio(
+        const shouldTranscribe =
+          !messageText || isAudioPlaceholder(messageText);
+
+        if (shouldTranscribe) {
+          const transcription = await transcribeAudioBuffer({
             companyId,
-            mediaBuffer,
-            message.mediaFilename || "audio.ogg",
-            agent.transcriptionModel,
-            agent.provider
-          );
+            audioBuffer: mediaBuffer,
+            filename: message.mediaFilename || "audio.ogg",
+            mimeType: message.mediaMimeType,
+            model: agent.transcriptionModel,
+            providerId: agent.provider,
+            ticketId: ticket.id,
+            messageId: message.messageId
+          });
+
+          if (transcription.success && transcription.text) {
+            messageText = transcription.text;
+          } else {
+            logger.error(
+              {
+                ticketId: ticket.id,
+                messageId: message.messageId,
+                errorReason: transcription.errorReason,
+                attempts: transcription.attempts,
+                bufferSize: transcription.bufferSize,
+                mimeType: transcription.mimeType,
+                filename: transcription.filename
+              },
+              "Audio transcription failed after retries"
+            );
+            return "__AUDIO_TRANSCRIPTION_FAILED__";
+          }
         }
 
-        void (async () => {
-          try {
-            const upload = await StorageService.uploadBuffer(mediaBuffer, {
-              companyId,
-              ticketId: ticket.id,
-              messageId: message.messageId,
-              filename: message.mediaFilename || "audio.ogg",
-              contentType: message.mediaMimeType,
-              folder: "media/audio"
-            });
+        try {
+          const upload = await StorageService.uploadBuffer(mediaBuffer, {
+            companyId,
+            ticketId: ticket.id,
+            messageId: message.messageId,
+            filename: message.mediaFilename || "audio.ogg",
+            contentType: message.mediaMimeType,
+            folder: "media/audio"
+          });
 
-            await MessageMediaFile.create({
-              companyId,
-              ticketId: ticket.id,
-              messageId: message.messageId,
-              mediaType: "audio",
-              mimeType: message.mediaMimeType,
-              originalFilename: message.mediaFilename,
-              sizeBytes: upload.sizeBytes,
-              storageProvider: upload.provider,
-              storageKey: upload.key,
-              bucket: upload.bucket,
-              publicUrl: upload.publicUrl,
-              hash: upload.hash,
-              transcriptionText: messageText
-            });
-          } catch (error) {
-            logger.warn(
-              { error, messageId: message.messageId },
-              "Deferred audio storage upload failed"
-            );
-          }
-        })();
+          await MessageMediaFile.create({
+            companyId,
+            ticketId: ticket.id,
+            messageId: message.messageId,
+            mediaType: "audio",
+            mimeType: message.mediaMimeType,
+            originalFilename: message.mediaFilename,
+            sizeBytes: upload.sizeBytes,
+            storageProvider: upload.provider,
+            storageKey: upload.key,
+            bucket: upload.bucket,
+            publicUrl: upload.publicUrl,
+            hash: upload.hash,
+            transcriptionText: messageText
+          });
+        } catch (error) {
+          logger.warn(
+            { error, messageId: message.messageId },
+            "Audio storage persistence failed"
+          );
+        }
 
         return messageText;
       }
 
       if (mediaBuffer && message.mediaType === "image") {
-        const upload = await StorageService.uploadBuffer(mediaBuffer, {
-          companyId,
-          ticketId: ticket.id,
-          messageId: message.messageId,
-          filename: message.mediaFilename || "image.jpg",
-          contentType: message.mediaMimeType,
-          folder: "media/images"
-        });
+        try {
+          const upload = await StorageService.uploadBuffer(mediaBuffer, {
+            companyId,
+            ticketId: ticket.id,
+            messageId: message.messageId,
+            filename: message.mediaFilename || "image.jpg",
+            contentType: message.mediaMimeType,
+            folder: "media/images"
+          });
 
-        const imageUrl = upload.publicUrl.startsWith("http")
-          ? upload.publicUrl
-          : `${process.env.BACKEND_URL || "http://localhost:8080"}${upload.publicUrl}`;
+          const imageUrl = upload.publicUrl.startsWith("http")
+            ? upload.publicUrl
+            : `${process.env.BACKEND_URL || "http://localhost:8080"}${upload.publicUrl}`;
 
-        const visionSummary = await analyzeImage(
-          companyId,
-          imageUrl,
-          agent.visionModel,
-          undefined,
-          agent.provider
-        );
+          const visionSummary = await analyzeImage(
+            companyId,
+            imageUrl,
+            agent.visionModel,
+            undefined,
+            agent.provider
+          );
 
-        await MessageMediaFile.create({
-          companyId,
-          ticketId: ticket.id,
-          messageId: message.messageId,
-          mediaType: "image",
-          mimeType: message.mediaMimeType,
-          originalFilename: message.mediaFilename,
-          sizeBytes: upload.sizeBytes,
-          storageProvider: upload.provider,
-          storageKey: upload.key,
-          bucket: upload.bucket,
-          publicUrl: upload.publicUrl,
-          hash: upload.hash,
-          visionSummary
-        });
+          await MessageMediaFile.create({
+            companyId,
+            ticketId: ticket.id,
+            messageId: message.messageId,
+            mediaType: "image",
+            mimeType: message.mediaMimeType,
+            originalFilename: message.mediaFilename,
+            sizeBytes: upload.sizeBytes,
+            storageProvider: upload.provider,
+            storageKey: upload.key,
+            bucket: upload.bucket,
+            publicUrl: upload.publicUrl,
+            hash: upload.hash,
+            visionSummary
+          });
 
-        messageText = messageText
-          ? `${messageText}\n\n[Imagem enviada pelo cliente]: ${visionSummary}`
-          : `[Imagem enviada pelo cliente]: ${visionSummary}`;
+          messageText = messageText
+            ? `${messageText}\n\n[Imagem enviada pelo cliente]: ${visionSummary}`
+            : `[Imagem enviada pelo cliente]: ${visionSummary}`;
+        } catch (error) {
+          logger.error(
+            {
+              error,
+              ticketId: ticket.id,
+              messageId: message.messageId,
+              mediaUrl: message.mediaUrl
+            },
+            "Image analysis failed"
+          );
+
+          messageText = messageText
+            ? messageText
+            : "[Imagem enviada pelo cliente — análise indisponível no momento]";
+        }
       }
 
       return messageText;
     })
   );
+
+  if (resolvedParts.includes("__AUDIO_TRANSCRIPTION_FAILED__")) {
+    return "__AUDIO_TRANSCRIPTION_FAILED__";
+  }
 
   return resolvedParts.filter(Boolean).join("\n\n");
 };
@@ -307,9 +350,9 @@ const ProcessInboundMessageService = async ({
       messages
     });
 
-    if (!userText) {
+    if (!userText || userText === "__AUDIO_TRANSCRIPTION_FAILED__") {
       await SendWhatsAppMessage({
-        body: formatBody(EMPTY_INPUT_FALLBACK, ticket),
+        body: formatBody(AUDIO_USER_FALLBACK, ticket),
         ticket
       });
 
@@ -320,9 +363,14 @@ const ProcessInboundMessageService = async ({
         action: "respond",
         reason: "empty_inbound_text_fallback",
         userMessage: messages.map(item => item.messageBody).join(" "),
-        aiResponse: EMPTY_INPUT_FALLBACK
+        aiResponse: AUDIO_USER_FALLBACK
       });
       return;
+    }
+
+    const priority = classifyTicketPriority(userText);
+    if (!ticket.aiPriority) {
+      await ticket.update({ aiPriority: priority });
     }
 
     const conversationText = await buildConversationText(ticket.id, userText);
@@ -336,7 +384,8 @@ const ProcessInboundMessageService = async ({
         ? AI_HANDOFF_REASONS.sensitive_subject
         : detectHumanHandoffRequest(userText)
           ? AI_HANDOFF_REASONS.customer_requested_human
-          : (handoffReason as any) || AI_HANDOFF_REASONS.customer_requested_human;
+          : (handoffReason as any) ||
+            AI_HANDOFF_REASONS.customer_requested_human;
 
       await HandoffToHumanService({
         ticket,
@@ -366,6 +415,7 @@ const ProcessInboundMessageService = async ({
           status: "closed",
           aiResolvedByAi: true,
           aiHandoff: false,
+          aiEndedAt: new Date(),
           justClose: true
         } as any
       });
@@ -472,6 +522,17 @@ const ProcessInboundMessageService = async ({
     }
 
     const outboundText = aiResponse;
+    const confidence = computeConfidenceScore({
+      topSimilarity: usedChunks[0]?.similarity || 0,
+      hasReliableContext,
+      responseLength: outboundText.length
+    });
+
+    const responseCost = estimateAiCostUsd(
+      completion.model,
+      completion.tokensInput || 0,
+      completion.tokensOutput || 0
+    );
 
     await SendWhatsAppMessage({
       body: formatBody(outboundText, ticket),
@@ -492,7 +553,14 @@ const ProcessInboundMessageService = async ({
       aiHandoff: false,
       aiPaused: false,
       chatbot: false,
-      aiStartedAt: ticket.aiStartedAt || new Date()
+      aiStartedAt: ticket.aiStartedAt || new Date(),
+      aiLastConfidence: confidence,
+      aiResponseCount: (ticket.aiResponseCount || 0) + 1,
+      aiTotalTokensInput:
+        (ticket.aiTotalTokensInput || 0) + (completion.tokensInput || 0),
+      aiTotalTokensOutput:
+        (ticket.aiTotalTokensOutput || 0) + (completion.tokensOutput || 0),
+      aiEstimatedCostUsd: Number(ticket.aiEstimatedCostUsd || 0) + responseCost
     });
 
     await logAiOperationalEvent({
@@ -502,7 +570,8 @@ const ProcessInboundMessageService = async ({
       messageId: primaryMessageId,
       details: {
         hasReliableContext,
-        chunksUsed: usedChunks.length
+        chunksUsed: usedChunks.length,
+        confidence
       }
     });
 
@@ -530,6 +599,7 @@ const ProcessInboundMessageService = async ({
         hasReliableContext,
         chunksUsed: usedChunks.length,
         topSimilarity: usedChunks[0]?.similarity || 0,
+        confidence,
         hadEmptyModelResponse: !aiResponse,
         reingestedDocuments: knowledgeContext.reingestedDocuments
       },

@@ -61,7 +61,8 @@ import { SimpleObjectCache } from "../../helpers/simpleObjectCache";
 import { getPublicPath } from "../../helpers/GetPublicPath";
 import { Session } from "../../libs/wbot";
 import { checkCompanyCompliant } from "../../helpers/CheckCompanyCompliant";
-import { transcriber } from "../../helpers/transcriber";
+import { transcribeAudioBuffer } from "../AiServices/AudioTranscriptionService";
+import { isAudioPlaceholder } from "../../helpers/mediaPlaceholders";
 import {
   readMediaBuffer,
   streamToBuffer,
@@ -743,17 +744,21 @@ export const verifyMediaMessage = async (
         const audioBuffer = Buffer.isBuffer(media.data)
           ? media.data
           : await streamToBuffer(media.data);
-        const audioTranscription = await transcriber(
+        const audioTranscription = await transcribeAudioBuffer({
+          companyId: ticket.companyId,
           audioBuffer,
-          { apiKey, provider },
-          filename
-        );
-        if (audioTranscription) {
-          body = audioTranscription;
+          filename,
+          mimeType: mimetype,
+          ticketId: ticket.id
+        });
+        if (audioTranscription.success && audioTranscription.text) {
+          body = audioTranscription.text;
+        } else if (isAudioPlaceholder(body)) {
+          body = "";
         }
       } catch (error) {
         logger.error(
-          { message: error?.message },
+          { message: error?.message, ticketId: ticket.id },
           "Error transcribing audio message from buffer"
         );
       }
@@ -795,13 +800,15 @@ export const verifyMediaMessage = async (
           ticket.companyId
         );
         if (audioBuffer) {
-          const audioTranscription = await transcriber(
+          const audioTranscription = await transcribeAudioBuffer({
+            companyId: ticket.companyId,
             audioBuffer,
-            { apiKey, provider },
-            filename
-          );
-          if (audioTranscription) {
-            body = audioTranscription;
+            filename,
+            mimeType: mimetype,
+            ticketId: ticket.id
+          });
+          if (audioTranscription.success && audioTranscription.text) {
+            body = audioTranscription.text;
           }
         }
       } catch (error) {
@@ -1448,6 +1455,11 @@ const handleRating = async (
     rate: finalRate
   });
 
+  await ticket.update({
+    aiSatisfactionRating: finalRate,
+    aiSatisfactionSource: ticket.aiResolvedByAi ? "ai_resolved" : "human_resolved"
+  });
+
   const complationMessage =
     whatsapp.complationMessage.trim() || _t("Service completed", ticket);
 
@@ -2007,6 +2019,12 @@ const handleMessage = async (
       mediaType: newMessage?.mediaType,
       mediaUrl: newMessage?.getDataValue("mediaUrl") || undefined,
       mediaFilename: newMessage?.getDataValue("mediaUrl")?.split("/").pop(),
+      mediaMimeType:
+        newMessage?.mediaType === "audio"
+          ? "audio/ogg"
+          : newMessage?.mediaType === "image"
+            ? "image/jpeg"
+            : undefined,
       trigger: "inbound_message"
     });
 

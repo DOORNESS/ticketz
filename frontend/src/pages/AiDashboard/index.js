@@ -149,6 +149,42 @@ const AiDashboard = () => {
               label="Encerrados por humano"
               value={operational.closedByHuman || 0}
             />
+            <AiMetricCard
+              label="Tempo médio IA"
+              value={
+                operational.avgAiHandlingSeconds
+                  ? `${operational.avgAiHandlingSeconds}s`
+                  : "—"
+              }
+            />
+            <AiMetricCard
+              label="Economia estimada (horas)"
+              value={operational.estimatedHoursSaved || 0}
+            />
+            <AiMetricCard
+              label="Economia estimada (custo)"
+              value={`$${Number(operational.estimatedCostSavedUsd || 0).toFixed(2)}`}
+            />
+            <AiMetricCard
+              label="Áudios processados"
+              value={operational.audioCount || 0}
+            />
+            <AiMetricCard
+              label="Imagens processadas"
+              value={operational.imageCount || 0}
+            />
+            <AiMetricCard
+              label="Documentos processados"
+              value={operational.documentCount || 0}
+            />
+            <AiMetricCard
+              label="Satisfação (IA)"
+              value={operational.aiSatisfactionAvg || "—"}
+            />
+            <AiMetricCard
+              label="Satisfação (humano)"
+              value={operational.humanSatisfactionAvg || "—"}
+            />
           </div>
         </AiSectionPaper>
 

@@ -41,6 +41,7 @@ import {
   formatWaitingTime,
   getAiTicketBadge,
   getHandoffReasonLabel,
+  getPriorityBadge,
   isHandoffPendingTicket
 } from "../../helpers/aiTicketStatus";
 
@@ -494,26 +495,44 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
 
   const renderAiBadges = () => {
     const badge = getAiTicketBadge(ticket);
-    if (!badge) return null;
+    const priorityBadge = getPriorityBadge(ticket.aiPriority);
+    if (!badge && !priorityBadge) return null;
 
     const waiting = formatWaitingTime(ticket.aiWaitingSince);
     const reasonLabel = getHandoffReasonLabel(ticket.aiHandoffReason);
 
     return (
       <Box className={classes.aiBadgeRow}>
-        <Badge
-          className={classes.Radiusdot}
-          badgeContent={badge.label}
-          style={{
-            backgroundColor: badge.color,
-            height: 18,
-            padding: 5,
-            position: "inherit",
-            borderRadius: 7,
-            color: "#fff",
-            marginRight: 3
-          }}
-        />
+        {priorityBadge && (
+          <Badge
+            className={classes.Radiusdot}
+            badgeContent={priorityBadge.label}
+            style={{
+              backgroundColor: priorityBadge.color,
+              height: 18,
+              padding: 5,
+              position: "inherit",
+              borderRadius: 7,
+              color: "#fff",
+              marginRight: 3
+            }}
+          />
+        )}
+        {badge && (
+          <Badge
+            className={classes.Radiusdot}
+            badgeContent={badge.label}
+            style={{
+              backgroundColor: badge.color,
+              height: 18,
+              padding: 5,
+              position: "inherit",
+              borderRadius: 7,
+              color: "#fff",
+              marginRight: 3
+            }}
+          />
+        )}
         {waiting && isHandoffPendingTicket(ticket) && (
           <Badge
             className={classes.Radiusdot}
