@@ -123,6 +123,14 @@ jobs:
             echo "::warning::CONTABO_PASSWORD vazio — deploy usa fallback do script"
             unset CONTABO_PASSWORD
           fi
+          # CONTABO_VPS_IP deve ser só IP/hostname (ex: 31.220.103.226), sem https://
+          CONTABO_HOST="${CONTABO_HOST:-31.220.103.226}"
+          CONTABO_HOST="${CONTABO_HOST#https://}"
+          CONTABO_HOST="${CONTABO_HOST#http://}"
+          CONTABO_HOST="${CONTABO_HOST%%/*}"
+          CONTABO_HOST="${CONTABO_HOST%%:*}"
+          export CONTABO_HOST
+          echo "Deploy target host: ${CONTABO_HOST}"
           python3 scripts/deploy-vps-backend.py
 
       - name: Garantir DNS produção → VPS Contabo

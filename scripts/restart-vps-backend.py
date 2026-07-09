@@ -3,10 +3,23 @@
 
 import os
 import sys
+from typing import Optional
 
 import winrm
 
-HOST = os.environ.get("CONTABO_HOST", "31.220.103.226")
+DEFAULT_HOST = "31.220.103.226"
+
+
+def normalize_host(value: Optional[str]) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return DEFAULT_HOST
+    raw = raw.replace("https://", "").replace("http://", "").strip("/")
+    raw = raw.split("/")[0].split(":")[0].strip()
+    return raw or DEFAULT_HOST
+
+
+HOST = normalize_host(os.environ.get("CONTABO_HOST"))
 USER = os.environ.get("CONTABO_USER", "administrator")
 PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip() or "74h9UFeGPbGni0"
 

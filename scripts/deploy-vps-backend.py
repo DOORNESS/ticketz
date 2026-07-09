@@ -6,11 +6,23 @@ import hashlib
 import os
 import sys
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import winrm
 
-HOST = os.environ.get("CONTABO_HOST", "31.220.103.226")
+DEFAULT_HOST = "31.220.103.226"
+
+
+def normalize_host(value: Optional[str]) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return DEFAULT_HOST
+    raw = raw.replace("https://", "").replace("http://", "").strip("/")
+    raw = raw.split("/")[0].split(":")[0].strip()
+    return raw or DEFAULT_HOST
+
+
+HOST = normalize_host(os.environ.get("CONTABO_HOST"))
 USER = os.environ.get("CONTABO_USER", "administrator")
 PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip() or "74h9UFeGPbGni0"
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,8 +83,10 @@ PATCH_PATHS = [
 
 
 def session():
+    endpoint = f"https://{HOST}:5986/wsman"
+    print(f"WinRM target: {endpoint}")
     return winrm.Session(
-        f"https://{HOST}:5986/wsman",
+        endpoint,
         auth=(USER, PASSWORD),
         transport="basic",
         server_cert_validation="ignore",
