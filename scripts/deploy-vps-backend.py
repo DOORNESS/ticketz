@@ -5,6 +5,8 @@ import base64
 import hashlib
 import os
 import sys
+import tempfile
+import zipfile
 from pathlib import Path
 from typing import List, Optional
 
@@ -144,6 +146,55 @@ Remove-Item '{tmp_path}' -Force
     print(f"  ok {local_path.relative_to(ROOT)} ({len(data)} bytes)")
 
 
+def build_zip_bundle(files: List[Path], extra_scripts: List[Path]) -> Path:
+    """Cria ZIP com dist/ + scripts/ para um único upload WinRM."""
+    tmp = tempfile.NamedTemporaryFile(suffix=".zip", delete=False)
+    tmp.close()
+    zip_path = Path(tmp.name)
+    with zipfile.ZipFile(zip_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for local in files:
+            arc = f"dist/{local.relative_to(DIST).as_posix()}"
+            zf.write(local, arc)
+        for script in extra_scripts:
+            arc = f"scripts/{script.name}"
+            zf.write(script, arc)
+    return zip_path
+
+
+def upload_zip_bundle(s, zip_path: Path) -> None:
+    """Envia 1 ZIP e extrai em C:\\ticketz\\backend (muito mais rápido que N arquivos)."""
+    remote_zip = r"C:\ticketz\deploy-cache\ticketz-dist.zip"
+    remote_root = r"C:\ticketz\backend"
+    size_mb = zip_path.stat().st_size / (1024 * 1024)
+    print(f"Uploading zip bundle ({size_mb:.1f} MB)...")
+    run_ps(
+        s,
+        r"New-Item -ItemType Directory -Force -Path C:\ticketz\deploy-cache | Out-Null",
+    )
+    upload_file(s, zip_path, remote_zip)
+    code, out, err = run_ps(
+        s,
+        f"""
+$zip = '{remote_zip}'
+$root = '{remote_root}'
+Expand-Archive -Path $zip -DestinationPath $root -Force
+Remove-Item $zip -Force -EA SilentlyContinue
+$count = (Get-ChildItem "$root\\dist" -Recurse -File -EA SilentlyContinue | Measure-Object).Count
+Write-Output "extracted dist files=$count"
+""",
+    )
+    print(out.strip())
+    if code != 0:
+        raise RuntimeError(f"Zip extract failed: {out} {err}")
+    zip_path.unlink(missing_ok=True)
+
+
+def should_use_zip(mode: str) -> bool:
+    if os.environ.get("DEPLOY_USE_ZIP", "").lower() in ("1", "true", "yes"):
+        return True
+    return mode in ("zip", "sync-routes", "full", "routes")
+
+
 def collect_files() -> List[Path]:
     mode = os.environ.get("DEPLOY_MODE", "patch").lower()
     if mode == "full":
@@ -186,27 +237,36 @@ def main() -> int:
 
     s = session()
     files = collect_files()
-    print(
-        f"Uploading {len(files)} file(s) while API stays online "
-        f"(mode={os.environ.get('DEPLOY_MODE', 'patch')})..."
-    )
-    for idx, local in enumerate(files, start=1):
-        rel = local.relative_to(DIST).as_posix().replace("/", "\\")
-        remote = f"C:\\ticketz\\backend\\dist\\{rel}"
-        run_ps(
-            s,
-            f"New-Item -ItemType Directory -Force -Path (Split-Path '{remote}') | Out-Null",
-        )
-        upload_file(s, local, remote)
-        if idx % 50 == 0:
-            print(f"  ... {idx}/{len(files)} files uploaded")
-
+    mode = os.environ.get("DEPLOY_MODE", "patch").lower()
+    extra_scripts = []
     reset_script = BACKEND / "scripts" / "reset-whatsapp-session.js"
     schema_script = BACKEND / "scripts" / "apply-db-schema.js"
     if reset_script.is_file():
-        upload_file(s, reset_script, r"C:\ticketz\backend\scripts\reset-whatsapp-session.js")
+        extra_scripts.append(reset_script)
     if schema_script.is_file():
-        upload_file(s, schema_script, r"C:\ticketz\backend\scripts\apply-db-schema.js")
+        extra_scripts.append(schema_script)
+
+    if should_use_zip(mode):
+        print(f"Zip deploy: {len(files)} dist file(s) + {len(extra_scripts)} script(s)")
+        zip_path = build_zip_bundle(files, extra_scripts)
+        try:
+            upload_zip_bundle(s, zip_path)
+        finally:
+            zip_path.unlink(missing_ok=True)
+    else:
+        print(f"Uploading {len(files)} file(s) (mode={mode})...")
+        for idx, local in enumerate(files, start=1):
+            rel = local.relative_to(DIST).as_posix().replace("/", "\\")
+            remote = f"C:\\ticketz\\backend\\dist\\{rel}"
+            run_ps(
+                s,
+                f"New-Item -ItemType Directory -Force -Path (Split-Path '{remote}') | Out-Null",
+            )
+            upload_file(s, local, remote)
+            if idx % 50 == 0:
+                print(f"  ... {idx}/{len(files)} files uploaded")
+        for script in extra_scripts:
+            upload_file(s, script, f"C:\\ticketz\\backend\\scripts\\{script.name}")
 
     skip_reset = os.environ.get("SKIP_WHATSAPP_RESET", "").lower() in (
         "1",
