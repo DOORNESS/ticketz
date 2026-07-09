@@ -1,4 +1,6 @@
 import crypto from "crypto";
+import fs from "fs";
+import path from "path";
 import mime from "mime-types";
 import { FileContents, FileStorage } from "@flystorage/file-storage";
 import { LocalStorageAdapter } from "@flystorage/local-fs";
@@ -38,9 +40,11 @@ class StorageService {
   private createLocalAdapter(): IStorageAdapter {
     return {
       upload: async (input: UploadInput): Promise<UploadResult> => {
-        const storage = new FileStorage(
-          new LocalStorageAdapter(getPublicPath())
-        );
+        const root = getPublicPath();
+        const targetPath = path.join(root, input.key);
+        fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+
+        const storage = new FileStorage(new LocalStorageAdapter(root));
         const body = Buffer.isBuffer(input.body)
           ? input.body
           : Buffer.from(input.body as Uint8Array);

@@ -62,7 +62,11 @@ import { getPublicPath } from "../../helpers/GetPublicPath";
 import { Session } from "../../libs/wbot";
 import { checkCompanyCompliant } from "../../helpers/CheckCompanyCompliant";
 import { transcriber } from "../../helpers/transcriber";
-import { readMediaBuffer } from "../../helpers/mediaStorage";
+import {
+  readMediaBuffer,
+  streamToBuffer,
+  resolveMediaAccessPath
+} from "../../helpers/mediaStorage";
 import { parseToMilliseconds } from "../../helpers/parseToMilliseconds";
 import { randomValue } from "../../helpers/randomValue";
 import { getJidOf } from "./getJidOf";
@@ -70,7 +74,6 @@ import { verifyContact } from "./verifyContact";
 import { decryptMessageEdit } from "./decryptMessageEdit";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import saveMediaToFile from "../../helpers/saveMediaFile";
-import { resolveMediaAccessPath } from "../../helpers/mediaStorage";
 import {
   tryEngageAiOnInboundMessage,
   shouldAiBypassLegacyBotMessages
@@ -708,6 +711,55 @@ export const verifyMediaMessage = async (
     throw new Error("ERR_WAPP_DOWNLOAD_MEDIA");
   }
 
+  const mimetype = mediaInfo?.mimetype || media?.mimetype || "";
+  const mediaType = mimetype.split("/")[0];
+  const filename = mediaInfo?.filename || media?.filename || "file.bin";
+
+  let body = await getBodyMessage(msg?.message);
+
+  const audioTranscriptionsSetting = await GetCompanySetting(
+    ticket.companyId,
+    "audioTranscriptions",
+    "disabled"
+  );
+  const aiAgentForAudio =
+    isAiFeaturesEnabled() &&
+    (await getActiveAgent(ticket.companyId, ticket.queueId));
+
+  if (
+    media &&
+    mediaType === "audio" &&
+    (audioTranscriptionsSetting === "enabled" || aiAgentForAudio)
+  ) {
+    const apiKey = await GetCompanySetting(ticket.companyId, "openAiKey", null);
+    const provider = await GetCompanySetting(
+      ticket.companyId,
+      "aiProvider",
+      "openai"
+    );
+
+    if (apiKey) {
+      try {
+        const audioBuffer = Buffer.isBuffer(media.data)
+          ? media.data
+          : await streamToBuffer(media.data);
+        const audioTranscription = await transcriber(
+          audioBuffer,
+          { apiKey, provider },
+          filename
+        );
+        if (audioTranscription) {
+          body = audioTranscription;
+        }
+      } catch (error) {
+        logger.error(
+          { message: error?.message },
+          "Error transcribing audio message from buffer"
+        );
+      }
+    }
+  }
+
   let mediaUrl = mediaInfo?.mediaUrl || null;
   if (media) {
     mediaUrl = await saveMediaToFile(media, { destination: ticket });
@@ -721,25 +773,11 @@ export const verifyMediaMessage = async (
     });
   }
 
-  const mimetype = mediaInfo?.mimetype || media?.mimetype || "";
-  const mediaType = mimetype.split("/")[0];
-  const filename = mediaInfo?.filename || media?.filename || "file.bin";
-
-  let body = await getBodyMessage(msg?.message);
-
   const storedMediaUrl = mediaUrl;
-
-  const audioTranscriptionsSetting = await GetCompanySetting(
-    ticket.companyId,
-    "audioTranscriptions",
-    "disabled"
-  );
-  const aiAgentForAudio =
-    isAiFeaturesEnabled() &&
-    (await getActiveAgent(ticket.companyId, ticket.queueId));
 
   if (
     mediaType === "audio" &&
+    !body?.trim() &&
     storedMediaUrl &&
     (audioTranscriptionsSetting === "enabled" || aiAgentForAudio)
   ) {

@@ -85,6 +85,7 @@ jobs:
         env:
           CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
           CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP }}
+          SKIP_WHATSAPP_RESET: "1"
         run: |
           set -euo pipefail
           if [ -z "${CONTABO_PASSWORD:-}" ]; then

@@ -21,6 +21,7 @@ CHUNK = 2000
 # Hotfix paths — full dist sync is too slow over WinRM (600+ files).
 PATCH_PATHS = [
     "libs/wbot.js",
+    "services/StorageService/StorageService.js",
     "services/WbotServices/StartWhatsAppSession.js",
     "services/WbotServices/wbotMessageListener.js",
     "services/AiServices/ProcessInboundMessageService.js",
@@ -129,23 +130,34 @@ def main() -> int:
     if reset_script.is_file():
         upload_file(s, reset_script, r"C:\ticketz\backend\scripts\reset-whatsapp-session.js")
 
-    print("Reset WhatsApp + restart backend...")
-    code, out, err = run_ps(
-        s,
-        r"""
-$ErrorActionPreference='Continue'
-Push-Location C:\ticketz\backend
-node scripts/reset-whatsapp-session.js 1 2>&1
-Pop-Location
+    skip_reset = os.environ.get("SKIP_WHATSAPP_RESET", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    reset_step = ""
+    if not skip_reset:
+        reset_step = (
+            "Push-Location C:\\ticketz\\backend\n"
+            "node scripts/reset-whatsapp-session.js 1 2>&1\n"
+            "Pop-Location\n"
+        )
+
+    print("Restart backend..." + (" (no WhatsApp reset)" if skip_reset else ""))
+    restart_ps = (
+        "$ErrorActionPreference='Continue'\n"
+        + reset_step
+        + """
 Start-ScheduledTask -TaskName TicketzRedis -EA SilentlyContinue
 Start-Sleep 2
 Start-ScheduledTask -TaskName TicketzBackend
 Start-Sleep 60
 try { Write-Output "health=$((Invoke-WebRequest http://127.0.0.1:8080/health -UseBasicParsing -TimeoutSec 20).Content)" } catch { Write-Output 'health fail' }
 try { $r=Invoke-WebRequest http://127.0.0.1:8080/whatsapp -UseBasicParsing -TimeoutSec 15; Write-Output "whatsapp=$($r.StatusCode)" } catch { Write-Output "whatsapp=$($_.Exception.Response.StatusCode.value__)" }
-Get-Content C:\ticketz\logs\backend.log -Tail 12 -EA SilentlyContinue | Select-String 'Heavy|QRCode|listening|failed|qrcode'
-""",
+Get-Content C:\\ticketz\\logs\\backend.log -Tail 12 -EA SilentlyContinue | Select-String 'Heavy|QRCode|listening|failed|transcri'
+"""
     )
+    code, out, err = run_ps(s, restart_ps)
     print(out)
     if err.strip():
         print(err[-2000:])
