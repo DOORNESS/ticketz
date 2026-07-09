@@ -52,6 +52,53 @@ const ensureTicketAiColumns = async (schema: string): Promise<void> => {
   `);
 };
 
+const ensureOperationalFlowColumns = async (schema: string): Promise<void> => {
+  await sequelize.query(`
+    ALTER TABLE ${q(schema, "Tickets")}
+    ADD COLUMN IF NOT EXISTS "aiHandoffReason" VARCHAR(64);
+  `);
+
+  await sequelize.query(`
+    ALTER TABLE ${q(schema, "Tickets")}
+    ADD COLUMN IF NOT EXISTS "aiPaused" BOOLEAN NOT NULL DEFAULT false;
+  `);
+
+  await sequelize.query(`
+    ALTER TABLE ${q(schema, "Tickets")}
+    ADD COLUMN IF NOT EXISTS "aiResolvedByAi" BOOLEAN NOT NULL DEFAULT false;
+  `);
+
+  await sequelize.query(`
+    ALTER TABLE ${q(schema, "Tickets")}
+    ADD COLUMN IF NOT EXISTS "aiHandoffAt" TIMESTAMPTZ;
+  `);
+
+  await sequelize.query(`
+    ALTER TABLE ${q(schema, "Tickets")}
+    ADD COLUMN IF NOT EXISTS "aiWaitingSince" TIMESTAMPTZ;
+  `);
+
+  await sequelize.query(`
+    ALTER TABLE ${q(schema, "Tickets")}
+    ADD COLUMN IF NOT EXISTS "aiStartedAt" TIMESTAMPTZ;
+  `);
+
+  await sequelize.query(`
+    ALTER TABLE ${q(schema, "Tickets")}
+    ADD COLUMN IF NOT EXISTS "aiSlaBreached" BOOLEAN NOT NULL DEFAULT false;
+  `);
+
+  await sequelize.query(`
+    ALTER TABLE ${q(schema, "Queues")}
+    ADD COLUMN IF NOT EXISTS "slaSeconds" INTEGER;
+  `);
+
+  await sequelize.query(`
+    ALTER TABLE ${q(schema, "Queues")}
+    ADD COLUMN IF NOT EXISTS "slaSupervisorEscalationSeconds" INTEGER;
+  `);
+};
+
 const ensureAiTables = async (schema: string): Promise<void> => {
   await sequelize.query(`
     CREATE TABLE IF NOT EXISTS ${q(schema, "AiAgents")} (
@@ -247,6 +294,7 @@ export const applyAiSchema = async (): Promise<void> => {
 
   await ensurePgVector();
   await ensureTicketAiColumns(schema);
+  await ensureOperationalFlowColumns(schema);
   await ensureAiTables(schema);
   await ensureAckColumns(schema);
 
@@ -257,6 +305,10 @@ export const applyAiSchema = async (): Promise<void> => {
   await markMigrationExecuted(
     schema,
     "20260708120000-add-ai-agent-ack-fields.js"
+  );
+  await markMigrationExecuted(
+    schema,
+    "20260709120000-add-ai-operational-flow-fields.js"
   );
 
   logger.info({ schema }, "AI schema ensured");
