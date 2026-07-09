@@ -125,7 +125,9 @@ const HandoffToHumanService = async ({
       aiAgentId: agent.id,
       aiHandoffAt: now,
       aiWaitingSince: now,
-      aiSlaBreached: false
+      aiSlaBreached: false,
+      aiSlaEscalationLevel: 0,
+      aiLastSlaAlertAt: null
     } as any
   });
 

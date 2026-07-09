@@ -5,37 +5,41 @@ import { getIO } from "../../libs/socket";
 import { logAiOperationalEvent } from "./AiOperationalLogService";
 import { websocketUpdateTicket } from "../TicketServices/UpdateTicketService";
 
-const DEFAULT_QUEUE_SLA: Record<string, number> = {
-  suporte: 30,
-  financeiro: 60,
-  comercial: 120,
-  gerencia: 300,
-  gerência: 300
+const FIRST_REMINDER_MS = 30 * 1000;
+const SECOND_REMINDER_MS = 60 * 1000;
+
+const resolveSupervisorEscalationMs = (queue?: Queue | null): number => {
+  if (
+    queue?.slaSupervisorEscalationSeconds &&
+    queue.slaSupervisorEscalationSeconds > 0
+  ) {
+    return queue.slaSupervisorEscalationSeconds * 1000;
+  }
+
+  if (queue?.slaSeconds && queue.slaSeconds > 0) {
+    return queue.slaSeconds * 1000;
+  }
+
+  return 300 * 1000;
 };
 
-const resolveQueueSlaSeconds = (queue?: Queue | null): number | null => {
-  if (!queue) {
-    return null;
+const emitSlaEvent = (
+  ticket: Ticket,
+  action: string,
+  details: Record<string, unknown>
+): void => {
+  const io = getIO();
+
+  if (ticket.queueId) {
+    io.to(`queue-${ticket.queueId}-handoff`)
+      .to(`queue-${ticket.queueId}-notification`)
+      .to(`company-${ticket.companyId}-handoff`)
+      .emit(`company-${ticket.companyId}-handoff`, {
+        action,
+        ticket,
+        ...details
+      });
   }
-
-  if (queue.slaSeconds && queue.slaSeconds > 0) {
-    return queue.slaSeconds;
-  }
-
-  const normalizedName = queue.name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-  const queueKeys = Object.keys(DEFAULT_QUEUE_SLA);
-  for (let i = 0; i < queueKeys.length; i += 1) {
-    const key = queueKeys[i];
-    if (normalizedName.includes(key)) {
-      return DEFAULT_QUEUE_SLA[key];
-    }
-  }
-
-  return 120;
 };
 
 export const monitorHandoffSla = async (): Promise<void> => {
@@ -49,46 +53,69 @@ export const monitorHandoffSla = async (): Promise<void> => {
     include: [{ model: Queue, as: "queue" }]
   });
 
-  const io = getIO();
-
   for (let i = 0; i < pendingHandoffs.length; i += 1) {
     const ticket = pendingHandoffs[i];
-    const slaSeconds = resolveQueueSlaSeconds(ticket.queue);
-    if (!slaSeconds) {
-      continue;
-    }
-
     const waitingMs = Date.now() - new Date(ticket.aiWaitingSince).getTime();
-    const breached = waitingMs > slaSeconds * 1000;
+    const supervisorMs = resolveSupervisorEscalationMs(ticket.queue);
+    let nextLevel = ticket.aiSlaEscalationLevel || 0;
 
-    if (!breached || ticket.aiSlaBreached) {
+    if (waitingMs >= supervisorMs && nextLevel < 3) {
+      nextLevel = 3;
+    } else if (waitingMs >= SECOND_REMINDER_MS && nextLevel < 2) {
+      nextLevel = 2;
+    } else if (waitingMs >= FIRST_REMINDER_MS && nextLevel < 1) {
+      nextLevel = 1;
+    }
+
+    if (nextLevel <= (ticket.aiSlaEscalationLevel || 0)) {
       continue;
     }
 
-    await ticket.update({ aiSlaBreached: true });
+    const now = new Date();
+    const updatePayload: Record<string, unknown> = {
+      aiSlaEscalationLevel: nextLevel,
+      aiLastSlaAlertAt: now
+    };
+
+    if (nextLevel >= 3) {
+      updatePayload.aiSlaBreached = true;
+    }
+
+    await ticket.update(updatePayload);
+
+    const eventName =
+      nextLevel === 1
+        ? "sla_reminder_30s"
+        : nextLevel === 2
+          ? "sla_reminder_60s"
+          : "sla_supervisor_escalation";
 
     await logAiOperationalEvent({
       companyId: ticket.companyId,
       ticketId: ticket.id,
-      event: "sla_breached",
+      event: eventName,
       details: {
         queueId: ticket.queueId,
         queueName: ticket.queue?.name,
         waitingMs,
-        slaSeconds
+        escalationLevel: nextLevel,
+        supervisorMs
       }
     });
 
     websocketUpdateTicket(ticket);
 
-    if (ticket.queueId) {
-      io.to(`queue-${ticket.queueId}-handoff`)
-        .to(`queue-${ticket.queueId}-notification`)
-        .to(`company-${ticket.companyId}-handoff`)
-        .emit(`company-${ticket.companyId}-handoff`, {
-          action: "sla_breached",
-          ticket
-        });
+    emitSlaEvent(ticket, eventName, {
+      waitingMs,
+      escalationLevel: nextLevel,
+      queueName: ticket.queue?.name
+    });
+
+    if (nextLevel === 1) {
+      emitSlaEvent(ticket, "handoff_alert", {
+        reason: "sla_reminder",
+        waitingMs
+      });
     }
   }
 };

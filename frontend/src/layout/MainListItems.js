@@ -585,6 +585,24 @@ const MainListItems = props => {
                   onClick={() => history.push("/ai/documents")}
                 />
                 <AiSubmenuItem
+                  icon={<ListIcon />}
+                  label="Aprendizados"
+                  selected={
+                    location.pathname === "/ai/learnings" ||
+                    location.pathname.startsWith("/ai/learnings/")
+                  }
+                  onClick={() => history.push("/ai/learnings")}
+                />
+                <AiSubmenuItem
+                  icon={<SettingsOutlinedIcon />}
+                  label="Replay"
+                  selected={
+                    location.pathname === "/ai/replay" ||
+                    location.pathname.startsWith("/ai/replay/")
+                  }
+                  onClick={() => history.push("/ai/replay")}
+                />
+                <AiSubmenuItem
                   icon={<SettingsOutlinedIcon />}
                   label="Logs"
                   selected={

@@ -534,12 +534,92 @@ const messages = {
         title: "Sugestão da IA",
         rationale: "Justificativa",
         confidence: "Confiança",
+        improved: "Melhoria sugerida",
+        relatedDocument: "Documento relacionado",
+        nextSteps: "Próximos passos",
+        risk: "Risco",
+        sentiment: "Sentimento do cliente",
         copy: "Copiar",
         send: "Enviar",
         ignore: "Ignorar",
         copied: "Sugestão copiada.",
         sent: "Sugestão enviada ao cliente.",
         empty: "A IA está analisando a conversa para sugerir uma resposta."
+      },
+      aiLearning: {
+        closeModal: {
+          title: "Aprendizado da IA",
+          question1:
+            "Este atendimento gerou conhecimento útil para ensinar à IA?",
+          question2: "Como este conhecimento deve ser tratado?",
+          yes: "Sim",
+          no: "Não",
+          createNew: "Criar novo documento",
+          updateExisting: "Atualizar documento existente",
+          reviewLater: "Armazenar para revisão",
+          selectDocument: "Selecione o documento a atualizar",
+          choose: "Escolher",
+          continue: "Continuar",
+          saveAndClose: "Salvar e encerrar",
+          cancel: "Cancelar"
+        },
+        fields: {
+          title: "Título",
+          mainQuestion: "Pergunta principal",
+          organizedAnswer: "Resposta organizada",
+          keywords: "Palavras-chave (separadas por vírgula)",
+          category: "Categoria",
+          summary: "Resumo",
+          suggestedUpdate: "Trecho sugerido para atualização"
+        },
+        admin: {
+          title: "Aprendizados da IA",
+          filter: "Status",
+          pending: "Pendentes",
+          approved: "Aprovados",
+          rejected: "Rejeitados",
+          incorporated: "Incorporados à Base",
+          refresh: "Atualizar",
+          empty: "Nenhum aprendizado encontrado.",
+          success: "Ação concluída com sucesso.",
+          edit: "Editar",
+          approve: "Aprovar",
+          reject: "Rejeitar",
+          incorporate: "Incorporar na Base",
+          save: "Salvar",
+          editTitle: "Editar aprendizado",
+          incorporateTitle: "Incorporar na Base de Conhecimento",
+          knowledgeBase: "Base de conhecimento",
+          transcript: "Conversa original",
+          columns: {
+            title: "Título",
+            customer: "Cliente",
+            queue: "Fila",
+            confidence: "Confiança IA",
+            status: "Status",
+            actions: "Ações"
+          }
+        }
+      },
+      aiReplay: {
+        title: "Replay da IA",
+        userQuestion: "Pergunta do cliente",
+        history: "Histórico enviado ao modelo",
+        prompt: "Prompt utilizado",
+        documents: "Documentos / chunks utilizados",
+        response: "Resposta da IA",
+        tokensIn: "Tokens entrada",
+        tokensOut: "Tokens saída",
+        latency: "Tempo",
+        cost: "Custo",
+        vision: "Vision",
+        ocr: "OCR",
+        empty: "Nenhum replay registrado ainda."
+      },
+      aiExplainability: {
+        title: "Por que respondeu isso?",
+        basedOn: "Baseado em:",
+        empty: "Sem fontes detalhadas para esta resposta."
       },
       newTicketModal: {
         title: "Criar Ticket",

@@ -38,7 +38,11 @@ export const assumeTicketFromBot = async ({
       userId: user.id,
       aiHandoff: true,
       aiHandoffReason: AI_HANDOFF_REASONS.manual_takeover,
-      aiPaused: true
+      aiPaused: true,
+      aiWaitingSince: null,
+      aiSlaEscalationLevel: 0,
+      aiSlaBreached: false,
+      aiLastSlaAlertAt: null
     } as any
   });
 
@@ -146,6 +150,8 @@ export const resumeTicketAi = async ({
       aiHandoffAt: null,
       aiWaitingSince: null,
       aiSlaBreached: false,
+      aiSlaEscalationLevel: 0,
+      aiLastSlaAlertAt: null,
       status: "pending",
       userId: null,
       queueId: null

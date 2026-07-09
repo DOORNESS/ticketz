@@ -175,6 +175,16 @@ class Ticket extends Model<Ticket> {
   @Column
   aiSatisfactionSource: string;
 
+  @Default(0)
+  @Column
+  aiSlaEscalationLevel: number;
+
+  @Column
+  aiLastExplainability: object;
+
+  @Column
+  aiLastSlaAlertAt: Date;
+
   @Default(uuidv4())
   @Column
   uuid: string;

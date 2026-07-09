@@ -1,11 +1,9 @@
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
-import MessageMediaFile from "../../models/MessageMediaFile";
 import AiConversationLog from "../../models/AiConversationLog";
-import { chatCompletion, analyzeImage } from "./ModelGateway";
-import { transcribeAudioBuffer } from "./AudioTranscriptionService";
-import { isAudioPlaceholder } from "../../helpers/mediaPlaceholders";
+import { chatCompletion } from "./ModelGateway";
+import { resolveInboundMessageText } from "./MediaInboundResolver";
 import {
   getActiveAgent,
   getKnowledgeBaseIdsForAgent,
@@ -24,7 +22,6 @@ import HandoffToHumanService from "./HandoffToHumanService";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import formatBody from "../../helpers/Mustache";
 import StorageService from "../StorageService/StorageService";
-import { readMediaBuffer } from "../../helpers/mediaStorage";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
 import { isTransientAiError } from "./isTransientAiError";
 import { logger } from "../../utils/logger";
@@ -34,6 +31,7 @@ import { logAiOperationalEvent } from "./AiOperationalLogService";
 import UpdateTicketService from "../TicketServices/UpdateTicketService";
 import { classifyTicketPriority } from "./AiPriorityClassifierService";
 import { computeConfidenceScore, estimateAiCostUsd } from "./AiMetricsHelper";
+import { buildExplainability, persistAiReplayLog } from "./AiReplayService";
 
 export type InboundMessageItem = {
   messageBody: string;
@@ -131,143 +129,9 @@ const resolveInboundText = async ({
   await StorageService.ensureReady(companyId);
 
   const resolvedParts = await Promise.all(
-    messages.map(async message => {
-      let messageText = message.messageBody?.trim() || "";
-      const mediaBuffer = message.mediaUrl
-        ? (await readMediaBuffer(message.mediaUrl, companyId)) || undefined
-        : undefined;
-
-      if (mediaBuffer && message.mediaType === "audio") {
-        const shouldTranscribe =
-          !messageText || isAudioPlaceholder(messageText);
-
-        if (shouldTranscribe) {
-          const transcription = await transcribeAudioBuffer({
-            companyId,
-            audioBuffer: mediaBuffer,
-            filename: message.mediaFilename || "audio.ogg",
-            mimeType: message.mediaMimeType,
-            model: agent.transcriptionModel,
-            providerId: agent.provider,
-            ticketId: ticket.id,
-            messageId: message.messageId
-          });
-
-          if (transcription.success && transcription.text) {
-            messageText = transcription.text;
-          } else {
-            logger.error(
-              {
-                ticketId: ticket.id,
-                messageId: message.messageId,
-                errorReason: transcription.errorReason,
-                attempts: transcription.attempts,
-                bufferSize: transcription.bufferSize,
-                mimeType: transcription.mimeType,
-                filename: transcription.filename
-              },
-              "Audio transcription failed after retries"
-            );
-            return "__AUDIO_TRANSCRIPTION_FAILED__";
-          }
-        }
-
-        try {
-          const upload = await StorageService.uploadBuffer(mediaBuffer, {
-            companyId,
-            ticketId: ticket.id,
-            messageId: message.messageId,
-            filename: message.mediaFilename || "audio.ogg",
-            contentType: message.mediaMimeType,
-            folder: "media/audio"
-          });
-
-          await MessageMediaFile.create({
-            companyId,
-            ticketId: ticket.id,
-            messageId: message.messageId,
-            mediaType: "audio",
-            mimeType: message.mediaMimeType,
-            originalFilename: message.mediaFilename,
-            sizeBytes: upload.sizeBytes,
-            storageProvider: upload.provider,
-            storageKey: upload.key,
-            bucket: upload.bucket,
-            publicUrl: upload.publicUrl,
-            hash: upload.hash,
-            transcriptionText: messageText
-          });
-        } catch (error) {
-          logger.warn(
-            { error, messageId: message.messageId },
-            "Audio storage persistence failed"
-          );
-        }
-
-        return messageText;
-      }
-
-      if (mediaBuffer && message.mediaType === "image") {
-        try {
-          const upload = await StorageService.uploadBuffer(mediaBuffer, {
-            companyId,
-            ticketId: ticket.id,
-            messageId: message.messageId,
-            filename: message.mediaFilename || "image.jpg",
-            contentType: message.mediaMimeType,
-            folder: "media/images"
-          });
-
-          const imageUrl = upload.publicUrl.startsWith("http")
-            ? upload.publicUrl
-            : `${process.env.BACKEND_URL || "http://localhost:8080"}${upload.publicUrl}`;
-
-          const visionSummary = await analyzeImage(
-            companyId,
-            imageUrl,
-            agent.visionModel,
-            undefined,
-            agent.provider
-          );
-
-          await MessageMediaFile.create({
-            companyId,
-            ticketId: ticket.id,
-            messageId: message.messageId,
-            mediaType: "image",
-            mimeType: message.mediaMimeType,
-            originalFilename: message.mediaFilename,
-            sizeBytes: upload.sizeBytes,
-            storageProvider: upload.provider,
-            storageKey: upload.key,
-            bucket: upload.bucket,
-            publicUrl: upload.publicUrl,
-            hash: upload.hash,
-            visionSummary
-          });
-
-          messageText = messageText
-            ? `${messageText}\n\n[Imagem enviada pelo cliente]: ${visionSummary}`
-            : `[Imagem enviada pelo cliente]: ${visionSummary}`;
-        } catch (error) {
-          logger.error(
-            {
-              error,
-              ticketId: ticket.id,
-              messageId: message.messageId,
-              mediaUrl: message.mediaUrl
-            },
-            "Image analysis failed"
-          );
-
-          messageText = messageText
-            ? messageText
-            : "[Imagem enviada pelo cliente — análise indisponível no momento]";
-        }
-      }
-
-      return messageText;
-    })
+    messages.map(message =>
+      resolveInboundMessageText({ companyId, ticket, agent, message })
+    )
   );
 
   if (resolvedParts.includes("__AUDIO_TRANSCRIPTION_FAILED__")) {
@@ -492,6 +356,8 @@ const ProcessInboundMessageService = async ({
       .filter(Boolean)
       .join("\n\n");
 
+    const requestStartedAt = Date.now();
+
     const completion = await chatCompletion(companyId, {
       model: agent.textModel,
       temperature: agent.temperature,
@@ -503,6 +369,8 @@ const ProcessInboundMessageService = async ({
         { role: "user", content: userText }
       ]
     });
+
+    const latencyMs = Date.now() - requestStartedAt;
 
     const aiResponse = completion.content?.trim();
 
@@ -548,6 +416,16 @@ const ProcessInboundMessageService = async ({
       });
     }
 
+    const explainability = buildExplainability({
+      confidence,
+      usedChunks: usedChunks.map(chunk => ({
+        documentTitle: chunk.documentTitle,
+        topic: chunk.documentTitle,
+        similarity: chunk.similarity
+      })),
+      extraSources: ["Histórico do cliente"]
+    });
+
     await ticket.update({
       aiAgentId: agent.id,
       aiHandoff: false,
@@ -555,6 +433,7 @@ const ProcessInboundMessageService = async ({
       chatbot: false,
       aiStartedAt: ticket.aiStartedAt || new Date(),
       aiLastConfidence: confidence,
+      aiLastExplainability: explainability,
       aiResponseCount: (ticket.aiResponseCount || 0) + 1,
       aiTotalTokensInput:
         (ticket.aiTotalTokensInput || 0) + (completion.tokensInput || 0),
@@ -605,6 +484,23 @@ const ProcessInboundMessageService = async ({
       },
       userMessage: maskSensitiveLog(userText),
       aiResponse: maskSensitiveLog(outboundText)
+    });
+
+    await persistAiReplayLog({
+      companyId,
+      ticketId: ticket.id,
+      messageId: primaryMessageId,
+      userQuestion: maskSensitiveLog(userText),
+      conversationHistory: history,
+      systemPrompt,
+      usedChunks,
+      aiResponse: maskSensitiveLog(outboundText),
+      confidence,
+      explainability,
+      tokensInput: completion.tokensInput,
+      tokensOutput: completion.tokensOutput,
+      latencyMs,
+      model: completion.model
     });
   } catch (error) {
     if (isTransientAiError(error)) {

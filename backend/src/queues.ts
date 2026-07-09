@@ -610,6 +610,16 @@ const createInvoices = new CronJob("0 * * * * *", async () => {
 
 createInvoices.start();
 
+const aiSlaMonitorJob = new CronJob("*/15 * * * * *", async () => {
+  try {
+    await monitorHandoffSla();
+  } catch (error) {
+    logger.error({ message: error?.message }, "aiSlaMonitorJob failed");
+  }
+});
+
+aiSlaMonitorJob.start();
+
 export async function startQueueProcess() {
   logger.info("Starting queue processing");
 

@@ -12,6 +12,7 @@ import {
 } from "sequelize-typescript";
 import Company from "./Company";
 import Ticket from "./Ticket";
+import User from "./User";
 
 @Table
 class AiKnowledgeSuggestion extends Model<AiKnowledgeSuggestion> {
@@ -49,6 +50,68 @@ class AiKnowledgeSuggestion extends Model<AiKnowledgeSuggestion> {
 
   @Column
   documentId: number;
+
+  @Column
+  actionType: string;
+
+  @Column
+  mainQuestion: string;
+
+  @Column
+  organizedAnswer: string;
+
+  @Column
+  keywords: object;
+
+  @Column
+  category: string;
+
+  @Column
+  summary: string;
+
+  @Column
+  similarDocuments: object;
+
+  @Column
+  suggestedUpdate: string;
+
+  @Column
+  selectedDocumentId: number;
+
+  @Column
+  confidence: number;
+
+  @Column
+  conversationSummary: string;
+
+  @Column
+  transcript: string;
+
+  @ForeignKey(() => User)
+  @Column
+  agentUserId: number;
+
+  @ForeignKey(() => User)
+  @Column
+  approvedByUserId: number;
+
+  @BelongsTo(() => User, "approvedByUserId")
+  approvedBy: User;
+
+  @Column
+  approvedAt: Date;
+
+  @Column
+  rejectedAt: Date;
+
+  @Column
+  rejectionReason: string;
+
+  @Column
+  customerName: string;
+
+  @Column
+  queueName: string;
 
   @CreatedAt
   createdAt: Date;

@@ -138,6 +138,32 @@ const AiCopilotPanel = ({ ticket }) => {
               {i18n.t("aiCopilot.rationale")}: {suggestion.rationale}
             </Typography>
           )}
+          {suggestion.improvedResponse && (
+            <Typography className={classes.rationale}>
+              {i18n.t("aiCopilot.improved")}: {suggestion.improvedResponse}
+            </Typography>
+          )}
+          {suggestion.relatedDocument && (
+            <Typography className={classes.rationale}>
+              {i18n.t("aiCopilot.relatedDocument")}:{" "}
+              {suggestion.relatedDocument}
+            </Typography>
+          )}
+          {suggestion.nextSteps && (
+            <Typography className={classes.rationale}>
+              {i18n.t("aiCopilot.nextSteps")}: {suggestion.nextSteps}
+            </Typography>
+          )}
+          {suggestion.riskAssessment && (
+            <Typography className={classes.rationale}>
+              {i18n.t("aiCopilot.risk")}: {suggestion.riskAssessment}
+            </Typography>
+          )}
+          {suggestion.customerSentiment && (
+            <Typography className={classes.rationale}>
+              {i18n.t("aiCopilot.sentiment")}: {suggestion.customerSentiment}
+            </Typography>
+          )}
           {suggestion.confidence !== null &&
             suggestion.confidence !== undefined && (
               <Typography className={classes.rationale}>

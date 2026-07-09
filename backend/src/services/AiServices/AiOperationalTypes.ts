@@ -31,7 +31,10 @@ export const AI_OPERATIONAL_EVENTS = {
   ticket_queue_changed: "ticket_queue_changed",
   ticket_closed_by_ai: "ticket_closed_by_ai",
   ticket_closed_by_human: "ticket_closed_by_human",
-  sla_breached: "sla_breached"
+  sla_breached: "sla_breached",
+  sla_reminder_30s: "sla_reminder_30s",
+  sla_reminder_60s: "sla_reminder_60s",
+  sla_supervisor_escalation: "sla_supervisor_escalation"
 } as const;
 
 export type AiOperationalEvent =
@@ -49,7 +52,10 @@ export const AI_OPERATIONAL_EVENT_LABELS: Record<AiOperationalEvent, string> = {
   ticket_queue_changed: "Ticket mudou de fila",
   ticket_closed_by_ai: "Ticket encerrado pela IA",
   ticket_closed_by_human: "Ticket encerrado pelo humano",
-  sla_breached: "SLA expirado"
+  sla_breached: "SLA expirado",
+  sla_reminder_30s: "Alerta SLA 30 segundos",
+  sla_reminder_60s: "Alerta SLA 1 minuto",
+  sla_supervisor_escalation: "Escalação para supervisor"
 };
 
 export const AI_TICKET_FILTERS = {
@@ -73,7 +79,5 @@ export const getHandoffReasonLabel = (
     return null;
   }
 
-  return (
-    AI_HANDOFF_REASON_LABELS[reason as AiHandoffReason] || reason
-  );
+  return AI_HANDOFF_REASON_LABELS[reason as AiHandoffReason] || reason;
 };

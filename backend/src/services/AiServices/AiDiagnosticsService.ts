@@ -42,7 +42,7 @@ const AI_TABLES = [
   "KnowledgeDocuments",
   "KnowledgeChunks",
   "AiConversationLogs",
-  "MessageMediaFiles"
+  "AiReplayLogs"
 ];
 
 const statusRank: Record<DiagnosticStatus, number> = {
@@ -227,7 +227,22 @@ const checkStorage = async (companyId: number): Promise<DiagnosticItem> => {
         "Storage",
         "ok",
         `Provider ${provider} configurado (bucket: ${config.bucket})`,
-        { provider, bucket: config.bucket, rootPrefix: config.rootPrefix }
+        {
+          provider,
+          bucket: config.bucket,
+          rootPrefix: config.rootPrefix,
+          mediaPrefixes: [
+            `${config.rootPrefix}/{companyId}/media/audio`,
+            `${config.rootPrefix}/{companyId}/media/images`,
+            `${config.rootPrefix}/{companyId}/media/video`,
+            `${config.rootPrefix}/{companyId}/media/documents`,
+            `${config.rootPrefix}/{companyId}/media/attachments`,
+            `${config.rootPrefix}/{companyId}/knowledge/text`,
+            `${config.rootPrefix}/{companyId}/knowledge/documents`
+          ],
+          definitiveStorage:
+            provider === "backblaze" ? "backblaze_b2" : provider
+        }
       );
     }
 

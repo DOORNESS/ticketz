@@ -50,6 +50,7 @@ import AiConversationLog from "../models/AiConversationLog";
 import MessageMediaFile from "../models/MessageMediaFile";
 import AiCopilotSuggestion from "../models/AiCopilotSuggestion";
 import AiKnowledgeSuggestion from "../models/AiKnowledgeSuggestion";
+import AiReplayLog from "../models/AiReplayLog";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const dbConfig = require("../config/database");
@@ -107,7 +108,8 @@ const models = [
   AiConversationLog,
   MessageMediaFile,
   AiCopilotSuggestion,
-  AiKnowledgeSuggestion
+  AiKnowledgeSuggestion,
+  AiReplayLog
 ];
 
 sequelize.addModels(models);

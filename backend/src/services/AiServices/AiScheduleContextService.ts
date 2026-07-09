@@ -22,7 +22,9 @@ const DAY_LABELS: Record<string, string> = {
   sun: "domingo"
 };
 
-const formatScheduleSummary = (schedule?: OpenHoursData | null): string | null => {
+const formatScheduleSummary = (
+  schedule?: OpenHoursData | null
+): string | null => {
   if (!schedule?.weeklyRules?.length) {
     return null;
   }

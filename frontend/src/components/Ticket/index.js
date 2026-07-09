@@ -20,6 +20,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { TagsContainer } from "../TagsContainer";
 import AiTicketContextBanner from "../AiTicketContextBanner";
 import AiCopilotPanel from "../AiCopilotPanel";
+import AiExplainabilityPanel from "../AiExplainabilityPanel";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import useSettings from "../../hooks/useSettings";
 import { i18n } from "../../translate/i18n";
@@ -229,6 +230,7 @@ const Ticket = () => {
           <TicketActionButtons ticket={ticket} showTabGroups={showTabGroups} />
         </TicketHeader>
         <AiTicketContextBanner ticket={ticket} />
+        <AiExplainabilityPanel ticket={ticket} />
         <AiCopilotPanel ticket={ticket} />
         <Paper>
           <TagsContainer

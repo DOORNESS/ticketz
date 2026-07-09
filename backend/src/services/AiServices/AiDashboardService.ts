@@ -377,8 +377,10 @@ export const getAiDashboard = async (
       : null;
 
   const estimatedMinutesSaved = resolvedByAiTickets * 8;
-  const estimatedHoursSaved = Math.round((estimatedMinutesSaved / 60) * 10) / 10;
-  const estimatedCostSavedUsd = Math.round(estimatedHoursSaved * 25 * 100) / 100;
+  const estimatedHoursSaved =
+    Math.round((estimatedMinutesSaved / 60) * 10) / 10;
+  const estimatedCostSavedUsd =
+    Math.round(estimatedHoursSaved * 25 * 100) / 100;
 
   const [audioCount, imageCount, documentCount] = await Promise.all([
     MessageMediaFile.count({ where: { companyId, mediaType: "audio" } }),

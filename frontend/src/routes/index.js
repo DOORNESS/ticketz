@@ -36,6 +36,8 @@ import AiDashboard from "../pages/AiDashboard";
 import AiKnowledgeBases from "../pages/AiKnowledgeBases";
 import AiDocuments from "../pages/AiDocuments";
 import AiLogs from "../pages/AiLogs";
+import AiLearnings from "../pages/AiLearnings";
+import AiReplay from "../pages/AiReplay";
 import AiDiagnostics from "../pages/AiDiagnostics";
 import AiPlayground from "../pages/AiPlayground";
 import Subscription from "../pages/Subscription/";
@@ -129,6 +131,13 @@ const Routes = () => {
                   isPrivate
                 />
                 <Route exact path="/ai/logs" component={AiLogs} isPrivate />
+                <Route
+                  exact
+                  path="/ai/learnings"
+                  component={AiLearnings}
+                  isPrivate
+                />
+                <Route exact path="/ai/replay" component={AiReplay} isPrivate />
                 <Route
                   exact
                   path="/ai/diagnostics"

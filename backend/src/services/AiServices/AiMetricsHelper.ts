@@ -1,9 +1,11 @@
-const TOKEN_COST_PER_MILLION: Record<string, { input: number; output: number }> =
-  {
-    "gpt-4o-mini": { input: 0.15, output: 0.6 },
-    "gpt-4o": { input: 2.5, output: 10 },
-    default: { input: 0.15, output: 0.6 }
-  };
+const TOKEN_COST_PER_MILLION: Record<
+  string,
+  { input: number; output: number }
+> = {
+  "gpt-4o-mini": { input: 0.15, output: 0.6 },
+  "gpt-4o": { input: 2.5, output: 10 },
+  default: { input: 0.15, output: 0.6 }
+};
 
 export const estimateAiCostUsd = (
   model: string | null | undefined,

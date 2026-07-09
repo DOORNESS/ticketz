@@ -11,11 +11,16 @@ import { isAiFeaturesEnabled } from "./AiPlatformState";
 
 const COPILOT_SYSTEM = `Você é copiloto silencioso de atendentes humanos.
 NUNCA envie mensagens ao cliente.
-Analise a conversa e sugira a melhor resposta para o atendente copiar ou enviar.
+Analise a conversa e auxilie o atendente com sugestões.
 Responda APENAS em JSON válido:
 {
-  "suggestedResponse": "texto sugerido",
+  "suggestedResponse": "resposta pronta para o atendente",
+  "improvedResponse": "versão melhorada da última resposta do atendente, se houver",
   "rationale": "por que essa resposta",
+  "relatedDocument": "documento ou tópico relacionado",
+  "nextSteps": "possíveis próximos passos",
+  "riskAssessment": "risco identificado ou nenhum",
+  "customerSentiment": "positivo|neutro|negativo|frustrado",
   "confidence": 0.0
 }
 confidence entre 0 e 1.`;
@@ -37,7 +42,12 @@ const parseCopilotJson = (
   raw: string
 ): {
   suggestedResponse: string;
+  improvedResponse: string;
   rationale: string;
+  relatedDocument: string;
+  nextSteps: string;
+  riskAssessment: string;
+  customerSentiment: string;
   confidence: number;
 } | null => {
   try {
@@ -49,7 +59,12 @@ const parseCopilotJson = (
 
     return {
       suggestedResponse: String(parsed.suggestedResponse),
+      improvedResponse: String(parsed.improvedResponse || ""),
       rationale: String(parsed.rationale || ""),
+      relatedDocument: String(parsed.relatedDocument || ""),
+      nextSteps: String(parsed.nextSteps || ""),
+      riskAssessment: String(parsed.riskAssessment || ""),
+      customerSentiment: String(parsed.customerSentiment || ""),
       confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0.5))
     };
   } catch {
@@ -142,7 +157,12 @@ export const generateCopilotSuggestion = async ({
       companyId: ticket.companyId,
       ticketId: ticket.id,
       suggestedResponse: parsed.suggestedResponse,
+      improvedResponse: parsed.improvedResponse,
       rationale: parsed.rationale,
+      relatedDocument: parsed.relatedDocument,
+      nextSteps: parsed.nextSteps,
+      riskAssessment: parsed.riskAssessment,
+      customerSentiment: parsed.customerSentiment,
       usedChunks: knowledgeContext.usedChunks,
       confidence,
       status: "pending"

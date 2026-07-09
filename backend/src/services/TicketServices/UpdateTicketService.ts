@@ -18,7 +18,6 @@ import { getJidOf } from "../WbotServices/getJidOf";
 import Queue from "../../models/Queue";
 import { _t } from "../TranslationServices/i18nService";
 import { logAiOperationalEvent } from "../AiServices/AiOperationalLogService";
-import { generateKnowledgeSuggestion } from "../AiServices/AiKnowledgeSuggestionService";
 
 export interface UpdateTicketData {
   status?: string;
@@ -378,10 +377,6 @@ const UpdateTicketService = async ({
         event: "ticket_closed_by_human",
         details: { userId: ticket.userId || userId }
       });
-
-      if (ticket.aiStartedAt) {
-        void generateKnowledgeSuggestion(ticket).catch(() => undefined);
-      }
     }
 
     if (ticket.status === "closed" && ticket.aiStartedAt && !ticket.aiEndedAt) {

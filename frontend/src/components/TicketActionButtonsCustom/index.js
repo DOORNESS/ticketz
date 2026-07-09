@@ -30,6 +30,7 @@ import {
   isHandoffPendingTicket
 } from "../../helpers/aiTicketStatus";
 import { toast } from "react-toastify";
+import AiLearningCloseModal from "../AiLearningCloseModal";
 
 const useStyles = makeStyles(theme => ({
   actionButtons: {
@@ -48,6 +49,7 @@ const TicketActionButtonsCustom = ({ ticket, showTabGroups }) => {
   const history = useHistory();
   const [anchorEl, setAnchorEl] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [learningModalOpen, setLearningModalOpen] = useState(false);
   const ticketOptionsMenuOpen = Boolean(anchorEl);
   const { user } = useContext(AuthContext);
   const { setCurrentTicket } = useContext(TicketsContext);
@@ -147,6 +149,21 @@ const TicketActionButtonsCustom = ({ ticket, showTabGroups }) => {
     }
   };
 
+  const handleCloseTicket = () => {
+    if (ticket.aiStartedAt && ticket.userId) {
+      setLearningModalOpen(true);
+      return;
+    }
+
+    handleUpdateTicketStatus(null, "closed", user?.id);
+  };
+
+  const handleLearningComplete = () => {
+    setLearningModalOpen(false);
+    setCurrentTicket({ id: null, code: null });
+    history.push("/tickets");
+  };
+
   const showAssumeFromBot =
     (isAiHandlingTicket(ticket) || isHandoffPendingTicket(ticket)) &&
     !ticket.userId;
@@ -229,12 +246,7 @@ const TicketActionButtonsCustom = ({ ticket, showTabGroups }) => {
               </Tooltip>
               <ThemeProvider theme={customTheme}>
                 <Tooltip title={i18n.t("messagesList.header.buttons.resolve")}>
-                  <IconButton
-                    onClick={e =>
-                      handleUpdateTicketStatus(e, "closed", user?.id)
-                    }
-                    color="primary"
-                  >
+                  <IconButton onClick={handleCloseTicket} color="primary">
                     <CheckCircleIcon />
                   </IconButton>
                 </Tooltip>
@@ -298,6 +310,12 @@ const TicketActionButtonsCustom = ({ ticket, showTabGroups }) => {
           {i18n.t("messagesList.header.buttons.accept")}
         </ButtonWithSpinner>
       )}
+      <AiLearningCloseModal
+        open={learningModalOpen}
+        ticket={ticket}
+        onClose={() => setLearningModalOpen(false)}
+        onComplete={handleLearningComplete}
+      />
     </div>
   );
 };

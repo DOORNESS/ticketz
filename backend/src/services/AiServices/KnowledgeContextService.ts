@@ -15,7 +15,13 @@ const MAX_CHUNK_SNIPPET = 900;
 
 export type KnowledgeContextResult = {
   contextBlock: string;
-  usedChunks: { id: number; content: string; similarity: number }[];
+  usedChunks: {
+    id: number;
+    content: string;
+    similarity: number;
+    knowledgeDocumentId?: number;
+    documentTitle?: string;
+  }[];
   hasReadyDocuments: boolean;
   reingestedDocuments: number;
 };
@@ -24,7 +30,9 @@ const mapChunks = (chunks: RetrievedChunk[]) =>
   chunks.map(chunk => ({
     id: chunk.id,
     content: chunk.content.slice(0, MAX_CHUNK_SNIPPET),
-    similarity: chunk.similarity
+    similarity: chunk.similarity,
+    knowledgeDocumentId: chunk.knowledgeDocumentId,
+    documentTitle: String(chunk.metadata?.documentTitle || "")
   }));
 
 const buildContextBlock = (
@@ -38,7 +46,15 @@ const buildContextBlock = (
 const loadAllReadyChunkTexts = async (
   companyId: number,
   knowledgeBaseIds: number[]
-): Promise<{ id: number; content: string; similarity: number }[]> => {
+): Promise<
+  {
+    id: number;
+    content: string;
+    similarity: number;
+    knowledgeDocumentId?: number;
+    documentTitle?: string;
+  }[]
+> => {
   const rows = await KnowledgeChunk.findAll({
     where: { companyId },
     include: [
@@ -60,7 +76,11 @@ const loadAllReadyChunkTexts = async (
   return rows.map(row => ({
     id: row.id,
     content: row.content.slice(0, MAX_CHUNK_SNIPPET),
-    similarity: 0.4
+    similarity: 0.4,
+    knowledgeDocumentId: row.knowledgeDocumentId,
+    documentTitle:
+      (row as KnowledgeChunk & { KnowledgeDocument?: KnowledgeDocument })
+        .KnowledgeDocument?.title || ""
   }));
 };
 
@@ -134,7 +154,10 @@ export const buildKnowledgeContextForQuery = async ({
   }
 
   if (readyCount > 0 && readyCount <= 4) {
-    const usedChunks = await loadAllReadyChunkTexts(companyId, knowledgeBaseIds);
+    const usedChunks = await loadAllReadyChunkTexts(
+      companyId,
+      knowledgeBaseIds
+    );
     return {
       contextBlock: buildContextBlock(usedChunks),
       usedChunks,
@@ -176,7 +199,7 @@ export const buildKnowledgeContextForQuery = async ({
     );
   }
 
-  let usedChunks = mapChunks(merged);
+  let usedChunks: KnowledgeContextResult["usedChunks"] = mapChunks(merged);
 
   if (!usedChunks.length) {
     usedChunks = await loadAllReadyChunkTexts(companyId, knowledgeBaseIds);

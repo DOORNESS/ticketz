@@ -13,6 +13,7 @@ import * as AiResetController from "../controllers/AiResetController";
 import * as AiSetupController from "../controllers/AiSetupController";
 import * as AiPlaygroundController from "../controllers/AiPlaygroundController";
 import * as AiDashboardController from "../controllers/AiDashboardController";
+import * as AiLearningController from "../controllers/AiLearningController";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -34,6 +35,24 @@ aiRoutes.get("/ai/knowledge-bases", KnowledgeBaseController.index);
 aiRoutes.get("/ai/documents", KnowledgeDocumentController.index);
 aiRoutes.get("/ai/logs", AiLogController.index);
 aiRoutes.get("/ai/dashboard", AiDashboardController.index);
+
+aiRoutes.get("/ai/learnings", AiLearningController.indexLearnings);
+aiRoutes.put("/ai/learnings/:learningId", AiLearningController.editLearningAction);
+aiRoutes.post(
+  "/ai/learnings/:learningId/approve",
+  AiLearningController.approveLearningAction
+);
+aiRoutes.post(
+  "/ai/learnings/:learningId/reject",
+  AiLearningController.rejectLearningAction
+);
+aiRoutes.post(
+  "/ai/learnings/:learningId/incorporate",
+  AiLearningController.incorporateLearningAction
+);
+
+aiRoutes.get("/ai/replay", AiLearningController.replayIndex);
+aiRoutes.get("/ai/replay/:replayId", AiLearningController.replayShow);
 
 aiRoutes.use(requireAiPlatformReady);
 

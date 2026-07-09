@@ -7,14 +7,13 @@ import {
   PrimaryKey,
   AutoIncrement,
   ForeignKey,
-  BelongsTo,
-  Default
+  BelongsTo
 } from "sequelize-typescript";
 import Company from "./Company";
 import Ticket from "./Ticket";
 
 @Table
-class AiCopilotSuggestion extends Model<AiCopilotSuggestion> {
+class AiReplayLog extends Model<AiReplayLog> {
   @PrimaryKey
   @AutoIncrement
   @Column
@@ -35,35 +34,52 @@ class AiCopilotSuggestion extends Model<AiCopilotSuggestion> {
   ticket: Ticket;
 
   @Column
-  suggestedResponse: string;
+  messageId: string;
 
   @Column
-  rationale: string;
+  userQuestion: string;
+
+  @Column
+  conversationHistory: object;
+
+  @Column
+  systemPrompt: string;
 
   @Column
   usedChunks: object;
 
   @Column
+  aiResponse: string;
+
+  @Column
   confidence: number;
 
-  @Default("pending")
   @Column
-  status: string;
+  explainability: object;
 
   @Column
-  improvedResponse: string;
+  tokensInput: number;
 
   @Column
-  relatedDocument: string;
+  tokensOutput: number;
 
   @Column
-  nextSteps: string;
+  latencyMs: number;
 
   @Column
-  riskAssessment: string;
+  costUsd: number;
 
   @Column
-  customerSentiment: string;
+  model: string;
+
+  @Column
+  mediaType: string;
+
+  @Column
+  visionSummary: string;
+
+  @Column
+  ocrText: string;
 
   @CreatedAt
   createdAt: Date;
@@ -72,4 +88,4 @@ class AiCopilotSuggestion extends Model<AiCopilotSuggestion> {
   updatedAt: Date;
 }
 
-export default AiCopilotSuggestion;
+export default AiReplayLog;
