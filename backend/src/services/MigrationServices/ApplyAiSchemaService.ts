@@ -53,40 +53,35 @@ const ensureTicketAiColumns = async (schema: string): Promise<void> => {
 };
 
 const ensureOperationalFlowColumns = async (schema: string): Promise<void> => {
-  await sequelize.query(`
-    ALTER TABLE ${q(schema, "Tickets")}
-    ADD COLUMN IF NOT EXISTS "aiHandoffReason" VARCHAR(64);
-  `);
+  const ticketColumns: Array<[string, string]> = [
+    ["aiHandoffReason", "VARCHAR(64)"],
+    ["aiPaused", "BOOLEAN NOT NULL DEFAULT false"],
+    ["aiResolvedByAi", "BOOLEAN NOT NULL DEFAULT false"],
+    ["aiHandoffAt", "TIMESTAMPTZ"],
+    ["aiWaitingSince", "TIMESTAMPTZ"],
+    ["aiStartedAt", "TIMESTAMPTZ"],
+    ["aiSlaBreached", "BOOLEAN NOT NULL DEFAULT false"],
+    ["aiHandoffSummary", "TEXT"],
+    ["aiPriority", "VARCHAR(16)"],
+    ["aiLastConfidence", "DOUBLE PRECISION"],
+    ["aiEndedAt", "TIMESTAMPTZ"],
+    ["aiResponseCount", "INTEGER NOT NULL DEFAULT 0"],
+    ["aiTotalTokensInput", "INTEGER NOT NULL DEFAULT 0"],
+    ["aiTotalTokensOutput", "INTEGER NOT NULL DEFAULT 0"],
+    ["aiEstimatedCostUsd", "DECIMAL(12,6) NOT NULL DEFAULT 0"],
+    ["aiSatisfactionRating", "SMALLINT"],
+    ["aiSatisfactionSource", "VARCHAR(32)"],
+    ["aiSlaEscalationLevel", "INTEGER NOT NULL DEFAULT 0"],
+    ["aiLastExplainability", "JSONB"],
+    ["aiLastSlaAlertAt", "TIMESTAMPTZ"]
+  ];
 
-  await sequelize.query(`
-    ALTER TABLE ${q(schema, "Tickets")}
-    ADD COLUMN IF NOT EXISTS "aiPaused" BOOLEAN NOT NULL DEFAULT false;
-  `);
-
-  await sequelize.query(`
-    ALTER TABLE ${q(schema, "Tickets")}
-    ADD COLUMN IF NOT EXISTS "aiResolvedByAi" BOOLEAN NOT NULL DEFAULT false;
-  `);
-
-  await sequelize.query(`
-    ALTER TABLE ${q(schema, "Tickets")}
-    ADD COLUMN IF NOT EXISTS "aiHandoffAt" TIMESTAMPTZ;
-  `);
-
-  await sequelize.query(`
-    ALTER TABLE ${q(schema, "Tickets")}
-    ADD COLUMN IF NOT EXISTS "aiWaitingSince" TIMESTAMPTZ;
-  `);
-
-  await sequelize.query(`
-    ALTER TABLE ${q(schema, "Tickets")}
-    ADD COLUMN IF NOT EXISTS "aiStartedAt" TIMESTAMPTZ;
-  `);
-
-  await sequelize.query(`
-    ALTER TABLE ${q(schema, "Tickets")}
-    ADD COLUMN IF NOT EXISTS "aiSlaBreached" BOOLEAN NOT NULL DEFAULT false;
-  `);
+  for (const [name, type] of ticketColumns) {
+    await sequelize.query(`
+      ALTER TABLE ${q(schema, "Tickets")}
+      ADD COLUMN IF NOT EXISTS "${name}" ${type};
+    `);
+  }
 
   await sequelize.query(`
     ALTER TABLE ${q(schema, "Queues")}
@@ -309,6 +304,14 @@ export const applyAiSchema = async (): Promise<void> => {
   await markMigrationExecuted(
     schema,
     "20260709120000-add-ai-operational-flow-fields.js"
+  );
+  await markMigrationExecuted(
+    schema,
+    "20260710120000-add-ai-professional-features.js"
+  );
+  await markMigrationExecuted(
+    schema,
+    "20260711120000-ai-gen2-intelligence.js"
   );
 
   logger.info({ schema }, "AI schema ensured");
