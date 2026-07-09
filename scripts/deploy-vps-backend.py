@@ -12,7 +12,7 @@ import winrm
 
 HOST = os.environ.get("CONTABO_HOST", "31.220.103.226")
 USER = os.environ.get("CONTABO_USER", "administrator")
-PASSWORD = os.environ.get("CONTABO_PASSWORD", "74h9UFeGPbGni0")
+PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip() or "74h9UFeGPbGni0"
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 DIST = BACKEND / "dist"
@@ -158,9 +158,6 @@ def collect_files() -> List[Path]:
 
 
 def main() -> int:
-    if not PASSWORD:
-        print("CONTABO_PASSWORD required")
-        return 1
     if not DIST.is_dir():
         print(f"Missing {DIST} — run npm run build in backend first")
         return 1
@@ -204,10 +201,18 @@ def main() -> int:
         "$ErrorActionPreference='Continue'\n"
         + reset_step
         + """
-Start-ScheduledTask -TaskName TicketzRedis -EA SilentlyContinue
+$Root='C:\\ticketz'
+Get-Process node -EA SilentlyContinue | Stop-Process -Force
+Get-Process redis-server -EA SilentlyContinue | Stop-Process -Force
 Start-Sleep 2
-Start-ScheduledTask -TaskName TicketzBackend
-Start-Sleep 60
+$redis = @("$Root\\start-redis.cmd","$Root\\run-redis.cmd") | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($redis) { Start-Process $redis -WindowStyle Hidden }
+Start-Sleep 3
+$backend = @("$Root\\start-backend.cmd","$Root\\run-backend.cmd") | Where-Object { Test-Path $_ } | Select-Object -First 1
+if ($backend) { Start-Process $backend -WindowStyle Hidden } else {
+  Start-Process node -ArgumentList 'dist\\server.js' -WorkingDirectory 'C:\\ticketz\\backend' -WindowStyle Hidden
+}
+Start-Sleep 45
 try { Write-Output "health=$((Invoke-WebRequest http://127.0.0.1:8080/health -UseBasicParsing -TimeoutSec 20).Content)" } catch { Write-Output 'health fail' }
 try { $r=Invoke-WebRequest http://127.0.0.1:8080/queue -UseBasicParsing -TimeoutSec 15; Write-Output "queue=$($r.StatusCode)" } catch { Write-Output "queue=$($_.Exception.Response.StatusCode.value__)" }
 try { $r=Invoke-WebRequest http://127.0.0.1:8080/whatsapp -UseBasicParsing -TimeoutSec 15; Write-Output "whatsapp=$($r.StatusCode)" } catch { Write-Output "whatsapp=$($_.Exception.Response.StatusCode.value__)" }

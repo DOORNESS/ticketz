@@ -118,8 +118,10 @@ jobs:
         run: |
           set -euo pipefail
           pip install pywinrm
+          # Secret vazio no GitHub vira "" e bloqueava o fallback do script Python
           if [ -z "${CONTABO_PASSWORD:-}" ]; then
-            echo "::warning::CONTABO_PASSWORD secret ausente — script usa fallback embutido"
+            echo "::warning::CONTABO_PASSWORD vazio — deploy usa fallback do script"
+            unset CONTABO_PASSWORD
           fi
           python3 scripts/deploy-vps-backend.py
 
