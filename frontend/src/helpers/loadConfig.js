@@ -36,7 +36,8 @@ export async function loadConfig() {
         BACKEND_PROTOCOL: "https",
         BACKEND_HOST: "api.fortmax.com.br",
         BACKEND_PATH: "",
-        LOG_LEVEL: "info"
+        LOG_LEVEL: "info",
+        TURNSTILE_SITE_KEY: "0x4AAAAAADhSILt9PsBiVeID"
       };
       window.__APP_CONFIG__ = fallback;
       return fallback;

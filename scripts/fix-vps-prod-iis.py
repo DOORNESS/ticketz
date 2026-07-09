@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ensure TicketzProdApi IIS site is up and proxying to :8080."""
+"""Ensure TicketzProdApi IIS site is up and proxying to :8080 (short WinRM steps)."""
 
 import os
 import sys
@@ -10,13 +10,13 @@ HOST = os.environ.get("CONTABO_HOST", "31.220.103.226")
 USER = os.environ.get("CONTABO_USER", "administrator")
 PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip() or "74h9UFeGPbGni0"
 
-FIX_PS = r"""
-$ErrorActionPreference = 'Continue'
-$Root = 'C:\ticketz'
-$prodDir = 'C:\inetpub\ticketz-prod'
-New-Item -ItemType Directory -Force -Path $prodDir | Out-Null
-
-@'
+STEPS = [
+    (
+        "webconfig",
+        r"""
+$d = 'C:\inetpub\ticketz-prod'
+New-Item -ItemType Directory -Force -Path $d | Out-Null
+$x = @'
 <?xml version="1.0" encoding="UTF-8"?>
 <configuration>
   <system.webServer>
@@ -30,71 +30,41 @@ New-Item -ItemType Directory -Force -Path $prodDir | Out-Null
     </rewrite>
   </system.webServer>
 </configuration>
-'@ | Set-Content "$prodDir\web.config" -Encoding UTF8
-
+'@
+Set-Content "$d\web.config" $x -Encoding UTF8
+Write-Output 'web.config ok'
+""",
+    ),
+    (
+        "site",
+        r"""
 Import-Module WebAdministration -EA SilentlyContinue
-
-if (-not (Get-Website -Name 'TicketzProdApi' -EA SilentlyContinue)) {
-  New-Website -Name 'TicketzProdApi' -PhysicalPath $prodDir -Port 80 -HostHeader 'api.fortmax.com.br' -Force | Out-Null
-  Write-Output 'created TicketzProdApi'
-} else {
-  Write-Output 'TicketzProdApi exists'
-}
-
-Start-Service W3SVC -EA SilentlyContinue
-Start-Website -Name 'TicketzProdApi' -EA SilentlyContinue
-
-# HTTPS para Cloudflare SSL Full (api.fortmax.com.br:443)
+$site = 'TicketzProdApi'
+$dir = 'C:\inetpub\ticketz-prod'
 $hostn = 'api.fortmax.com.br'
-$siteName = 'TicketzProdApi'
-$cert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.DnsNameList.Unicode -contains $hostn } | Select-Object -First 1
-if (-not $cert) {
-  $cert = New-SelfSignedCertificate -DnsName $hostn -CertStoreLocation 'Cert:\LocalMachine\My' -NotAfter (Get-Date).AddYears(2) -KeyExportPolicy Exportable
+if (-not (Get-Website -Name $site -EA SilentlyContinue)) {
+  New-Website -Name $site -PhysicalPath $dir -Port 80 -HostHeader $hostn -Force | Out-Null
+  Write-Output 'site created'
+} else {
+  Write-Output 'site exists'
 }
-$thumb = $cert.Thumbprint
-$httpsBinding = Get-WebBinding -Name $siteName -Protocol 'https' -HostHeader $hostn -EA SilentlyContinue
-if (-not $httpsBinding) {
-  New-WebBinding -Name $siteName -Protocol 'https' -Port 443 -HostHeader $hostn -SslFlags 1
-}
-try {
-  (Get-Item "IIS:\SslBindings\0.0.0.0!443!$hostn" -EA Stop).Delete()
-} catch {}
-New-Item "IIS:\SslBindings\0.0.0.0!443!$hostn" -Value (Get-Item "Cert:\LocalMachine\My\$thumb") | Out-Null
-Write-Output "ssl thumb=$thumb"
-
-# Evita iisreset (derruba node); recicla só o site prod
-Stop-Website -Name $siteName -EA SilentlyContinue
-Start-Website -Name $siteName -EA SilentlyContinue
-
-Write-Output '=== SITES ==='
-Get-Website | Where-Object { $_.Name -match 'Ticketz|WebG3|migracao' } | Format-Table Name,State -AutoSize
-Write-Output '=== PORT 80 ==='
-netstat -ano | findstr ':80 '
-Write-Output '=== ALL BINDINGS ==='
-Get-Website | ForEach-Object {
-  $b = $_.bindings.Collection | ForEach-Object { $_.protocol + '://' + $_.bindingInformation }
-  Write-Output ($_.name + ' | ' + $_.state + ' | ' + ($b -join ', '))
-}
-Write-Output '=== TESTS ==='
-try {
-  Write-Output "8080=$((Invoke-WebRequest http://127.0.0.1:8080/health -UseBasicParsing -TimeoutSec 15).StatusCode)"
-} catch {
-  Write-Output "8080=FAIL $($_.Exception.Message)"
-}
+Start-Service W3SVC -EA SilentlyContinue
+Start-Website -Name $site -EA SilentlyContinue
+Write-Output ((Get-Website -Name $site).State)
+""",
+    ),
+    (
+        "test",
+        r"""
 try {
   $r = Invoke-WebRequest 'http://127.0.0.1/health' -Headers @{Host='api.fortmax.com.br'} -UseBasicParsing -TimeoutSec 15
-  Write-Output "iis_proxy=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(150,$r.Content.Length)))"
+  Write-Output "iis=$($r.StatusCode)"
 } catch {
-  Write-Output "iis_proxy=FAIL $($_.Exception.Message)"
+  Write-Output "iis=FAIL $($_.Exception.Message)"
 }
-try {
-  [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-  $r = Invoke-WebRequest 'https://127.0.0.1/health' -Headers @{Host='api.fortmax.com.br'} -UseBasicParsing -TimeoutSec 15
-  Write-Output "iis_https_local=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(150,$r.Content.Length)))"
-} catch {
-  Write-Output "iis_https_local=FAIL $($_.Exception.Message)"
-}
-"""
+""",
+    ),
+]
 
 
 def main() -> int:
@@ -103,17 +73,19 @@ def main() -> int:
         auth=(USER, PASSWORD),
         transport="basic",
         server_cert_validation="ignore",
-        operation_timeout_sec=120,
-        read_timeout_sec=150,
+        operation_timeout_sec=90,
+        read_timeout_sec=120,
     )
     print(f"Fixing IIS on {HOST}...")
-    r = s.run_ps(FIX_PS)
-    out = (r.std_out or b"").decode("utf-8", errors="replace")
-    err = (r.std_err or b"").decode("utf-8", errors="replace")
-    print(out)
-    if err.strip():
-        print(err[-1500:])
-    return 0 if r.status_code == 0 else 1
+    ok = True
+    for name, ps in STEPS:
+        print(f"\n=== {name} ===")
+        r = s.run_ps(ps)
+        out = (r.std_out or b"").decode("utf-8", errors="replace").strip()
+        print(out)
+        if r.status_code != 0:
+            ok = False
+    return 0 if ok else 1
 
 
 if __name__ == "__main__":
