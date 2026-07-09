@@ -45,7 +45,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     provider: provider || "openai",
     textModel: textModel || "gpt-4o-mini",
     visionModel: visionModel || "gpt-4o-mini",
-    transcriptionModel: transcriptionModel || "gpt-4o-mini-transcribe",
+    transcriptionModel: transcriptionModel || "whisper-1",
     basePrompt,
     temperature: temperature ?? 0.3,
     maxTokens: maxTokens ?? 1024,

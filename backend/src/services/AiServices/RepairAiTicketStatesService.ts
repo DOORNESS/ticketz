@@ -12,6 +12,17 @@ import { websocketUpdateTicket } from "../TicketServices/UpdateTicketService";
 export const repairAiTicketStates = async (
   companyId?: number
 ): Promise<number> => {
+  await AiAgent.update(
+    { transcriptionModel: "whisper-1" },
+    {
+      where: {
+        transcriptionModel: {
+          [Op.in]: ["gpt-4o-mini-transcribe", "gpt-4o-transcribe"]
+        }
+      }
+    }
+  );
+
   const where: Record<string, unknown> = {
     [Op.or]: [
       {

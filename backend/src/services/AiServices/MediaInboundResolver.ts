@@ -7,10 +7,17 @@ import { resolveInboundAudioText } from "./AudioInboundResolver";
 import AiAgent from "../../models/AiAgent";
 import Ticket from "../../models/Ticket";
 import { InboundMessageItem } from "./ProcessInboundMessageService";
-import { readMediaBuffer } from "../../helpers/mediaStorage";
+import {
+  readMediaBuffer,
+  extractStorageKeyFromUrl
+} from "../../helpers/mediaStorage";
 
 const buildPublicMediaUrl = (mediaUrl: string): string => {
   if (mediaUrl.startsWith("http")) {
+    const storageKey = extractStorageKeyFromUrl(mediaUrl);
+    if (storageKey) {
+      return `${process.env.BACKEND_URL || "http://localhost:8080"}/public/${storageKey}`;
+    }
     return mediaUrl;
   }
 
@@ -160,6 +167,7 @@ export const resolveInboundMessageText = async ({
       companyId,
       ticketId: ticket.id,
       messageId: message.messageId,
+      audioBuffer: mediaBuffer,
       mediaUrl: message.mediaUrl,
       filename: message.mediaFilename || "audio.ogg",
       mimeType: message.mediaMimeType,

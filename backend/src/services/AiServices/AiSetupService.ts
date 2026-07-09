@@ -133,7 +133,7 @@ export const createDemoEnvironment = async (
       provider: "openai",
       textModel: "gpt-4o-mini",
       visionModel: "gpt-4o-mini",
-      transcriptionModel: "gpt-4o-mini-transcribe",
+      transcriptionModel: "whisper-1",
       basePrompt:
         "Você é um assistente de demonstração. Responda com base exclusivamente na base de conhecimento fornecida.",
       temperature: 0.3,

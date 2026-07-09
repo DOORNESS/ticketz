@@ -17,6 +17,7 @@ import Company from "./Company";
 import Queue from "./Queue";
 import OldMessage from "./OldMessage";
 import { URLCharEncoder } from "./URLCharEncoder";
+import { extractStorageKeyFromUrl } from "../helpers/mediaStorage";
 
 export type MessageErrorPayload = {
   code: string;
@@ -63,23 +64,37 @@ class Message extends Model {
   @Column(DataType.STRING)
   get mediaUrl(): string | null {
     const value = this.getDataValue("mediaUrl");
-    if (value) {
-      return value.match(/^https?:\/\//)
-        ? URLCharEncoder(value)
-        : `${process.env.BACKEND_URL}/public/${URLCharEncoder(value)}`;
+    if (!value) {
+      return null;
     }
-    return null;
+
+    if (value.match(/^https?:\/\//)) {
+      const storageKey = extractStorageKeyFromUrl(value);
+      if (storageKey) {
+        return `${process.env.BACKEND_URL}/public/${URLCharEncoder(storageKey)}`;
+      }
+      return URLCharEncoder(value);
+    }
+
+    return `${process.env.BACKEND_URL}/public/${URLCharEncoder(value)}`;
   }
 
   @Column(DataType.STRING)
   get thumbnailUrl(): string | null {
     const value = this.getDataValue("thumbnailUrl");
-    if (value) {
-      return value.match(/^https?:\/\//)
-        ? URLCharEncoder(value)
-        : `${process.env.BACKEND_URL}/public/${URLCharEncoder(value)}`;
+    if (!value) {
+      return null;
     }
-    return null;
+
+    if (value.match(/^https?:\/\//)) {
+      const storageKey = extractStorageKeyFromUrl(value);
+      if (storageKey) {
+        return `${process.env.BACKEND_URL}/public/${URLCharEncoder(storageKey)}`;
+      }
+      return URLCharEncoder(value);
+    }
+
+    return `${process.env.BACKEND_URL}/public/${URLCharEncoder(value)}`;
   }
 
   @Column

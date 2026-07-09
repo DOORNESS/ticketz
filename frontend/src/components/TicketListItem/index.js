@@ -5,7 +5,7 @@ import { parseISO, format, isSameDay } from "date-fns";
 import clsx from "clsx";
 
 import { makeStyles } from "@material-ui/core/styles";
-import { green, purple } from "@material-ui/core/colors";
+import { green } from "@material-ui/core/colors";
 import ListItem from "@material-ui/core/ListItem";
 import ListItemText from "@material-ui/core/ListItemText";
 import ListItemAvatar from "@material-ui/core/ListItemAvatar";
@@ -13,7 +13,6 @@ import Typography from "@material-ui/core/Typography";
 import Avatar from "@material-ui/core/Avatar";
 import Divider from "@material-ui/core/Divider";
 import Badge from "@material-ui/core/Badge";
-import Button from "@material-ui/core/Button";
 
 import { i18n } from "../../translate/i18n";
 import { formatWhatsappContactName } from "../../helpers/formatWhatsappDisplay";
@@ -26,7 +25,6 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import toastError from "../../errors/toastError";
 import {
-  canSuperviseAi,
   isAiHandlingTicket,
   isHandoffPendingTicket
 } from "../../helpers/aiTicketStatus";
@@ -38,29 +36,6 @@ const useStyles = makeStyles(theme => ({
 
   pendingTicket: {
     cursor: "pointer"
-  },
-
-  noTicketsDiv: {
-    display: "flex",
-    height: "100px",
-    margin: 40,
-    flexDirection: "column",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-
-  noTicketsText: {
-    textAlign: "center",
-    color: "rgb(104, 121, 146)",
-    fontSize: "14px",
-    lineHeight: "1.4"
-  },
-
-  noTicketsTitle: {
-    textAlign: "center",
-    fontSize: "16px",
-    fontWeight: "600",
-    margin: "0px"
   },
 
   contactNameWrapper: {
@@ -99,14 +74,6 @@ const useStyles = makeStyles(theme => ({
     left: "50%",
     transform: "translateX(-50%)",
     whiteSpace: "nowrap"
-  },
-
-  observeButton: {
-    backgroundColor: purple[700],
-    color: "#fff",
-    "&:hover": {
-      backgroundColor: purple[900]
-    }
   },
 
   ticketQueueColor: {
@@ -160,89 +127,8 @@ const TicketListItem = ({ ticket, groupActionButtons }) => {
     }
   };
 
-  const handleAssumeFromBot = async selectedTicket => {
-    setLoading(true);
-    try {
-      await api.post(`/tickets/${selectedTicket.id}/ai/assume`);
-      setObservationMode(false);
-      history.push(`/tickets/${routeId}`);
-    } catch (err) {
-      toastError(err);
-    }
-    if (isMounted.current) {
-      setLoading(false);
-    }
-  };
-
   const handleSelectTicket = () => {
-    if (aiHandling || handoffPending) {
-      openTicket(true);
-      return;
-    }
-
-    openTicket(false);
-  };
-
-  const renderActionButton = () => {
-    if (aiHandling) {
-      if (canSuperviseAi(user)) {
-        return (
-          <ButtonWithSpinner
-            color="primary"
-            variant="contained"
-            className={clsx(classes.actionButton, classes.observeButton)}
-            size="small"
-            loading={loading}
-            onClick={e => {
-              e.stopPropagation();
-              handleAssumeFromBot(ticket);
-            }}
-          >
-            {i18n.t("aiSupervision.actions.assumeFromBot")}
-          </ButtonWithSpinner>
-        );
-      }
-
-      return (
-        <Button
-          variant="contained"
-          className={clsx(classes.actionButton, classes.observeButton)}
-          size="small"
-          onClick={e => {
-            e.stopPropagation();
-            openTicket(true);
-          }}
-        >
-          {i18n.t("aiSupervision.actions.observe", {
-            defaultValue: "Observar"
-          })}
-        </Button>
-      );
-    }
-
-    if (
-      ticket.status === "pending" &&
-      handoffPending &&
-      (groupActionButtons || !ticket.isGroup)
-    ) {
-      return (
-        <ButtonWithSpinner
-          color="primary"
-          variant="contained"
-          className={classes.actionButton}
-          size="small"
-          loading={loading}
-          onClick={e => {
-            e.stopPropagation();
-            handleAcceptTicket(ticket);
-          }}
-        >
-          {i18n.t("ticketsList.buttons.accept")}
-        </ButtonWithSpinner>
-      );
-    }
-
-    return null;
+    openTicket(aiHandling || handoffPending);
   };
 
   return (
@@ -337,7 +223,24 @@ const TicketListItem = ({ ticket, groupActionButtons }) => {
             </span>
           }
         />
-        {renderActionButton()}
+        {handoffPending &&
+          !aiHandling &&
+          ticket.status === "pending" &&
+          (groupActionButtons || !ticket.isGroup) && (
+            <ButtonWithSpinner
+              color="primary"
+              variant="contained"
+              className={classes.actionButton}
+              size="small"
+              loading={loading}
+              onClick={e => {
+                e.stopPropagation();
+                handleAcceptTicket(ticket);
+              }}
+            >
+              {i18n.t("ticketsList.buttons.accept")}
+            </ButtonWithSpinner>
+          )}
       </ListItem>
       <Divider variant="inset" component="li" />
     </React.Fragment>

@@ -63,6 +63,11 @@ const useStyles = makeStyles(theme => ({
     width: 100
   },
 
+  openSubTab: {
+    minWidth: 110,
+    flexShrink: 0
+  },
+
   ticketOptionsBox: {
     display: "flex",
     justifyContent: "space-between",
@@ -330,9 +335,11 @@ const TicketsManagerTabs = () => {
           onChange={handleChangeTabOpen}
           indicatorColor="primary"
           textColor="primary"
-          variant="fullWidth"
+          variant="scrollable"
+          scrollButtons="auto"
         >
           <Tab
+            className={classes.openSubTab}
             label={
               <Badge
                 className={classes.badge}
@@ -346,6 +353,7 @@ const TicketsManagerTabs = () => {
             value={"open"}
           />
           <Tab
+            className={classes.openSubTab}
             label={
               <Badge
                 className={classes.badge}
@@ -359,11 +367,12 @@ const TicketsManagerTabs = () => {
             value={"pending"}
           />
           <Tab
+            className={classes.openSubTab}
             label={
               <Badge
                 className={classes.badge}
                 badgeContent={aiCount}
-                color="secondary"
+                color="primary"
                 max={999}
               >
                 {i18n.t("aiSupervision.tabTitle")}

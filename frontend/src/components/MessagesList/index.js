@@ -1080,10 +1080,17 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
       );
     }
     if (!document && message.mediaType === "audio") {
+      const audioSrc = message.mediaUrl;
+      const audioType = (audioSrc || "").toLowerCase().includes(".ogg")
+        ? "audio/ogg"
+        : (audioSrc || "").toLowerCase().includes(".opus")
+          ? "audio/opus"
+          : "audio/mpeg";
+
       return (
         <>
-          <audio className={classes.audioBottom} controls>
-            <source src={message.mediaUrl} type="audio/ogg"></source>
+          <audio className={classes.audioBottom} controls preload="metadata">
+            <source src={audioSrc} type={audioType} />
           </audio>
           {message.body && !["🔊", "Áudio"].includes(message.body) && (
             <div className={classes.mediaDescription}>{message.body}</div>

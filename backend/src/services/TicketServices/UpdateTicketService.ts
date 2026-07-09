@@ -153,7 +153,14 @@ const UpdateTicketService = async ({
     }
 
     if (user && ticket.status !== "pending") {
-      if (user.profile !== "admin" && ticket.userId !== user.id) {
+      const isAiTakeover =
+        !ticket.userId && userId && (ticket.aiAgentId || ticket.aiHandoff);
+
+      if (
+        !isAiTakeover &&
+        user.profile !== "admin" &&
+        ticket.userId !== user.id
+      ) {
         throw new AppError("ERR_FORBIDDEN", 403);
       }
     }

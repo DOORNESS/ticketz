@@ -225,10 +225,4 @@ export const deleteStoredMedia = async (
 export const toStoredMediaReference = (input: {
   key: string;
   publicUrl: string;
-}): string => {
-  if (input.publicUrl?.startsWith("http")) {
-    return input.publicUrl;
-  }
-
-  return input.key;
-};
+}): string => input.key;

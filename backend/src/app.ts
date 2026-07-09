@@ -7,8 +7,6 @@ import cookieParser from "cookie-parser";
 import * as Sentry from "@sentry/node";
 
 import "./database";
-import path from "path";
-import uploadConfig from "./config/upload";
 import AppError from "./errors/AppError";
 import routes from "./routes";
 import * as VersionController from "./controllers/VersionController";
@@ -16,10 +14,7 @@ import { logger } from "./utils/logger";
 import { messageQueue, sendScheduledMessages } from "./queues";
 import { corsOrigin } from "./helpers/corsOrigin";
 import { getBuildInfo } from "./helpers/buildInfo";
-
-class SystemError extends Error {
-  code?: string;
-}
+import { servePublicMedia } from "./helpers/servePublicMedia";
 
 Sentry.init({ dsn: process.env.SENTRY_DSN });
 
@@ -50,46 +45,13 @@ app.get("/health", (_req, res) => {
   res.status(200).json({ ok: true, ...getBuildInfo() });
 });
 app.get("/version", VersionController.versionPublic);
-app.get("/public/*", (req, res) => {
-  const filePath = path.join(uploadConfig.directory, req.params[0]);
-
-  if (filePath.endsWith(".aac")) {
-    res.setHeader("Content-Type", "audio/aac");
+app.get("/public/*", async (req, res) => {
+  try {
+    await servePublicMedia(req, res);
+  } catch (err) {
+    logger.error({ err, path: req.params[0] }, "Error serving public media");
+    res.status(500).end();
   }
-
-  // ?inline=1 → serve with Content-Disposition: inline so browsers display
-  // the file in-place (e.g. PDF viewer iframe) instead of downloading it.
-  if (req.query.inline === "1") {
-    res.setHeader("Content-Disposition", "inline");
-    return res.sendFile(filePath, err => {
-      if (err) {
-        const sysErr = err as SystemError;
-        if (sysErr.code === "ENOENT") {
-          res.status(404).end();
-        } else {
-          logger.debug(
-            { err },
-            `Error serving inline file ${req.params[0]}: ${sysErr.message}`
-          );
-          res.status(500).end();
-        }
-      }
-    });
-  }
-
-  res.download(filePath, (err: SystemError) => {
-    if (err) {
-      if (err.code === "ENOENT") {
-        res.status(404).end();
-      } else {
-        logger.debug(
-          { err },
-          `Error downloading file ${req.params[0]}: ${err.message}`
-        );
-        res.status(500).end();
-      }
-    }
-  });
 });
 
 app.use((req, res, next) => {

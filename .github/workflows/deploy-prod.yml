@@ -118,7 +118,8 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${CONTABO_PASSWORD:-}" ]; then
-            echo "::warning::CONTABO_PASSWORD ausente — deploy VPS ignorado (health check only)."
+            echo "::error::CONTABO_PASSWORD ausente — deploy VPS bloqueado."
+            exit 1
           else
             pip install pywinrm
             python3 scripts/deploy-vps-backend.py

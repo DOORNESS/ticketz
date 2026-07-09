@@ -24,8 +24,8 @@ import AiExplainabilityPanel from "../AiExplainabilityPanel";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import useSettings from "../../hooks/useSettings";
 import {
-  canSuperviseAi,
-  isAiHandlingTicket
+  isAiHandlingTicket,
+  isHandoffPendingTicket
 } from "../../helpers/aiTicketStatus";
 import { isTicketObservationMode } from "../../helpers/ticketListVisibility";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
@@ -145,7 +145,7 @@ const Ticket = () => {
             profile !== "admin" &&
             !user?.super &&
             !isAiHandlingTicket(data) &&
-            !canSuperviseAi(user)
+            !isHandoffPendingTicket(data)
           ) {
             toast.error(i18n.t("common.accessNotAllowed"));
             history.push("/tickets");

@@ -170,10 +170,8 @@ export const transcribeAudioBuffer = async ({
 
   let lastError = "unknown_error";
   const modelsToTry = [
-    resolvedModel,
-    ...(resolvedModel !== TRANSCRIPTION_FALLBACK_MODEL
-      ? [TRANSCRIPTION_FALLBACK_MODEL]
-      : [])
+    TRANSCRIPTION_FALLBACK_MODEL,
+    ...(resolvedModel !== TRANSCRIPTION_FALLBACK_MODEL ? [resolvedModel] : [])
   ];
 
   for (let modelIndex = 0; modelIndex < modelsToTry.length; modelIndex += 1) {

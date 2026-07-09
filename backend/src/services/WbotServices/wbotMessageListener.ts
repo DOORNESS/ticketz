@@ -725,12 +725,14 @@ export const verifyMediaMessage = async (
     isAiFeaturesEnabled() &&
     (await getActiveAgent(ticket.companyId, ticket.queueId));
 
+  let inboundAudioBuffer: Buffer | null = null;
+
   if (
     media &&
     mediaType === "audio" &&
     (audioTranscriptionsSetting === "enabled" || aiAgentForAudio)
   ) {
-    const audioBuffer = Buffer.isBuffer(media.data)
+    inboundAudioBuffer = Buffer.isBuffer(media.data)
       ? media.data
       : await streamToBuffer(media.data);
 
@@ -738,7 +740,7 @@ export const verifyMediaMessage = async (
       companyId: ticket.companyId,
       ticketId: ticket.id,
       messageId: msg.key?.id,
-      audioBuffer,
+      audioBuffer: inboundAudioBuffer,
       filename,
       mimeType: mimetype,
       existingText: body,
@@ -779,6 +781,7 @@ export const verifyMediaMessage = async (
         companyId: ticket.companyId,
         ticketId: ticket.id,
         messageId: msg.key?.id,
+        audioBuffer: inboundAudioBuffer,
         mediaUrl: storedMediaUrl,
         filename,
         mimeType: mimetype,

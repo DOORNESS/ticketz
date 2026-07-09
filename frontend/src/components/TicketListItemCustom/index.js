@@ -455,6 +455,8 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
               </Tooltip>
             )}
           {ticket.status === "pending" &&
+            isHandoffPendingTicket(ticket) &&
+            !isAiHandlingTicket(ticket) &&
             (groupActionButtons || !ticket.isGroup) && (
               <Tooltip
                 title={i18n.t("ticketsList.tooltips.acceptConversation")}

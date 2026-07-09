@@ -60,7 +60,7 @@ const ensureAgent = async (companyId: number): Promise<AiAgent> => {
       provider: "openai",
       textModel: "gpt-4o-mini",
       visionModel: "gpt-4o-mini",
-      transcriptionModel: "gpt-4o-mini-transcribe",
+      transcriptionModel: "whisper-1",
       basePrompt: DEFAULT_BASE_PROMPT,
       temperature: 0.4,
       maxTokens: 1024,

@@ -5,6 +5,7 @@ import cookieParser from "cookie-parser";
 
 import { corsOrigin } from "./helpers/corsOrigin";
 import { getBuildInfo } from "./helpers/buildInfo";
+import { servePublicMedia } from "./helpers/servePublicMedia";
 import AppError from "./errors/AppError";
 import { logger } from "./utils/logger";
 
@@ -177,6 +178,15 @@ app.get("/version", (_req, res) => {
   });
 });
 
+app.get("/public/*", async (req, res) => {
+  try {
+    await servePublicMedia(req, res);
+  } catch (err) {
+    logger.error({ err, path: req.params[0] }, "Error serving public media");
+    res.status(500).end();
+  }
+});
+
 app.get("/public-settings/:settingKey", (req, res) => {
   const { settingKey } = req.params;
 
@@ -304,6 +314,7 @@ export async function ensureCoreRoutes(): Promise<void> {
 const isFastShellPath = (req: express.Request): boolean =>
   req.path === "/health" ||
   req.path === "/version" ||
+  req.path.startsWith("/public/") ||
   req.path.startsWith("/public-settings/") ||
   (req.method === "POST" && req.path === "/auth/login");
 
