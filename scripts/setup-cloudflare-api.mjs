@@ -90,12 +90,12 @@ async function ensureDnsRecord(zoneId) {
   console.log(`✅ DNS criado: ${API_HOST} → ${VPS_IP}`);
 }
 
-async function ensureSslFull(zoneId) {
+async function ensureSslFlexible(zoneId) {
   const res = await cf(
     `https://api.cloudflare.com/client/v4/zones/${zoneId}/settings/ssl`,
-    { method: "PATCH", body: JSON.stringify({ value: "full" }) }
+    { method: "PATCH", body: JSON.stringify({ value: "flexible" }) }
   );
-  if (res.data?.success) console.log("✅ SSL mode: Full");
+  if (res.data?.success) console.log("✅ SSL mode: Flexible (origin HTTP:80 via IIS)");
 }
 
 async function main() {
@@ -103,7 +103,7 @@ async function main() {
   console.log(`→ DNS produção VPS: ${API_HOST} → ${VPS_IP}`);
   await removeWorkerRoutes(zoneId);
   await ensureDnsRecord(zoneId);
-  await ensureSslFull(zoneId);
+  await ensureSslFlexible(zoneId);
   console.log(`\n🎯 API produção (VPS): https://${API_HOST}`);
 }
 

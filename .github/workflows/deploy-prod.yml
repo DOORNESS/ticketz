@@ -41,13 +41,14 @@ jobs:
             backend:
               - 'backend/**'
               - 'api-worker/**'
-              - 'scripts/setup-cloudflare-api.mjs'
-              - 'scripts/migrate-prod-to-vps.mjs'
+              - 'scripts/**'
               - '.github/workflows/deploy-prod.yml'
             frontend:
               - 'frontend/**'
               - 'functions/**'
               - 'scripts/setup-cloudflare-prod.mjs'
+              - 'scripts/setup-cloudflare-api.mjs'
+              - '.github/workflows/deploy-prod.yml'
 
   deploy-api:
     name: API → VPS Contabo (api.fortmax.com.br)
@@ -109,6 +110,16 @@ jobs:
           npm ci --no-audit --no-fund
           npm run build
 
+      - name: Garantir DNS + SSL Flexible (Cloudflare) — antes do deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          VPS_IP: ${{ secrets.CONTABO_VPS_IP }}
+          API_HOST: ${{ env.API_HOST }}
+        run: |
+          set -euo pipefail
+          node scripts/setup-cloudflare-api.mjs
+
       - name: Deploy backend na VPS Contabo
         env:
           CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
@@ -133,22 +144,46 @@ jobs:
           echo "Deploy target host: ${CONTABO_HOST}"
           python3 scripts/deploy-vps-backend.py
 
-      - name: Garantir DNS produção → VPS Contabo
+      - name: Corrigir .env PORT/HOST e scripts de start na VPS
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-          VPS_IP: ${{ secrets.CONTABO_VPS_IP }}
-          API_HOST: ${{ env.API_HOST }}
+          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP }}
         run: |
           set -euo pipefail
-          node scripts/setup-cloudflare-api.mjs
+          pip install pywinrm
+          if [ -z "${CONTABO_PASSWORD:-}" ]; then unset CONTABO_PASSWORD; fi
+          CONTABO_HOST="${CONTABO_HOST:-31.220.103.226}"
+          CONTABO_HOST="${CONTABO_HOST#https://}"
+          CONTABO_HOST="${CONTABO_HOST#http://}"
+          CONTABO_HOST="${CONTABO_HOST%%/*}"
+          CONTABO_HOST="${CONTABO_HOST%%:*}"
+          export CONTABO_HOST
+          python3 scripts/fix-vps-env-port.py
+
+      - name: Corrigir IIS proxy (api.fortmax.com.br)
+        env:
+          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP }}
+        run: |
+          set -euo pipefail
+          pip install pywinrm
+          if [ -z "${CONTABO_PASSWORD:-}" ]; then
+            unset CONTABO_PASSWORD
+          fi
+          CONTABO_HOST="${CONTABO_HOST:-31.220.103.226}"
+          CONTABO_HOST="${CONTABO_HOST#https://}"
+          CONTABO_HOST="${CONTABO_HOST#http://}"
+          CONTABO_HOST="${CONTABO_HOST%%/*}"
+          CONTABO_HOST="${CONTABO_HOST%%:*}"
+          export CONTABO_HOST
+          python3 scripts/fix-vps-prod-iis.py
 
       - name: Aguardar API ficar pronta (VPS)
         run: |
           set -euo pipefail
           API_URL="https://${{ env.API_HOST }}"
           EXPECTED_SHA="${{ github.sha }}"
-          for attempt in $(seq 1 18); do
+          for attempt in $(seq 1 30); do
             if curl -fsS --max-time 20 "${API_URL}/health" >/dev/null 2>&1; then
               echo "API health OK on attempt ${attempt}"
               curl -fsS --max-time 10 "${API_URL}/health" || true
@@ -163,11 +198,35 @@ jobs:
               fi
               exit 0
             fi
-            echo "Attempt ${attempt}/18: API ainda aquecendo..."
+            echo "Attempt ${attempt}/30: API ainda aquecendo..."
+            sleep 10
+          done
+          echo "::warning::Health externo falhou — tentando restart na VPS"
+          pip install pywinrm
+          if [ -z "${CONTABO_PASSWORD:-}" ]; then
+            unset CONTABO_PASSWORD
+          fi
+          CONTABO_HOST="${CONTABO_HOST:-31.220.103.226}"
+          CONTABO_HOST="${CONTABO_HOST#https://}"
+          CONTABO_HOST="${CONTABO_HOST#http://}"
+          CONTABO_HOST="${CONTABO_HOST%%/*}"
+          CONTABO_HOST="${CONTABO_HOST%%:*}"
+          export CONTABO_HOST
+          python3 scripts/restart-vps-backend.py || true
+          python3 scripts/fix-vps-prod-iis.py || true
+          for attempt in $(seq 1 12); do
+            if curl -fsS --max-time 20 "${API_URL}/health" >/dev/null 2>&1; then
+              echo "API health OK after recovery on attempt ${attempt}"
+              exit 0
+            fi
+            echo "Recovery attempt ${attempt}/12..."
             sleep 10
           done
           echo "::error::API /health não respondeu — verifique backend na VPS Contabo."
           exit 1
+        env:
+          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP }}
 
       - name: Summary API
         run: |

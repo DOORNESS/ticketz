@@ -62,7 +62,8 @@ PATCH_PATHS = [
     "services/TicketServices/ListTicketsService.js",
     "services/WbotServices/wbotMessageListener.js",
     "services/WbotServices/SendWhatsAppMedia.js",
-    "services/AiServices/AudioInboundResolver.js",
+    "services/MigrationServices/ApplyAiSchemaService.js",
+    "services/MigrationServices/MigrationService.js",
     "services/AiServices/AudioTranscriptionService.js",
     "services/AiServices/AudioPipelineLogger.js",
     "services/AiServices/MediaInboundResolver.js",
@@ -184,11 +185,11 @@ def main() -> int:
         return 1
 
     s = session()
-    print("Stopping backend...")
-    run_ps(s, "Get-Process node -EA SilentlyContinue | Stop-Process -Force")
-
     files = collect_files()
-    print(f"Uploading {len(files)} file(s) (mode={os.environ.get('DEPLOY_MODE', 'patch')})...")
+    print(
+        f"Uploading {len(files)} file(s) while API stays online "
+        f"(mode={os.environ.get('DEPLOY_MODE', 'patch')})..."
+    )
     for idx, local in enumerate(files, start=1):
         rel = local.relative_to(DIST).as_posix().replace("/", "\\")
         remote = f"C:\\ticketz\\backend\\dist\\{rel}"
@@ -201,8 +202,11 @@ def main() -> int:
             print(f"  ... {idx}/{len(files)} files uploaded")
 
     reset_script = BACKEND / "scripts" / "reset-whatsapp-session.js"
+    schema_script = BACKEND / "scripts" / "apply-db-schema.js"
     if reset_script.is_file():
         upload_file(s, reset_script, r"C:\ticketz\backend\scripts\reset-whatsapp-session.js")
+    if schema_script.is_file():
+        upload_file(s, schema_script, r"C:\ticketz\backend\scripts\apply-db-schema.js")
 
     skip_reset = os.environ.get("SKIP_WHATSAPP_RESET", "").lower() in (
         "1",
@@ -223,28 +227,48 @@ def main() -> int:
         + reset_step
         + """
 $Root='C:\\ticketz'
+schtasks /Change /TN TicketzBackend /DISABLE 2>&1 | Out-Null
+schtasks /Change /TN TicketzRedis /DISABLE 2>&1 | Out-Null
 Get-Process node -EA SilentlyContinue | Stop-Process -Force
 Get-Process redis-server -EA SilentlyContinue | Stop-Process -Force
 Start-Sleep 2
 $redis = @("$Root\\start-redis.cmd","$Root\\run-redis.cmd") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($redis) { Start-Process $redis -WindowStyle Hidden }
 Start-Sleep 3
-$backend = @("$Root\\start-backend.cmd","$Root\\run-backend.cmd") | Where-Object { Test-Path $_ } | Select-Object -First 1
+if (Test-Path "$Root\\backend\\scripts\\apply-db-schema.js") {
+  Push-Location "$Root\\backend"
+  node scripts\\apply-db-schema.js 2>&1
+  Pop-Location
+}
+$backend = @("$Root\\start-backend-watch.cmd","$Root\\start-backend.cmd","$Root\\run-backend.cmd") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($backend) { Start-Process $backend -WindowStyle Hidden } else {
   Start-Process node -ArgumentList 'dist\\server.js' -WorkingDirectory 'C:\\ticketz\\backend' -WindowStyle Hidden
 }
-Start-Sleep 45
-try { Write-Output "health=$((Invoke-WebRequest http://127.0.0.1:8080/health -UseBasicParsing -TimeoutSec 20).Content)" } catch { Write-Output 'health fail' }
+Start-Sleep 60
+$healthOk = $false
+try {
+  $h = Invoke-WebRequest http://127.0.0.1:8080/health -UseBasicParsing -TimeoutSec 20
+  Write-Output "health=$($h.Content)"
+  if ($h.StatusCode -eq 200) { $healthOk = $true }
+} catch { Write-Output "health fail $($_.Exception.Message)" }
+try {
+  $r = Invoke-WebRequest 'http://127.0.0.1/health' -Headers @{Host='api.fortmax.com.br'} -UseBasicParsing -TimeoutSec 15
+  Write-Output "iis_proxy=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(120,$r.Content.Length)))"
+} catch { Write-Output "iis_proxy=FAIL $($_.Exception.Message)" }
 try { $r=Invoke-WebRequest http://127.0.0.1:8080/queue -UseBasicParsing -TimeoutSec 15; Write-Output "queue=$($r.StatusCode)" } catch { Write-Output "queue=$($_.Exception.Response.StatusCode.value__)" }
-try { $r=Invoke-WebRequest http://127.0.0.1:8080/whatsapp -UseBasicParsing -TimeoutSec 15; Write-Output "whatsapp=$($r.StatusCode)" } catch { Write-Output "whatsapp=$($_.Exception.Response.StatusCode.value__)" }
-Get-Content C:\\ticketz\\logs\\backend.log -Tail 12 -EA SilentlyContinue | Select-String 'Heavy|QRCode|listening|failed|transcri'
+Get-Content C:\\ticketz\\logs\\backend.err.log -Tail 20 -EA SilentlyContinue
+Get-Content C:\\ticketz\\logs\\backend.log -Tail 12 -EA SilentlyContinue | Select-String 'listening|failed|error|Heavy'
+if (-not $healthOk) { exit 1 }
 """
     )
     code, out, err = run_ps(s, restart_ps)
     print(out)
     if err.strip():
         print(err[-2000:])
-    return 0 if code == 0 else 1
+    if code != 0:
+        print("::error::Backend local health check failed after restart")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

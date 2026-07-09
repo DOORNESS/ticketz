@@ -27,6 +27,9 @@ RESTART_PS = r"""
 $ErrorActionPreference = 'Continue'
 $Root = 'C:\ticketz'
 
+schtasks /Change /TN TicketzBackend /DISABLE 2>&1 | Out-Null
+schtasks /Change /TN TicketzRedis /DISABLE 2>&1 | Out-Null
+
 Get-Process node -EA SilentlyContinue | Stop-Process -Force
 Get-Process redis-server -EA SilentlyContinue | Stop-Process -Force
 Start-Sleep 2
@@ -45,6 +48,7 @@ if ($redis) {
 Start-Sleep 3
 
 $backend = @(
+  "$Root\start-backend-watch.cmd",
   "$Root\start-backend.cmd",
   "$Root\run-backend.cmd"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
@@ -71,6 +75,26 @@ try {
   Write-Output "iis_proxy=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(120,$r.Content.Length)))"
 } catch {
   Write-Output "iis_proxy=FAIL $($_.Exception.Message)"
+}
+try {
+  $r = Invoke-WebRequest 'http://31.220.103.226/health' -Headers @{Host='api.fortmax.com.br'} -UseBasicParsing -TimeoutSec 15
+  Write-Output "iis_public_ip=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(120,$r.Content.Length)))"
+} catch {
+  Write-Output "iis_public_ip=FAIL $($_.Exception.Message)"
+}
+try {
+  [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+  $r = Invoke-WebRequest 'https://127.0.0.1/health' -Headers @{Host='api.fortmax.com.br'} -UseBasicParsing -TimeoutSec 15
+  Write-Output "iis_https_local=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(120,$r.Content.Length)))"
+} catch {
+  Write-Output "iis_https_local=FAIL $($_.Exception.Message)"
+}
+try {
+  [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+  $r = Invoke-WebRequest 'https://31.220.103.226/health' -Headers @{Host='api.fortmax.com.br'} -UseBasicParsing -TimeoutSec 15
+  Write-Output "iis_https_ip=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(120,$r.Content.Length)))"
+} catch {
+  Write-Output "iis_https_ip=FAIL $($_.Exception.Message)"
 }
 """
 
