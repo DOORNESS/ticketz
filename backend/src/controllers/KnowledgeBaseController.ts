@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import KnowledgeBase from "../models/KnowledgeBase";
 import AppError from "../errors/AppError";
 import { safeAiQuery } from "../helpers/safeAiQuery";
+import { listAgentsByKnowledgeBase } from "../services/AiServices/AiAgentKnowledgeBaseService";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
@@ -13,7 +14,15 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
       }),
     []
   );
-  return res.json(bases);
+
+  const enriched = await Promise.all(
+    bases.map(async base => ({
+      ...base.toJSON(),
+      linkedAgents: await listAgentsByKnowledgeBase(companyId, base.id)
+    }))
+  );
+
+  return res.json(enriched);
 };
 
 export const store = async (req: Request, res: Response): Promise<Response> => {
@@ -27,7 +36,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     active: active !== false
   });
 
-  return res.status(201).json(base);
+  return res.status(201).json({ ...base.toJSON(), linkedAgents: [] });
 };
 
 export const update = async (
@@ -46,7 +55,10 @@ export const update = async (
   }
 
   await base.update(req.body);
-  return res.json(base);
+  return res.json({
+    ...base.toJSON(),
+    linkedAgents: await listAgentsByKnowledgeBase(companyId, base.id)
+  });
 };
 
 export const remove = async (

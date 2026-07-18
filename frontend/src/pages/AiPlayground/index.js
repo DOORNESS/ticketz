@@ -31,6 +31,8 @@ const AiPlayground = () => {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState(null);
+  const [routingLoading, setRoutingLoading] = useState(false);
+  const [routingResult, setRoutingResult] = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -47,6 +49,25 @@ const AiPlayground = () => {
     };
     load();
   }, []);
+
+  const handleRoutingPreview = async () => {
+    if (!message.trim()) return;
+    try {
+      setRoutingLoading(true);
+      const { data } = await api.post("/ai/orchestrator/preview", {
+        message: message.trim()
+      });
+      setRoutingResult(data);
+      if (data?.selectedAgent?.id) {
+        setAgentId(String(data.selectedAgent.id));
+      }
+    } catch (err) {
+      toastError(err);
+      setRoutingResult(null);
+    } finally {
+      setRoutingLoading(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!agentId || !message.trim()) return;
@@ -73,6 +94,46 @@ const AiPlayground = () => {
       </MainHeader>
 
       <div className={classes.pageContent}>
+        <AiSectionPaper
+          title="Roteamento (Orquestrador)"
+          subtitle="Teste qual especialista seria escolhido antes de gerar a resposta."
+        >
+          <Grid container spacing={2}>
+            <Grid item xs={12}>
+              <AiFormTextField
+                label="Mensagem para classificar"
+                multiline
+                rows={3}
+                value={message}
+                onChange={e => setMessage(e.target.value)}
+              />
+            </Grid>
+          </Grid>
+          <div className={classes.actionsRow}>
+            <Button
+              variant="outlined"
+              color="primary"
+              disabled={routingLoading || !message.trim()}
+              onClick={handleRoutingPreview}
+            >
+              {routingLoading ? "Classificando..." : "Testar roteamento"}
+            </Button>
+          </div>
+          {routingResult && (
+            <Box mt={2} p={2} bgcolor="#f5f5f5" borderRadius={4}>
+              <Typography variant="body2">
+                Agente: <strong>{routingResult.selectedAgent?.name}</strong> (
+                {routingResult.selectedAgent?.specialty}) · Confiança:{" "}
+                {(Number(routingResult.confidence || 0) * 100).toFixed(0)}%
+              </Typography>
+              <Typography variant="body2" color="textSecondary">
+                {routingResult.reason}
+                {routingResult.fallbackUsed ? " · fallback determinístico" : ""}
+              </Typography>
+            </Box>
+          )}
+        </AiSectionPaper>
+
         <AiSectionPaper
           title="Testar agente"
           subtitle="Simule perguntas e valide respostas antes de colocar em produção."

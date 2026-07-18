@@ -43,6 +43,7 @@ import Translation from "../models/Translation";
 import Wavoip from "../models/Wavoip";
 import AiAgent from "../models/AiAgent";
 import AiAgentQueue from "../models/AiAgentQueue";
+import AiAgentKnowledgeBase from "../models/AiAgentKnowledgeBase";
 import KnowledgeBase from "../models/KnowledgeBase";
 import KnowledgeDocument from "../models/KnowledgeDocument";
 import KnowledgeChunk from "../models/KnowledgeChunk";
@@ -51,6 +52,7 @@ import MessageMediaFile from "../models/MessageMediaFile";
 import AiCopilotSuggestion from "../models/AiCopilotSuggestion";
 import AiKnowledgeSuggestion from "../models/AiKnowledgeSuggestion";
 import AiReplayLog from "../models/AiReplayLog";
+import AiRoutingLog from "../models/AiRoutingLog";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const dbConfig = require("../config/database");
@@ -102,6 +104,7 @@ const models = [
   Wavoip,
   AiAgent,
   AiAgentQueue,
+  AiAgentKnowledgeBase,
   KnowledgeBase,
   KnowledgeDocument,
   KnowledgeChunk,
@@ -109,7 +112,8 @@ const models = [
   MessageMediaFile,
   AiCopilotSuggestion,
   AiKnowledgeSuggestion,
-  AiReplayLog
+  AiReplayLog,
+  AiRoutingLog
 ];
 
 sequelize.addModels(models);

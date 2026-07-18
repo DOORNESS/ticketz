@@ -7,6 +7,8 @@ import { resolveInboundMessageText } from "./MediaInboundResolver";
 import {
   getActiveAgent,
   getKnowledgeBaseIdsForAgent,
+  getSpecialtyPromptRules,
+  resolveSpecialistAgent,
   detectHumanHandoffRequest,
   detectSensitiveTopic,
   detectLowConfidenceResponse,
@@ -23,6 +25,7 @@ import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import formatBody from "../../helpers/Mustache";
 import StorageService from "../StorageService/StorageService";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
+import { isOrchestratorEnabledForCompany } from "./AiOrchestratorFeatureFlag";
 import { isTransientAiError } from "./isTransientAiError";
 import { logger } from "../../utils/logger";
 import { persistAiDecisionLog } from "./AiDecisionLogger";
@@ -193,8 +196,9 @@ const ProcessInboundMessageService = async ({
     return;
   }
 
-  const agent =
+  let agent =
     providedAgent || (await getActiveAgent(companyId, ticket.queueId));
+
   if (!agent) {
     await persistAiDecisionLog({
       companyId,
@@ -205,6 +209,10 @@ const ProcessInboundMessageService = async ({
     });
     return;
   }
+
+  let routingMeta: Awaited<
+    ReturnType<typeof resolveSpecialistAgent>
+  >["routing"];
 
   let userText = "";
 
@@ -303,10 +311,25 @@ const ProcessInboundMessageService = async ({
       return;
     }
 
+    if (!providedAgent) {
+      const resolved = await resolveSpecialistAgent({
+        companyId,
+        ticket,
+        userText,
+        conversationSummary: conversationText,
+        messageId: primaryMessageId
+      });
+      agent = resolved.agent;
+      routingMeta = resolved.routing;
+    }
+
+    const orchestratorMode = await isOrchestratorEnabledForCompany(companyId);
+
     const knowledgeBaseIds = await getKnowledgeBaseIdsForAgent(
       companyId,
       agent.id,
-      ticket.queueId
+      ticket.queueId,
+      { orchestratorMode }
     );
 
     const [scheduleContext, knowledgeContext, history] = await Promise.all([
@@ -351,6 +374,7 @@ const ProcessInboundMessageService = async ({
 
     const systemPrompt = [
       agent.basePrompt || "",
+      getSpecialtyPromptRules(agent.specialty),
       DEFAULT_SYSTEM_RULES,
       schedulePrompt,
       `Base de conhecimento:\n${contextHint}`
@@ -485,7 +509,11 @@ const ProcessInboundMessageService = async ({
         topSimilarity: usedChunks[0]?.similarity || 0,
         confidence,
         hadEmptyModelResponse: !aiResponse,
-        reingestedDocuments: knowledgeContext.reingestedDocuments
+        reingestedDocuments: knowledgeContext.reingestedDocuments,
+        routingLogId: routingMeta?.routingLogId,
+        selectedSpecialty: agent.specialty,
+        orchestratorConfidence: routingMeta?.confidence,
+        orchestratorFallbackUsed: routingMeta?.fallbackUsed
       },
       userMessage: maskSensitiveLog(userText),
       aiResponse: maskSensitiveLog(outboundText)

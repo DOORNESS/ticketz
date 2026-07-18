@@ -25,6 +25,7 @@ import {
   Box,
   Grid
 } from "@material-ui/core";
+import { Alert } from "@material-ui/lab";
 import { DeleteOutline, Edit } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
@@ -39,6 +40,12 @@ import { AiFormTextField } from "../../components/Ai/forms";
 const defaultAgent = {
   name: "",
   active: true,
+  role: "legacy",
+  specialty: "geral",
+  routingDescription: "",
+  routingKeywordsText: "",
+  priority: 100,
+  knowledgeBaseIds: [],
   provider: "openai",
   textModel: "gpt-4o-mini",
   visionModel: "gpt-4o-mini",
@@ -87,6 +94,8 @@ const AiAgents = () => {
   const classes = useAiPageStyles();
   const [agents, setAgents] = useState([]);
   const [queues, setQueues] = useState([]);
+  const [knowledgeBases, setKnowledgeBases] = useState([]);
+  const [orchestratorStatus, setOrchestratorStatus] = useState(null);
   const [queuesLoading, setQueuesLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(defaultAgent);
@@ -118,10 +127,31 @@ const AiAgents = () => {
     }
   }, []);
 
+  const loadKnowledgeBases = useCallback(async () => {
+    try {
+      const { data: kbData } = await api.get("/ai/knowledge-bases");
+      setKnowledgeBases(Array.isArray(kbData) ? kbData : []);
+    } catch (err) {
+      toastError(err);
+      setKnowledgeBases([]);
+    }
+  }, []);
+
+  const loadOrchestratorStatus = useCallback(async () => {
+    try {
+      const { data } = await api.get("/ai/orchestrator/status");
+      setOrchestratorStatus(data);
+    } catch (err) {
+      setOrchestratorStatus(null);
+    }
+  }, []);
+
   useEffect(() => {
     loadAgents();
     loadQueues();
-  }, [loadQueues]);
+    loadKnowledgeBases();
+    loadOrchestratorStatus();
+  }, [loadQueues, loadKnowledgeBases, loadOrchestratorStatus]);
 
   useEffect(() => {
     if (!open) {
@@ -141,14 +171,24 @@ const AiAgents = () => {
   const handleSave = async () => {
     setSaveError("");
     try {
+      const routingKeywords = form.routingKeywordsText
+        .split(",")
+        .map(item => item.trim())
+        .filter(Boolean);
+
       const payload = {
         ...form,
+        routingKeywords,
         fallbackQueueId: form.fallbackQueueId
           ? Number(form.fallbackQueueId)
           : null,
         temperature: Number(form.temperature),
-        maxTokens: Number(form.maxTokens)
+        maxTokens: Number(form.maxTokens),
+        priority: Number(form.priority),
+        knowledgeBaseIds: (form.knowledgeBaseIds || []).map(Number)
       };
+
+      delete payload.routingKeywordsText;
 
       if (editingId) {
         await api.put(`/ai/agents/${editingId}`, payload);
@@ -175,6 +215,14 @@ const AiAgents = () => {
     setForm({
       name: agent.name,
       active: agent.active,
+      role: agent.role || "legacy",
+      specialty: agent.specialty || "geral",
+      routingDescription: agent.routingDescription || "",
+      routingKeywordsText: Array.isArray(agent.routingKeywords)
+        ? agent.routingKeywords.join(", ")
+        : "",
+      priority: agent.priority ?? 100,
+      knowledgeBaseIds: agent.knowledgeBaseIds || [],
       provider: agent.provider,
       textModel: agent.textModel,
       visionModel: agent.visionModel,
@@ -278,11 +326,28 @@ const AiAgents = () => {
         </Button>
       </MainHeader>
       <AiSetupWizard />
+      {orchestratorStatus && (
+        <Box mb={2} p={2} bgcolor="#f5f5f5" borderRadius={4}>
+          <Typography variant="body2">
+            Orquestrador:{" "}
+            {orchestratorStatus.active
+              ? "ativo para esta empresa"
+              : orchestratorStatus.globalEnabled
+                ? "global ON — habilite aiOrchestratorEnabled=enabled na empresa"
+                : "inativo (AI_ORCHESTRATOR_ENABLED=false)"}
+            {" · "}
+            Especialistas: {orchestratorStatus.specialistsCount || 0}
+          </Typography>
+        </Box>
+      )}
       <Paper className={classes.tablePaper} elevation={0}>
         <Table>
           <TableHead>
             <TableRow>
               <TableCell>Nome</TableCell>
+              <TableCell>Tipo</TableCell>
+              <TableCell>Especialidade</TableCell>
+              <TableCell>Bases</TableCell>
               <TableCell>Modelo</TableCell>
               <TableCell>Ativo</TableCell>
               <TableCell align="center">Ações</TableCell>
@@ -292,6 +357,13 @@ const AiAgents = () => {
             {agents.map(agent => (
               <TableRow key={agent.id}>
                 <TableCell>{agent.name}</TableCell>
+                <TableCell>{agent.role || "legacy"}</TableCell>
+                <TableCell>{agent.specialty || "—"}</TableCell>
+                <TableCell>
+                  {(agent.knowledgeBases || [])
+                    .map(base => base.name)
+                    .join(", ") || "—"}
+                </TableCell>
                 <TableCell>{agent.textModel}</TableCell>
                 <TableCell>{agent.active ? "Sim" : "Não"}</TableCell>
                 <TableCell align="center">
@@ -356,6 +428,114 @@ const AiAgents = () => {
                 label="Ativo"
               />
             </div>
+          </SectionBlock>
+
+          <SectionBlock
+            title="Roteamento (Fase 1)"
+            subtitle="Orquestrador classifica intenção; especialistas consultam bases próprias."
+          >
+            <Grid container spacing={2}>
+              <Grid item xs={12} md={4}>
+                <FormControl fullWidth variant="outlined" margin="normal">
+                  <InputLabel id="agent-role-label">Tipo</InputLabel>
+                  <Select
+                    labelId="agent-role-label"
+                    label="Tipo"
+                    value={form.role}
+                    onChange={e => setForm({ ...form, role: e.target.value })}
+                  >
+                    <MenuItem value="legacy">Legado</MenuItem>
+                    <MenuItem value="orchestrator">Orquestrador</MenuItem>
+                    <MenuItem value="specialist">Especialista</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+              {form.role === "specialist" && (
+                <Grid item xs={12} md={4}>
+                  <FormControl fullWidth variant="outlined" margin="normal">
+                    <InputLabel id="agent-specialty-label">
+                      Especialidade
+                    </InputLabel>
+                    <Select
+                      labelId="agent-specialty-label"
+                      label="Especialidade"
+                      value={form.specialty}
+                      onChange={e =>
+                        setForm({ ...form, specialty: e.target.value })
+                      }
+                    >
+                      <MenuItem value="faq">FAQ</MenuItem>
+                      <MenuItem value="financeiro">Financeiro</MenuItem>
+                      <MenuItem value="suporte">Suporte Técnico</MenuItem>
+                      <MenuItem value="geral">Atendimento Geral</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Grid>
+              )}
+              <Grid item xs={12} md={4}>
+                <AiFormTextField
+                  label="Prioridade"
+                  type="number"
+                  value={form.priority}
+                  onChange={e => setForm({ ...form, priority: e.target.value })}
+                  helperText="Menor número = maior prioridade em empates."
+                />
+              </Grid>
+            </Grid>
+            {form.role !== "orchestrator" && (
+              <>
+                <AiFormTextField
+                  label="Descrição para roteamento"
+                  multiline
+                  rows={2}
+                  value={form.routingDescription}
+                  onChange={e =>
+                    setForm({ ...form, routingDescription: e.target.value })
+                  }
+                  helperText="Explica ao orquestrador quando usar este agente."
+                />
+                <AiFormTextField
+                  label="Palavras-chave (separadas por vírgula)"
+                  value={form.routingKeywordsText}
+                  onChange={e =>
+                    setForm({ ...form, routingKeywordsText: e.target.value })
+                  }
+                />
+              </>
+            )}
+            {form.role === "specialist" && (
+              <>
+                <FormControl fullWidth variant="outlined" margin="normal">
+                  <InputLabel id="agent-kb-label">
+                    Bases de conhecimento
+                  </InputLabel>
+                  <Select
+                    labelId="agent-kb-label"
+                    label="Bases de conhecimento"
+                    multiple
+                    value={form.knowledgeBaseIds}
+                    onChange={e =>
+                      setForm({
+                        ...form,
+                        knowledgeBaseIds: e.target.value
+                      })
+                    }
+                    renderValue={selected =>
+                      knowledgeBases
+                        .filter(base => selected.includes(base.id))
+                        .map(base => base.name)
+                        .join(", ")
+                    }
+                  >
+                    {knowledgeBases.map(base => (
+                      <MenuItem key={base.id} value={base.id}>
+                        {base.name}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+              </>
+            )}
           </SectionBlock>
 
           <SectionBlock

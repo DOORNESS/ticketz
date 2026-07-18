@@ -15,6 +15,7 @@ import {
 import Company from "./Company";
 import Queue from "./Queue";
 import AiAgentQueue from "./AiAgentQueue";
+import AiAgentKnowledgeBase from "./AiAgentKnowledgeBase";
 
 @Table
 class AiAgent extends Model<AiAgent> {
@@ -81,6 +82,23 @@ class AiAgent extends Model<AiAgent> {
   @Column(DataType.TEXT)
   ackMessage: string;
 
+  @Default("legacy")
+  @Column
+  role: string;
+
+  @Column
+  specialty: string;
+
+  @Column(DataType.TEXT)
+  routingDescription: string;
+
+  @Column(DataType.JSONB)
+  routingKeywords: string[];
+
+  @Default(100)
+  @Column
+  priority: number;
+
   @CreatedAt
   createdAt: Date;
 
@@ -89,6 +107,9 @@ class AiAgent extends Model<AiAgent> {
 
   @HasMany(() => AiAgentQueue)
   agentQueues: AiAgentQueue[];
+
+  @HasMany(() => AiAgentKnowledgeBase)
+  agentKnowledgeBases: AiAgentKnowledgeBase[];
 }
 
 export default AiAgent;

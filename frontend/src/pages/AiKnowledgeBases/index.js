@@ -87,6 +87,7 @@ const AiKnowledgeBases = () => {
               <TableRow>
                 <TableCell>Nome</TableCell>
                 <TableCell>Descrição</TableCell>
+                <TableCell>Agentes</TableCell>
                 <TableCell>Ativa</TableCell>
                 <TableCell align="center">Ações</TableCell>
               </TableRow>
@@ -96,6 +97,11 @@ const AiKnowledgeBases = () => {
                 <TableRow key={base.id}>
                   <TableCell>{base.name}</TableCell>
                   <TableCell>{base.description}</TableCell>
+                  <TableCell>
+                    {(base.linkedAgents || [])
+                      .map(agent => agent.name)
+                      .join(", ") || "—"}
+                  </TableCell>
                   <TableCell>{base.active ? "Sim" : "Não"}</TableCell>
                   <TableCell align="center">
                     <IconButton

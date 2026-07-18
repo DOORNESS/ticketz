@@ -14,6 +14,7 @@ import * as AiSetupController from "../controllers/AiSetupController";
 import * as AiPlaygroundController from "../controllers/AiPlaygroundController";
 import * as AiDashboardController from "../controllers/AiDashboardController";
 import * as AiLearningController from "../controllers/AiLearningController";
+import * as AiOrchestratorController from "../controllers/AiOrchestratorController";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -31,13 +32,17 @@ aiRoutes.post("/ai/diagnostics/run", AiDiagnosticsController.run);
 aiRoutes.get("/ai/setup/status", AiSetupController.status);
 
 aiRoutes.get("/ai/agents", AiAgentController.index);
+aiRoutes.get("/ai/orchestrator/status", AiAgentController.orchestratorStatus);
 aiRoutes.get("/ai/knowledge-bases", KnowledgeBaseController.index);
 aiRoutes.get("/ai/documents", KnowledgeDocumentController.index);
 aiRoutes.get("/ai/logs", AiLogController.index);
 aiRoutes.get("/ai/dashboard", AiDashboardController.index);
 
 aiRoutes.get("/ai/learnings", AiLearningController.indexLearnings);
-aiRoutes.put("/ai/learnings/:learningId", AiLearningController.editLearningAction);
+aiRoutes.put(
+  "/ai/learnings/:learningId",
+  AiLearningController.editLearningAction
+);
 aiRoutes.post(
   "/ai/learnings/:learningId/approve",
   AiLearningController.approveLearningAction
@@ -81,5 +86,6 @@ aiRoutes.delete(
 );
 
 aiRoutes.post("/ai/playground", AiPlaygroundController.query);
+aiRoutes.post("/ai/orchestrator/preview", AiOrchestratorController.preview);
 
 export default aiRoutes;

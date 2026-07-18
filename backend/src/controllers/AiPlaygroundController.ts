@@ -8,12 +8,12 @@ export const query = async (req: Request, res: Response): Promise<Response> => {
   const { agentId, knowledgeBaseId, message } = req.body;
 
   if (!agentId || !message?.trim()) {
-    throw new AppError("agentId and message are required", 400);
+    throw new AppError("message is required", 400);
   }
 
   const result = await runPlaygroundQuery({
     companyId,
-    agentId: Number(agentId),
+    agentId: agentId ? Number(agentId) : undefined,
     knowledgeBaseId: knowledgeBaseId ? Number(knowledgeBaseId) : undefined,
     message: message.trim()
   });
