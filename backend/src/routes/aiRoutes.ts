@@ -18,6 +18,8 @@ import * as AiPlaygroundController from "../controllers/AiPlaygroundController";
 import * as AiDashboardController from "../controllers/AiDashboardController";
 import * as AiLearningController from "../controllers/AiLearningController";
 import * as AiOrchestratorController from "../controllers/AiOrchestratorController";
+import * as ContactAiMemoryController from "../controllers/ContactAiMemoryController";
+import * as AiToolController from "../controllers/AiToolController";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -137,5 +139,34 @@ aiRoutes.delete(
 
 aiRoutes.post("/ai/playground", AiPlaygroundController.query);
 aiRoutes.post("/ai/orchestrator/preview", AiOrchestratorController.preview);
+
+aiRoutes.get("/ai/dashboard/timeseries", AiDashboardController.timeseries);
+aiRoutes.get("/ai/dashboard/agents", AiDashboardController.agentMetrics);
+aiRoutes.get("/ai/write-tools/status", AiToolController.writeToolsStatus);
+aiRoutes.get("/ai/tools/status", AiToolController.toolsStatus);
+aiRoutes.get("/ai/tools", AiToolController.listRegisteredTools);
+aiRoutes.get("/ai/agents/:agentId/tools", AiToolController.listAgentTools);
+aiRoutes.put("/ai/agents/:agentId/tools", AiToolController.updateAgentTools);
+aiRoutes.get(
+  "/ai/contacts/:contactId/memory",
+  ContactAiMemoryController.index
+);
+aiRoutes.post(
+  "/ai/contacts/:contactId/memory",
+  ContactAiMemoryController.store
+);
+aiRoutes.patch(
+  "/ai/contacts/:contactId/memory/:memoryId",
+  ContactAiMemoryController.patch
+);
+aiRoutes.get(
+  "/ai/contacts/:contactId/memory/export",
+  ContactAiMemoryController.exportMemory
+);
+aiRoutes.delete(
+  "/ai/contacts/:contactId/memory",
+  ContactAiMemoryController.removeAll
+);
+aiRoutes.get("/ai/tool-executions", AiToolController.toolExecutions);
 
 export default aiRoutes;

@@ -1,5 +1,9 @@
 import { getAIProvider } from "./providers/ProviderFactory";
-import { ChatCompletionResult, ChatMessage } from "./providers/AIProvider";
+import {
+  ChatCompletionResult,
+  ChatMessage,
+  ProviderToolDefinition
+} from "./providers/AIProvider";
 import { transcribeAudioBuffer } from "./AudioTranscriptionService";
 
 export type { ChatMessage, ChatCompletionResult };
@@ -20,13 +24,17 @@ export const chatCompletion = async (
     messages,
     temperature = 0.3,
     maxTokens = 1024,
-    providerId
+    providerId,
+    tools,
+    toolChoice
   }: {
     model: string;
     messages: ChatMessage[];
     temperature?: number;
     maxTokens?: number;
     providerId?: string;
+    tools?: ProviderToolDefinition[];
+    toolChoice?: "auto" | "none";
   }
 ): Promise<ChatCompletionResult> => {
   const provider = await getAIProvider(companyId, providerId);
@@ -34,7 +42,9 @@ export const chatCompletion = async (
     model,
     messages,
     temperature,
-    maxTokens
+    maxTokens,
+    tools,
+    toolChoice
   });
 };
 

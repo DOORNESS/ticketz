@@ -5,9 +5,18 @@ import AppError from "../errors/AppError";
 
 export const query = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { agentId, knowledgeBaseId, message } = req.body;
+  const {
+    agentId,
+    knowledgeBaseId,
+    message,
+    contactId,
+    ticketId,
+    simulateMemory,
+    simulateTools,
+    simulateWriteTools
+  } = req.body;
 
-  if (!agentId || !message?.trim()) {
+  if (!message?.trim()) {
     throw new AppError("message is required", 400);
   }
 
@@ -15,7 +24,12 @@ export const query = async (req: Request, res: Response): Promise<Response> => {
     companyId,
     agentId: agentId ? Number(agentId) : undefined,
     knowledgeBaseId: knowledgeBaseId ? Number(knowledgeBaseId) : undefined,
-    message: message.trim()
+    contactId: contactId ? Number(contactId) : undefined,
+    ticketId: ticketId ? Number(ticketId) : undefined,
+    message: message.trim(),
+    simulateMemory: Boolean(simulateMemory),
+    simulateTools: Boolean(simulateTools),
+    simulateWriteTools: Boolean(simulateWriteTools)
   });
 
   await AiConversationLog.create({

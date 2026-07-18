@@ -6,13 +6,15 @@ import {
   AIProvider,
   AIProviderId,
   ChatCompletionParams,
-  ChatCompletionResult
+  ChatCompletionResult,
+  ToolCall
 } from "./AIProvider";
 
 const PROVIDER_BASE_URLS: Partial<Record<AIProviderId, string>> = {
   openai: "https://api.openai.com/v1",
   groq: "https://api.groq.com/openai/v1",
-  openrouter: "https://openrouter.ai/api/v1"
+  openrouter: "https://openrouter.ai/api/v1",
+  gemini: "https://generativelanguage.googleapis.com/v1beta/openai"
 };
 
 const parsePositiveInt = (
@@ -41,18 +43,84 @@ export class OpenAIProvider implements AIProvider {
   async chatCompletion(
     params: ChatCompletionParams
   ): Promise<ChatCompletionResult> {
-    const response = await this.client.chat.completions.create({
-      model: params.model,
-      messages: params.messages,
-      temperature: params.temperature ?? 0.3,
-      max_tokens: params.maxTokens ?? 1024
+    const requestMessages = params.messages.map(message => {
+      if (message.role === "tool") {
+        return {
+          role: "tool" as const,
+          tool_call_id: message.tool_call_id,
+          content: message.content
+        };
+      }
+
+      if (message.role === "assistant" && message.tool_calls?.length) {
+        return {
+          role: "assistant" as const,
+          content: message.content || null,
+          tool_calls: message.tool_calls.map(call => ({
+            id: call.id,
+            type: "function" as const,
+            function: {
+              name: call.name,
+              arguments: call.arguments
+            }
+          }))
+        };
+      }
+
+      return {
+        role: message.role as "system" | "user" | "assistant",
+        content: message.content
+      };
     });
 
+    const tools = params.tools?.length
+      ? params.tools.map(tool => ({
+          type: "function" as const,
+          function: {
+            name: tool.name,
+            description: tool.description,
+            parameters: tool.parameters
+          }
+        }))
+      : undefined;
+
+    const response = await this.client.chat.completions.create({
+      model: params.model,
+      messages:
+        requestMessages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
+      temperature: params.temperature ?? 0.3,
+      max_tokens: params.maxTokens ?? 1024,
+      ...(tools
+        ? {
+            tools,
+            tool_choice: params.toolChoice || "auto"
+          }
+        : {})
+    });
+
+    const message = response.choices[0]?.message;
+    const toolCalls: ToolCall[] | undefined = message?.tool_calls?.length
+      ? message.tool_calls
+          .filter(
+            (
+              call
+            ): call is OpenAI.Chat.Completions.ChatCompletionMessageToolCall & {
+              type: "function";
+            } => call.type === "function"
+          )
+          .map(call => ({
+            id: call.id,
+            name: call.function.name,
+            arguments: call.function.arguments
+          }))
+      : undefined;
+
     return {
-      content: response.choices[0]?.message?.content || "",
+      content: message?.content || "",
       tokensInput: response.usage?.prompt_tokens || 0,
       tokensOutput: response.usage?.completion_tokens || 0,
-      model: response.model
+      model: response.model,
+      toolCalls
     };
   }
 
@@ -116,11 +184,12 @@ const resolveProviderId = (value: string): AIProviderId => {
     normalized === "openai" ||
     normalized === "groq" ||
     normalized === "openrouter" ||
+    normalized === "gemini" ||
     normalized === "azure" ||
     normalized === "ollama" ||
     normalized === "custom"
   ) {
-    return normalized;
+    return normalized as AIProviderId;
   }
 
   return "openai";
@@ -130,14 +199,19 @@ export const createOpenAICompatibleProvider = async (
   companyId: number,
   providerId?: string
 ): Promise<OpenAIProvider | null> => {
-  const apiKey = await GetCompanySetting(companyId, "openAiKey", null);
-  if (!apiKey) {
-    return null;
-  }
-
   const resolvedId = resolveProviderId(
     providerId || (await GetCompanySetting(companyId, "aiProvider", "openai"))
   );
+
+  const apiKey =
+    resolvedId === "gemini"
+      ? (await GetCompanySetting(companyId, "geminiApiKey", null)) ||
+        (await GetCompanySetting(companyId, "openAiKey", null))
+      : await GetCompanySetting(companyId, "openAiKey", null);
+
+  if (!apiKey) {
+    return null;
+  }
 
   const customBaseUrl = await GetCompanySetting(companyId, "aiBaseUrl", null);
   const baseURL =

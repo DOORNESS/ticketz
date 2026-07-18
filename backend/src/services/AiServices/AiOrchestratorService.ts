@@ -359,6 +359,7 @@ Nunca escolha role orchestrator.`;
     if (
       !selectedAgent ||
       !Number.isFinite(confidence) ||
+      confidence < config.confidenceThreshold ||
       selectedAgent.role !== "specialist"
     ) {
       fallbackUsed = true;

@@ -5,25 +5,9 @@ import Ticket from "../../models/Ticket";
 import Queue from "../../models/Queue";
 import MessageMediaFile from "../../models/MessageMediaFile";
 import { AI_HANDOFF_REASON_LABELS } from "./AiOperationalTypes";
-
-const TOKEN_COST_PER_MILLION = {
-  "gpt-4o-mini": { input: 0.15, output: 0.6 },
-  "gpt-4o": { input: 2.5, output: 10 },
-  default: { input: 0.15, output: 0.6 }
-};
-
-const estimateCostUsd = (
-  model: string | null | undefined,
-  tokensInput: number,
-  tokensOutput: number
-): number => {
-  const pricing =
-    TOKEN_COST_PER_MILLION[model || ""] || TOKEN_COST_PER_MILLION.default;
-  return (
-    (tokensInput / 1_000_000) * pricing.input +
-    (tokensOutput / 1_000_000) * pricing.output
-  );
-};
+import { estimateCostUsd } from "./pricing/AiPricingCatalog";
+import { aggregateCompanyMetrics } from "./metrics/AiMetricsAggregatorService";
+import { isMetricsV2Enabled } from "./metrics/AiMetricsFeatureFlag";
 
 const startOfDay = (): Date => {
   const date = new Date();
@@ -112,7 +96,15 @@ export type AiDashboardData = {
     aiSatisfactionAvg: number | null;
     humanSatisfactionAvg: number | null;
   };
+  phase4?: {
+    tools: AggregatedMetrics["tools"];
+    memory: AggregatedMetrics["memory"];
+    orchestrator: AggregatedMetrics["orchestrator"];
+    byAgent: AggregatedMetrics["byAgent"];
+  };
 };
+
+type AggregatedMetrics = Awaited<ReturnType<typeof aggregateCompanyMetrics>>;
 
 const buildCostFromLogs = (
   logs: Array<{
@@ -411,6 +403,11 @@ export const getAiDashboard = async (
         ) / 10
       : null;
 
+  const monthStartDate = startOfMonth();
+  const phase4 = isMetricsV2Enabled()
+    ? await aggregateCompanyMetrics(companyId, monthStartDate)
+    : undefined;
+
   return {
     totals: {
       totalAttendances,
@@ -475,6 +472,7 @@ export const getAiDashboard = async (
       documentCount,
       aiSatisfactionAvg: avg(aiRatings),
       humanSatisfactionAvg: avg(humanRatings)
-    }
+    },
+    ...(phase4 ? { phase4 } : {})
   };
 };

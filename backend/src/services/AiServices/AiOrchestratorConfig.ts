@@ -6,10 +6,7 @@ const parsePositiveInt = (
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
-const parseFloatEnv = (
-  value: string | undefined,
-  fallback: number
-): number => {
+const parseFloatEnv = (value: string | undefined, fallback: number): number => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 };
@@ -26,7 +23,9 @@ export type AiOrchestratorConfig = {
 
 export const isGlobalOrchestratorEnabled = (): boolean =>
   ["true", "1", "yes", "enabled"].includes(
-    String(process.env.AI_ORCHESTRATOR_ENABLED || "").trim().toLowerCase()
+    String(process.env.AI_ORCHESTRATOR_ENABLED || "")
+      .trim()
+      .toLowerCase()
   );
 
 export const getOrchestratorConfig = (): AiOrchestratorConfig => ({

@@ -21,6 +21,7 @@ import { TagsContainer } from "../TagsContainer";
 import AiTicketContextBanner from "../AiTicketContextBanner";
 import AiCopilotPanel from "../AiCopilotPanel";
 import AiExplainabilityPanel from "../AiExplainabilityPanel";
+import TicketAiTimeline from "../Ai/TicketAiTimeline";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import useSettings from "../../hooks/useSettings";
 import {
@@ -273,6 +274,7 @@ const Ticket = () => {
         </TicketHeader>
         <AiTicketContextBanner ticket={ticket} observationMode={isObserving} />
         <AiExplainabilityPanel ticket={ticket} />
+        <TicketAiTimeline ticketId={ticket?.id} />
         <AiCopilotPanel ticket={ticket} />
         <Paper>
           <TagsContainer

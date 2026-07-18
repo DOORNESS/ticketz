@@ -17,7 +17,7 @@
 - Seeds: `backend/src/database/seeds/`
 - CLI: `npm run db:migrate`, `npm run db:seed` (requer build em prod)
 
-## Migrations IA (8 arquivos)
+## Migrations IA (9 arquivos)
 
 | Migration | Conteúdo |
 |-----------|----------|
@@ -28,6 +28,7 @@
 | `20260711120000-ai-gen2-intelligence` | Replay, gen2 |
 | `20260718100000-ai-phase1-orchestrator` | Orquestrador, `AiAgentKnowledgeBases`, `AiRoutingLogs` |
 | `20260725100000-ai-phase2-knowledge-cms` | Domínios, categorias, assets, versões, permissões, jobs |
+| `20260730100000-ai-phase3-memory-tools` | Memória contato, agent tools, tool execution logs |
 
 ## Variável
 

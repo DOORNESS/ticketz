@@ -1,6 +1,15 @@
 import { Request, Response } from "express";
 import { getAiDashboard } from "../services/AiServices/AiDashboardService";
 import { safeAiQuery } from "../helpers/safeAiQuery";
+import {
+  getCachedDashboard,
+  setCachedDashboard
+} from "../services/AiServices/metrics/AiDashboardCacheService";
+import { isMetricsV2Enabled } from "../services/AiServices/metrics/AiMetricsFeatureFlag";
+import {
+  getTimeseries,
+  listMetricSnapshots
+} from "../services/AiServices/metrics/AiMetricsSnapshotService";
 
 const emptyDashboard = {
   totals: {
@@ -44,9 +53,45 @@ const emptyDashboard = {
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
+
+  if (isMetricsV2Enabled()) {
+    const cached = await getCachedDashboard(companyId);
+    if (cached) {
+      return res.json(cached);
+    }
+  }
+
   const dashboard = await safeAiQuery(
     () => getAiDashboard(companyId),
     emptyDashboard
   );
+
+  if (isMetricsV2Enabled()) {
+    await setCachedDashboard(companyId, dashboard as Record<string, unknown>);
+  }
+
   return res.json(dashboard);
+};
+
+export const timeseries = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+  const days = req.query.days ? Number(req.query.days) : 30;
+  const series = await getTimeseries(companyId, days);
+  return res.json({ days, series });
+};
+
+export const agentMetrics = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+  const snapshots = await listMetricSnapshots({ companyId, days: 30 });
+  const latest = snapshots[snapshots.length - 1];
+  const byAgent =
+    (latest?.metricsJson as { byAgent?: unknown[] } | undefined)?.byAgent || [];
+
+  return res.json({ byAgent });
 };

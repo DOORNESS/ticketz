@@ -26,6 +26,7 @@ import { generateColor } from "../../helpers/colorGenerator";
 import { getInitials } from "../../helpers/getInitials";
 import { TagsContainer } from "../TagsContainer";
 import useSettings from "../../hooks/useSettings";
+import ContactAiMemoryPanel from "../Ai/ContactAiMemoryPanel";
 
 const drawerWidth = 320;
 
@@ -220,6 +221,7 @@ const ContactDrawer = ({
               </Typography>
               <TicketNotes ticket={ticket} />
             </Paper>
+            {contact?.id && <ContactAiMemoryPanel contactId={contact.id} />}
             <ContactModal
               open={modalOpen}
               onClose={() => setModalOpen(false)}

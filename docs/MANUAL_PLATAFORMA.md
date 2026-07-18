@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.1 — auditada contra o código  
+**Versão:** 1.4 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -384,6 +384,9 @@ IA só opera quando `AiPlatformState.aiFeaturesEnabled === true` (setado em `boo
 | Handoff | `HandoffToHumanService` | ✅ |
 | Copilot | `AiCopilotService` | ✅ |
 | Playground | `AiPlaygroundService` | ✅ |
+| Memória por contato | `ContactAiMemoryService` + fila Bull | ✅ (flag dupla, default OFF) |
+| Ferramentas executáveis | `ToolRegistry`, `ToolLoopService`, 9 tools (4 read + 5 write) | ✅ (flags, write OFF default) |
+| Observabilidade IA v2 | `AiMetricsAggregator`, snapshots, cache Redis | ✅ |
 | Orquestrador | `AiOrchestratorService` | ✅ (flag dupla) |
 | Transcrição áudio | `AudioInboundResolver` | ✅ |
 | Visão/OCR imagem | `AiVisionOcrService` | ✅ |
@@ -404,9 +407,38 @@ Requer **ambos**:
 - Leitura (health, diagnostics, listagens): sem `requireAiPlatformReady`
 - Escrita (POST/PUT/DELETE após linha 59): + `requireAiPlatformReady`
 
+### Fase 3 — memória e tools (jul/2026)
+
+**Feature flags (default OFF):**
+
+| Recurso | Env global | Setting empresa |
+|---------|------------|-----------------|
+| Memória contato | `AI_CONTACT_MEMORY_ENABLED` | `aiContactMemoryEnabled` |
+| Tools | `AI_TOOLS_ENABLED` | `aiToolsEnabled` |
+
+**Endpoints novos:** `/ai/memory/status`, `/ai/tools/status`, `/ai/tools`, `/ai/agents/:agentId/tools`, `/ai/contacts/:contactId/memory` (+ export/CRUD), `/ai/tool-executions`.
+
+**Fila Bull:** `AiContactMemoryQueue` — job `persist-contact-memory` (sem `setImmediate`).
+
+**Tools piloto:** `get_ticket_status`, `get_business_hours`, `search_published_knowledge`, `request_human_handoff` (handoff idempotente via Redis lock).
+
+Spec: `docs/AI_PHASE3_ARCHITECTURE.md` · Relatório: `docs/AI_PHASE3_REPORT.md`
+
+### Fase 4 — write tools + observabilidade (jul/2026)
+
+**Flags write (default OFF):** `AI_WRITE_TOOLS_ENABLED` + Setting `aiWriteToolsEnabled` (requer tools ON).
+
+**Write tools:** `add_ticket_tag`, `update_ticket_priority`, `transfer_ticket_queue`, `create_contact_memory_note`, `schedule_followup`.
+
+**Observabilidade:** `AiMetricsSnapshots`, cache dashboard, `/ai/dashboard/timeseries`, `/ai/dashboard/agents`.
+
+**Provider Gemini:** via endpoint OpenAI-compatible + Setting `geminiApiKey`.
+
+Relatório: `docs/AI_PHASE4_REPORT.md`
+
 ### Auditoria §11
 
-| Controllers | `AiAgentController`, `KnowledgeBaseController`, `KnowledgeDocumentController`, `AiPlaygroundController`, `AiDiagnosticsController`, `TicketAiController`, etc. |
+| Controllers | `AiAgentController`, `KnowledgeBaseController`, `KnowledgeDocumentController`, `AiPlaygroundController`, `AiDiagnosticsController`, `TicketAiController`, `ContactAiMemoryController`, `AiToolController`, etc. |
 | **Divergências corrigidas** | `AI_QUEUE_DEBOUNCE_MS` padrão **0** (não 2000). Variável `AI_REENGAGEMENT_ENABLED` **não existe** no código. Groq é **provider ID**, não env `GROQ_*`. |
 
 ---
@@ -649,15 +681,15 @@ Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot/playground), contatos,
 | Item | Evidência |
 |------|-----------|
 | Orquestrador multi-agente | Implementado mas desligado por padrão (env + Setting) |
-| ToolRegistry | Skeleton vazio — `tools/ToolRegistry.ts` |
-| Schema IA readiness | `AI_MIGRATION_NAMES` só lista **2** de **6** migrations IA |
+| Memória contato + tools | Implementados (Fase 3) mas desligados por padrão (env + Setting) |
+| UI memória contato | API pronta; painel de listagem/export **não** implementado |
+| Schema IA readiness | `AI_MIGRATION_NAMES` só lista **2** de **8** migrations IA |
 | Providers gemini/anthropic | `ProviderFactory` → 501 |
-| Branding hardcoded | Prompts "Fortmax/WEBG3" em `ProcessInboundMessageService.ts` |
 | Playground RAG | Só busca vetorial; sem merge keyword |
 | Múltiplos agentes | `getActiveAgent` → primeiro ativo por `id ASC` ou fila |
 
 ### ❌ Não implementado
-Tools execução, versionamento KB, memória Contact IA, métricas custo agregadas dashboard, processamento vídeo dedicado.
+Métricas custo agregadas dashboard, processamento vídeo dedicado, UI admin memória por contato.
 
 ---
 
@@ -925,7 +957,7 @@ flowchart TD
 
 ## 33. Banco de dados — módulo IA
 
-### Migrations IA (6 arquivos)
+### Migrations IA (8 arquivos)
 
 | Migration | Conteúdo |
 |-----------|----------|
@@ -935,6 +967,8 @@ flowchart TD
 | `20260710120000-add-ai-professional-features` | Copilot/Knowledge suggestions + métricas Ticket |
 | `20260711120000-ai-gen2-intelligence` | AiReplayLogs + campos gen2 |
 | `20260718100000-ai-phase1-orchestrator` | Orchestrator + AiAgentKnowledgeBases + AiRoutingLogs |
+| `20260725100000-ai-phase2-knowledge-cms` | CMS assets, domínios, publicação |
+| `20260730100000-ai-phase3-memory-tools` | Memória contato + AiAgentTools + logs sanitizados |
 
 ### Tabelas IA
 
@@ -951,6 +985,11 @@ flowchart TD
 | `AiKnowledgeSuggestions` | Sugestões FAQ |
 | `AiReplayLogs` | Replay de conversas |
 | `AiRoutingLogs` | Decisões do orquestrador |
+| `ContactAiMemories` | Memória por contato (`verificationStatus`, LGPD) |
+| `ContactAiMemoryJobs` | Jobs Bull memória + idempotencyKey |
+| `ContactAiMemoryLogs` | Auditoria LGPD memória |
+| `AiAgentTools` | Vínculo agente ↔ tool habilitada |
+| `AiToolExecutionLogs` | Auditoria execução tools (sanitizada) |
 | `MessageMediaFiles` | Metadados mídia (transcrição, visão) |
 
 ### Campos `Tickets.ai*` (21)
@@ -979,6 +1018,11 @@ erDiagram
   Tickets ||--o{ AiRoutingLogs : has
   Tickets ||--o{ MessageMediaFiles : has
   AiAgents ||--o{ AiRoutingLogs : selected_in
+  Contacts ||--o{ ContactAiMemories : has
+  Contacts ||--o{ ContactAiMemoryJobs : has
+  Contacts ||--o{ ContactAiMemoryLogs : has
+  AiAgents ||--o{ AiAgentTools : enables
+  AiAgents ||--o{ AiToolExecutionLogs : executes
 ```
 
 ---
@@ -1077,7 +1121,9 @@ frontend/src/
 | `AI_ORCHESTRATOR_TEMPERATURE` | `0` | idem |
 | `AI_ORCHESTRATOR_MAX_TOKENS` | `200` | idem |
 | `AI_ORCHESTRATOR_TIMEOUT_MS` | `15000` | idem |
-| `AI_ORCHESTRATOR_CONFIDENCE_THRESHOLD` | `0.4` | idem (**não usado** no routing) |
+| `AI_ORCHESTRATOR_CONFIDENCE_THRESHOLD` | `0.4` | `AiOrchestratorService.ts` (Fase 3) |
+| `AI_CONTACT_MEMORY_ENABLED` | `false` | `AiContactMemoryFeatureFlag.ts` |
+| `AI_TOOLS_ENABLED` | `false` | `AiToolsFeatureFlag.ts` |
 | `AI_ORCHESTRATOR_PROVIDER` | `openai` | idem |
 | `AI_PROVIDER_MAX_RETRIES` | `1` | `OpenAIProvider.ts` |
 | `AI_PROVIDER_TIMEOUT_MS` | `45000` | idem |
@@ -1119,7 +1165,7 @@ frontend/src/
 
 | Ponto | Local | Estado |
 |-------|-------|--------|
-| `ToolRegistry` | `AiServices/tools/ToolRegistry.ts` | Interface pronta; **0 tools registradas** |
+| `ToolRegistry` | `AiServices/tools/ToolRegistry.ts` | 4 tools piloto; registro em `registerPilotTools.ts` |
 | `AIProvider` / `ProviderFactory` | `providers/` | OpenAI-compatible; gemini/anthropic stub 501 |
 | `DecoupledDriverServices` | `services/DecoupledDriverServices/` | Hook drivers externos |
 | `buildCaptureExtensionRoutes` | Extensão captura sessão WA | Operacional |
@@ -1133,13 +1179,11 @@ frontend/src/
 
 ## 41. Dívidas técnicas
 
-1. **`AI_MIGRATION_NAMES`** só inclui 2 migrations — diagnóstico incompleto vs 6 migrations IA reais
+1. **`AI_MIGRATION_NAMES`** só inclui 2 migrations — diagnóstico incompleto vs 8 migrations IA reais
 2. **`KnowledgeChunk.embedding`** ausente no model Sequelize (só SQL raw)
-3. **`ToolRegistry`** vazio — sem execução de ferramentas
-4. **Branding Fortmax/WEBG3** hardcoded em prompts de produção
-5. **Query fallback RAG** hardcoded em `KnowledgeContextService.ts:197`
-6. **`AI_ORCHESTRATOR_CONFIDENCE_THRESHOLD`** definido mas não aplicado
-7. **Debounce default mismatch** — queue usa 0, metrics reporta 2000
+3. **UI memória contato** — API Fase 3 pronta; painel admin não implementado
+4. **Query fallback RAG** hardcoded em `KnowledgeContextService.ts:197`
+5. **Debounce default mismatch** — queue usa 0, metrics reporta 2000
 8. **`AiAgentQueues.knowledgeBaseId`** sem FK na migration inicial
 9. **To-Do List** só localStorage — sem sync entre dispositivos
 10. **Campanhas** ocultas por flag manual no localStorage
@@ -1174,7 +1218,7 @@ frontend/src/
 | AGPL compliance | Média | Link fonte obrigatório |
 | Single point Redis | Média | Filas + buffer IA dependem de Redis |
 | Orchestrator dual-flag | Baixa | Confusão operacional env vs Setting |
-| Prompt injection RAG | Média | Conteúdo KB entra no system prompt |
+| Prompt injection RAG/memória | Média | Mitigado parcialmente via `AiPromptBuilder` + wrapper `[OPERATIONAL_DATA]` |
 | Sem rate limit IA | Média | Custo OpenAI não limitado por tenant no código |
 | Company 1 bypass compliance | Baixa | Tenant admin sempre "compliant" |
 
@@ -1257,11 +1301,9 @@ Todas as 16 inconsistências acima foram **corrigidas neste documento** (v1.1). 
 
 | Pendência | Tipo |
 |-----------|------|
-| Implementar tools no ToolRegistry | Código (Fase 2) |
+| UI admin memória contato | Frontend (Fase 3) |
 | Completar AI_MIGRATION_NAMES | Código |
-| Remover branding hardcoded | Código |
-| Versionamento KB | Código (Fase 2) |
-| Métricas custo dashboard | Código (Fase 2) |
+| Métricas custo dashboard | Código |
 | Credenciais em dev-local.sh | Operacional |
 | Página Companies (super) comentada | Frontend |
 | Mercado Pago vs Owen — alinhar docs comerciais PRO | Docs externas |
@@ -1284,7 +1326,7 @@ Todas as 16 inconsistências acima foram **corrigidas neste documento** (v1.1). 
 
 **Sim — com ressalvas.**
 
-Este manual (`docs/MANUAL_PLATAFORMA.md` v1.1) pode ser considerado a **documentação oficial congelada** da plataforma Ticketz para início da Fase 2, porque:
+Este manual (`docs/MANUAL_PLATAFORMA.md` v1.3) reflete a plataforma após Fase 3 (memória + tools), porque:
 
 1. Cada seção foi validada contra arquivos concretos do repositório
 2. Inconsistências identificadas foram corrigidas no próprio manual
@@ -1294,7 +1336,7 @@ Este manual (`docs/MANUAL_PLATAFORMA.md` v1.1) pode ser considerado a **document
 **Ressalvas:**
 - Documentos comerciais (`Ticketz PRO.md`) podem divergir do OSS (Mercado Pago)
 - Scripts locais não versionados podem existir fora deste manual
-- Qualquer commit futuro **invalida** parcialmente este congelamento — revisar antes de Fase 2 se houver merge
+- Qualquer commit futuro **invalida** parcialmente este congelamento — revisar se houver merge
 
 ---
 
@@ -1308,10 +1350,12 @@ Este manual (`docs/MANUAL_PLATAFORMA.md` v1.1) pode ser considerado a **document
 | `docs/architecture.md` … `roadmap.md` | Índices temáticos → seções deste manual |
 | `AGENTS.md` | Guia dev (complementar) |
 | `docs/AI_SETUP.md` | Setup operacional IA |
-| `docs/AI_ARCHITECTURE_PLAN.md` | Roadmap Fase 1–2 |
+| `docs/AI_ARCHITECTURE_PLAN.md` | Roadmap Fase 1–3 |
+| `docs/AI_PHASE3_ARCHITECTURE.md` | Spec Fase 3 memória + tools |
+| `docs/AI_PHASE3_REPORT.md` | Relatório implementação Fase 3 |
 | `docs/Local Development.pt.md` | Dev local Postgres |
 | `README.pt.md` | Instalação pública |
 
 ---
 
-*Manual oficial v1.1 — auditado integralmente contra o código em julho/2026. Mantido sincronizado via `documentation-rules.mdc`.*
+*Manual oficial v1.3 — auditado integralmente contra o código em julho/2026. Mantido sincronizado via `documentation-rules.mdc`.*

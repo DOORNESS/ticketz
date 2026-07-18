@@ -2,7 +2,6 @@ import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
 import AiConversationLog from "../../models/AiConversationLog";
-import { chatCompletion } from "./ModelGateway";
 import { resolveInboundMessageText } from "./MediaInboundResolver";
 import {
   getActiveAgent,
@@ -37,6 +36,18 @@ import UpdateTicketService, {
 import { classifyTicketPriority } from "./AiPriorityClassifierService";
 import { computeConfidenceScore, estimateAiCostUsd } from "./AiMetricsHelper";
 import { buildExplainability, persistAiReplayLog } from "./AiReplayService";
+import { buildAiSystemPrompt } from "./AiPromptBuilder";
+import {
+  loadVerifiedMemoryForPrompt,
+  touchMemoryLastUsed
+} from "./ContactMemory/ContactAiMemoryService";
+import { extractMemoryCandidates } from "./ContactMemory/ContactAiMemoryExtractor";
+import { enqueuePersistContactMemory } from "./ContactMemory/AiContactMemoryQueueService";
+import { isContactMemoryEnabledForCompany } from "./ContactMemory/AiContactMemoryFeatureFlag";
+import { isToolsEnabledForCompany } from "./tools/AiToolsFeatureFlag";
+import { runToolLoop } from "./tools/ToolLoopService";
+import "./tools/registerPilotTools";
+import crypto from "crypto";
 
 export type InboundMessageItem = {
   messageBody: string;
@@ -55,19 +66,6 @@ type ProcessInboundParams = {
   forceHandoff?: boolean;
   handoffReason?: string;
 };
-
-const DEFAULT_SYSTEM_RULES = `
-Você é o primeiro atendente virtual da Fortmax Sistemas. Mantenha conversa contínua: responda TODA mensagem do cliente.
-Mensagens de áudio do cliente são transcritas automaticamente — trate o texto transcrito como a pergunta dela e responda normalmente.
-Nunca diga que não entende áudio; se a transcrição vier vazia, peça para repetir ou enviar por texto.
-Quando o cliente fizer uma pergunta objetiva, responda o fato na primeira frase (ex.: anos no mercado, produtos, o que a empresa faz).
-Use a base de conhecimento abaixo como fonte principal — se o dado estiver lá, cite-o.
-Não repita saudações genéricas se o cliente já fez uma pergunta; responda a pergunta.
-Se faltar um detalhe, faça perguntas objetivas e continue ajudando — não encerre o atendimento.
-NUNCA diga que vai transferir, encaminhar ou chamar especialista, a menos que o cliente peça atendente/humano explicitamente.
-Nunca invente preços, prazos ou políticas que não estejam no contexto.
-Responda em português do Brasil.
-`;
 
 const TRANSIENT_ERROR_FALLBACK =
   "Desculpe, tive uma instabilidade momentânea. Pode repetir sua pergunta?";
@@ -332,7 +330,14 @@ const ProcessInboundMessageService = async ({
       { orchestratorMode }
     );
 
-    const [scheduleContext, knowledgeContext, history] = await Promise.all([
+    const [
+      scheduleContext,
+      knowledgeContext,
+      history,
+      verifiedMemory,
+      memoryEnabled,
+      toolsEnabled
+    ] = await Promise.all([
       getAiScheduleContext(ticket),
       buildKnowledgeContextForQuery({
         companyId,
@@ -340,10 +345,12 @@ const ProcessInboundMessageService = async ({
         userText,
         provider: agent.provider
       }),
-      buildConversationHistory(ticket.id, 6)
+      buildConversationHistory(ticket.id, 6),
+      loadVerifiedMemoryForPrompt(companyId, ticket.contactId),
+      isContactMemoryEnabledForCompany(companyId),
+      isToolsEnabledForCompany(companyId)
     ]);
 
-    const schedulePrompt = buildAiSchedulePromptBlock(scheduleContext);
     const usedChunks = knowledgeContext.usedChunks;
     const contextBlock = knowledgeContext.contextBlock;
     const hasReliableContext =
@@ -372,33 +379,60 @@ const ProcessInboundMessageService = async ({
         ? "Documentos existem na base, mas nenhum trecho foi recuperado. Responda com base no histórico e peça detalhes se necessário."
         : "Base de conhecimento ainda sem documentos prontos. Responda com cordialidade e peça detalhes.";
 
-    const systemPrompt = [
-      agent.basePrompt || "",
-      getSpecialtyPromptRules(agent.specialty),
-      DEFAULT_SYSTEM_RULES,
-      schedulePrompt,
-      `Base de conhecimento:\n${contextHint}`
-    ]
-      .filter(Boolean)
-      .join("\n\n");
+    const systemPrompt = buildAiSystemPrompt({
+      agent,
+      specialtyRules: getSpecialtyPromptRules(agent.specialty),
+      schedulePrompt: buildAiSchedulePromptBlock(scheduleContext),
+      knowledgeContextBlock: contextHint,
+      verifiedMemory,
+      toolsEnabled
+    });
 
     const requestStartedAt = Date.now();
 
-    const completion = await chatCompletion(companyId, {
-      model: agent.textModel,
-      temperature: agent.temperature,
-      maxTokens: agent.maxTokens,
-      providerId: agent.provider,
+    const loopResult = await runToolLoop({
+      companyId,
+      agent,
       messages: [
         { role: "system", content: systemPrompt },
         ...history.map(h => ({ role: h.role, content: h.content })),
         { role: "user", content: userText }
-      ]
+      ],
+      context: {
+        companyId,
+        aiAgentId: agent.id,
+        ticketId: ticket.id,
+        contactId: ticket.contactId,
+        queueId: ticket.queueId,
+        userId: ticket.userId,
+        userText,
+        conversationText,
+        knowledgeBaseIds,
+        providerId: agent.provider
+      }
     });
+
+    if (loopResult.handoffTriggered) {
+      await persistAiDecisionLog({
+        companyId,
+        ticketId: ticket.id,
+        messageId: primaryMessageId,
+        action: "handoff",
+        reason: "tool_handoff",
+        userMessage: maskSensitiveLog(userText)
+      });
+      return;
+    }
 
     const latencyMs = Date.now() - requestStartedAt;
 
-    const aiResponse = completion.content?.trim();
+    const aiResponse = loopResult.content?.trim();
+    const completion = {
+      content: loopResult.content,
+      tokensInput: loopResult.tokensInput,
+      tokensOutput: loopResult.tokensOutput,
+      model: loopResult.model
+    };
 
     if (!aiResponse || detectLowConfidenceResponse(aiResponse)) {
       await HandoffToHumanService({
@@ -535,6 +569,42 @@ const ProcessInboundMessageService = async ({
       latencyMs,
       model: completion.model
     });
+
+    if (memoryEnabled && ticket.contactId) {
+      const candidates = extractMemoryCandidates({
+        userText,
+        aiResponse: outboundText,
+        conversationText
+      });
+
+      if (candidates.length) {
+        const idempotencyKey = crypto
+          .createHash("sha256")
+          .update(
+            [
+              companyId,
+              ticket.contactId,
+              ticket.id,
+              primaryMessageId || "",
+              JSON.stringify(candidates.map(item => item.key))
+            ].join("|")
+          )
+          .digest("hex")
+          .slice(0, 64);
+
+        await enqueuePersistContactMemory({
+          companyId,
+          contactId: ticket.contactId,
+          ticketId: ticket.id,
+          messageId: primaryMessageId,
+          aiAgentId: agent.id,
+          candidates,
+          idempotencyKey
+        });
+      }
+
+      await touchMemoryLastUsed(companyId, ticket.contactId);
+    }
   } catch (error) {
     if (isTransientAiError(error)) {
       throw error;

@@ -2,37 +2,21 @@ import AiAgent from "../../models/AiAgent";
 import KnowledgeBase from "../../models/KnowledgeBase";
 import Ticket from "../../models/Ticket";
 import AppError from "../../errors/AppError";
-import {
-  getActiveAgent,
-  resolveSpecialistAgent
-} from "./AiHelpers";
+import { getActiveAgent, resolveSpecialistAgent } from "./AiHelpers";
 import { isOrchestratorEnabledForCompany } from "./AiOrchestratorFeatureFlag";
 import { generateSpecialistAiReply } from "./AiSpecialistReplyService";
-
-const TOKEN_COST_PER_MILLION: Record<
-  string,
-  { input: number; output: number }
-> = {
-  default: { input: 0.15, output: 0.6 }
-};
-
-const estimateCostUsd = (
-  model: string,
-  tokensInput: number,
-  tokensOutput: number
-): number => {
-  const pricing = TOKEN_COST_PER_MILLION[model] || TOKEN_COST_PER_MILLION.default;
-  return (
-    (tokensInput / 1_000_000) * pricing.input +
-    (tokensOutput / 1_000_000) * pricing.output
-  );
-};
+import { estimateCostUsd } from "./pricing/AiPricingCatalog";
 
 export type PlaygroundRequest = {
   companyId: number;
   agentId?: number;
   knowledgeBaseId?: number;
+  contactId?: number;
+  ticketId?: number;
   message: string;
+  simulateMemory?: boolean;
+  simulateTools?: boolean;
+  simulateWriteTools?: boolean;
 };
 
 export type PlaygroundChunk = {
@@ -59,13 +43,20 @@ export type PlaygroundResult = {
   latencyMs: number;
   model: string;
   orchestratorMode: boolean;
+  toolCallsExecuted?: number;
+  handoffTriggered?: boolean;
 };
 
 export const runPlaygroundQuery = async ({
   companyId,
   agentId,
   knowledgeBaseId,
-  message
+  contactId,
+  ticketId,
+  message,
+  simulateMemory,
+  simulateTools,
+  simulateWriteTools
 }: PlaygroundRequest): Promise<PlaygroundResult> => {
   const startedAt = Date.now();
   const orchestratorMode = await isOrchestratorEnabledForCompany(companyId);
@@ -142,7 +133,9 @@ export const runPlaygroundQuery = async ({
     companyId,
     agent,
     userText: message,
-    orchestratorMode
+    orchestratorMode,
+    contactId: contactId || (simulateMemory ? 0 : undefined),
+    ticketId: ticketId || (simulateTools || simulateWriteTools ? 0 : undefined)
   });
 
   return {
@@ -165,6 +158,8 @@ export const runPlaygroundQuery = async ({
     ),
     latencyMs: Date.now() - startedAt,
     model: reply.model,
-    orchestratorMode
+    orchestratorMode,
+    toolCallsExecuted: reply.toolCallsExecuted,
+    handoffTriggered: reply.handoffTriggered
   };
 };

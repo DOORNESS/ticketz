@@ -59,6 +59,13 @@ import AiCopilotSuggestion from "../models/AiCopilotSuggestion";
 import AiKnowledgeSuggestion from "../models/AiKnowledgeSuggestion";
 import AiReplayLog from "../models/AiReplayLog";
 import AiRoutingLog from "../models/AiRoutingLog";
+import ContactAiMemory from "../models/ContactAiMemory";
+import ContactAiMemoryJob from "../models/ContactAiMemoryJob";
+import ContactAiMemoryLog from "../models/ContactAiMemoryLog";
+import AiAgentTool from "../models/AiAgentTool";
+import AiToolExecutionLog from "../models/AiToolExecutionLog";
+import AiToolIdempotencyRecord from "../models/AiToolIdempotencyRecord";
+import AiMetricsSnapshot from "../models/AiMetricsSnapshot";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const dbConfig = require("../config/database");
@@ -125,7 +132,14 @@ const models = [
   AiCopilotSuggestion,
   AiKnowledgeSuggestion,
   AiReplayLog,
-  AiRoutingLog
+  AiRoutingLog,
+  ContactAiMemory,
+  ContactAiMemoryJob,
+  ContactAiMemoryLog,
+  AiAgentTool,
+  AiToolExecutionLog,
+  AiMetricsSnapshot,
+  AiToolIdempotencyRecord
 ];
 
 sequelize.addModels(models);

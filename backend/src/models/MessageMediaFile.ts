@@ -60,6 +60,10 @@ class MessageMediaFile extends Model<MessageMediaFile> {
   @Column
   hash: string;
 
+  @Default("inbound")
+  @Column
+  direction: string;
+
   @Column(DataType.TEXT)
   transcriptionText: string;
 

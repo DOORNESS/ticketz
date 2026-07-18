@@ -3,7 +3,9 @@ import {
   Button,
   Box,
   CircularProgress,
+  FormControlLabel,
   Grid,
+  Switch,
   Typography,
   List,
   ListItem,
@@ -33,6 +35,11 @@ const AiPlayground = () => {
   const [result, setResult] = useState(null);
   const [routingLoading, setRoutingLoading] = useState(false);
   const [routingResult, setRoutingResult] = useState(null);
+  const [contactId, setContactId] = useState("");
+  const [ticketId, setTicketId] = useState("");
+  const [simulateMemory, setSimulateMemory] = useState(false);
+  const [simulateTools, setSimulateTools] = useState(false);
+  const [simulateWriteTools, setSimulateWriteTools] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -73,11 +80,23 @@ const AiPlayground = () => {
     if (!agentId || !message.trim()) return;
     try {
       setLoading(true);
-      const { data } = await api.post("/ai/playground", {
+      const payload = {
         agentId: Number(agentId),
         knowledgeBaseId: knowledgeBaseId ? Number(knowledgeBaseId) : undefined,
-        message: message.trim()
-      });
+        message: message.trim(),
+        simulateMemory,
+        simulateTools,
+        simulateWriteTools
+      };
+
+      if (contactId.trim()) {
+        payload.contactId = Number(contactId);
+      }
+      if (ticketId.trim()) {
+        payload.ticketId = Number(ticketId);
+      }
+
+      const { data } = await api.post("/ai/playground", payload);
       setResult(data);
     } catch (err) {
       toastError(err);
@@ -174,6 +193,56 @@ const AiPlayground = () => {
                 helperText="Descreva a pergunta do cliente como no WhatsApp."
               />
             </Grid>
+            <Grid item xs={12} md={6}>
+              <AiFormTextField
+                label="Contact ID (opcional)"
+                type="number"
+                value={contactId}
+                onChange={e => setContactId(e.target.value)}
+                helperText="Contexto de memória do contato."
+              />
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <AiFormTextField
+                label="Ticket ID (opcional)"
+                type="number"
+                value={ticketId}
+                onChange={e => setTicketId(e.target.value)}
+                helperText="Contexto de ticket para tools."
+              />
+            </Grid>
+            <Grid item xs={12}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={simulateMemory}
+                    onChange={e => setSimulateMemory(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Simular memória de contato"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={simulateTools}
+                    onChange={e => setSimulateTools(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Simular tools (leitura)"
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={simulateWriteTools}
+                    onChange={e => setSimulateWriteTools(e.target.checked)}
+                    color="primary"
+                  />
+                }
+                label="Simular write tools"
+              />
+            </Grid>
           </Grid>
 
           <div className={classes.actionsRow}>
@@ -222,6 +291,15 @@ const AiPlayground = () => {
                     label="Tempo de resposta"
                     value={`${result.latencyMs}ms`}
                   />
+                  {result.toolCallsExecuted != null && (
+                    <AiMetricCard
+                      label="Tools executadas"
+                      value={result.toolCallsExecuted}
+                    />
+                  )}
+                  {result.handoffTriggered && (
+                    <AiMetricCard label="Handoff" value="Sim" />
+                  )}
                 </div>
               </Box>
             </AiSectionPaper>

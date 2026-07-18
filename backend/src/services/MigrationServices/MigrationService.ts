@@ -23,7 +23,15 @@ const getSchema = (): string => process.env.DB_SCHEMA || "ticketz";
 
 const AI_MIGRATION_NAMES = new Set([
   "20260707100000-create-ai-and-knowledge-tables",
-  "20260708120000-add-ai-agent-ack-fields"
+  "20260708120000-add-ai-agent-ack-fields",
+  "20260709120000-add-ai-operational-flow-fields",
+  "20260710120000-add-ai-professional-features",
+  "20260711120000-ai-gen2-intelligence",
+  "20260718100000-ai-phase1-orchestrator",
+  "20260725100000-ai-phase2-knowledge-cms",
+  "20260730100000-ai-phase3-memory-tools",
+  "20260815100000-ai-phase4-operations-observability",
+  "20260818100000-ai-phase34-consolidation"
 ]);
 
 const listMigrationFiles = (): string[] => {

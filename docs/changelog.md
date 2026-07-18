@@ -6,6 +6,51 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.4.1] — 2026-07-18
+
+### Consolidado (Fases 3 + 4)
+
+- Idempotência persistente write tools (`AiToolIdempotencyRecords` + Redis lock)
+- Semântica correta memória agente: `agent_note` / `unverified` — promoção `human_verified` só via API autenticada
+- Migration `20260818100000-ai-phase34-consolidation.ts`
+- `AI_METRICS_V2_ENABLED` default **false**
+- Script `fix:agent-memory` para correção de dados legados
+- Relatório: [`AI_PHASE34_CONSOLIDATION_REPORT.md`](AI_PHASE34_CONSOLIDATION_REPORT.md)
+- Spec Fase 4: [`AI_PHASE4_ARCHITECTURE.md`](AI_PHASE4_ARCHITECTURE.md)
+
+---
+
+## [1.4.0] — 2026-07-18
+
+### Adicionado (Fase 4 — Operações + Observabilidade)
+
+- Write tools governadas (5) + `ToolGovernancePolicy` + idempotência persistente
+- `AiMetricsSnapshots`, aggregator, cache dashboard, fila `AiMetricsQueue`
+- Provider **Gemini** (OpenAI-compatible endpoint)
+- `UnifiedMediaPersistenceService` + `MessageMediaFiles.direction`
+- Migration `20260815100000-ai-phase4-operations-observability.ts`
+- `AI_MIGRATION_NAMES` completo (9 migrations IA)
+- Scripts: `seed:ai-phase4`, `audit:ai-phase4`, `backfill:legacy-media`
+- Relatório: [`AI_PHASE4_REPORT.md`](AI_PHASE4_REPORT.md)
+- Frontend: memória contato, timeline tools, dashboard Phase 4, playground toggles
+
+---
+
+## [1.3.0] — 2026-07-18
+
+### Adicionado (Fase 3 — Memória + Ferramentas)
+
+- Serviços `ContactMemory/` — memória por contato, verificação, LGPD, fila Bull `AiContactMemoryQueue`
+- Framework `tools/` — executor, loop, 4 tools piloto, logs sanitizados, handoff idempotente
+- Migration `20260730100000-ai-phase3-memory-tools.ts`
+- `AiPromptBuilder.ts` — prompt unificado + anti prompt-injection
+- Scripts: `COMPANY_ID=<id> npm run seed:ai-phase3`, `audit:ai-phase3`
+- Spec: [`AI_PHASE3_ARCHITECTURE.md`](AI_PHASE3_ARCHITECTURE.md)
+- Relatório: [`AI_PHASE3_REPORT.md`](AI_PHASE3_REPORT.md)
+- Frontend: toggles de tools em Agentes; métricas tools no Playground
+
+---
+
 ## [1.2.1] — 2026-07-18
 
 ### Adicionado (governança documental)

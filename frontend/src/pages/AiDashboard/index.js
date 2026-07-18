@@ -316,6 +316,118 @@ const AiDashboard = () => {
           </Grid>
         </Grid>
 
+        {data?.phase4 && (
+          <AiSectionPaper
+            title="Fase 4 — Tools, memória e orquestrador"
+            subtitle="Métricas operacionais de ferramentas, memória de contato e roteamento."
+          >
+            <div className={classes.metricsGrid}>
+              <AiMetricCard
+                label="Execuções de tools"
+                value={data.phase4.tools?.executions || 0}
+              />
+              <AiMetricCard
+                label="Taxa de sucesso (tools)"
+                value={`${data.phase4.tools?.successRate || 0}%`}
+              />
+              <AiMetricCard
+                label="Execuções write"
+                value={data.phase4.tools?.writeExecutions || 0}
+              />
+              <AiMetricCard
+                label="Latência média (tools)"
+                value={
+                  data.phase4.tools?.avgLatencyMs != null
+                    ? `${data.phase4.tools.avgLatencyMs}ms`
+                    : "—"
+                }
+              />
+              <AiMetricCard
+                label="Memórias aplicadas (mês)"
+                value={data.phase4.memory?.recordsApplied || 0}
+              />
+              <AiMetricCard
+                label="Memórias ativas"
+                value={data.phase4.memory?.activeRecords || 0}
+              />
+              <AiMetricCard
+                label="Roteamentos"
+                value={data.phase4.orchestrator?.routed || 0}
+              />
+              <AiMetricCard
+                label="Confiança média"
+                value={
+                  data.phase4.orchestrator?.avgConfidence != null
+                    ? `${(Number(data.phase4.orchestrator.avgConfidence) * 100).toFixed(0)}%`
+                    : "—"
+                }
+              />
+              <AiMetricCard
+                label="Fallbacks"
+                value={data.phase4.orchestrator?.fallbacks || 0}
+              />
+            </div>
+
+            <Grid container spacing={2} style={{ marginTop: 8 }}>
+              {(data.phase4.tools?.byTool || []).length > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Tools por volume
+                  </Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Tool</TableCell>
+                        <TableCell align="right">Execuções</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {data.phase4.tools.byTool.map(item => (
+                        <TableRow key={item.toolId}>
+                          <TableCell>{item.toolId}</TableCell>
+                          <TableCell align="right">{item.count}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Grid>
+              )}
+
+              {(data.phase4.byAgent || []).length > 0 && (
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle2" gutterBottom>
+                    Por agente
+                  </Typography>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Agente</TableCell>
+                        <TableCell align="right">Conversas</TableCell>
+                        <TableCell align="right">Custo (USD)</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {data.phase4.byAgent.map(item => (
+                        <TableRow key={item.agentId}>
+                          <TableCell>
+                            {item.name || `#${item.agentId}`}
+                          </TableCell>
+                          <TableCell align="right">
+                            {item.conversations || 0}
+                          </TableCell>
+                          <TableCell align="right">
+                            {formatUsd(item.costUsd)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Grid>
+              )}
+            </Grid>
+          </AiSectionPaper>
+        )}
+
         <Grid container spacing={2}>
           <Grid item xs={12} md={6}>
             <AiSectionPaper title="Perguntas sem resposta">

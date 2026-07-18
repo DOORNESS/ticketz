@@ -2,7 +2,7 @@ import AppError from "../../../errors/AppError";
 import { AIProvider, AIProviderId } from "./AIProvider";
 import { createOpenAICompatibleProvider } from "./OpenAIProvider";
 
-const UNSUPPORTED_PROVIDERS: AIProviderId[] = ["gemini", "anthropic"];
+const UNSUPPORTED_PROVIDERS: AIProviderId[] = ["anthropic"];
 
 export const getAIProvider = async (
   companyId: number,

@@ -1,22 +1,19 @@
 import AiAgent from "../../models/AiAgent";
-import { chatCompletion, createEmbedding } from "./ModelGateway";
+import AppError from "../../errors/AppError";
 import {
   getKnowledgeBaseIdsForAgent,
   getSpecialtyPromptRules
 } from "./AiHelpers";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
 import { searchKnowledgeChunks } from "./RetrievalEngine";
-import AppError from "../../errors/AppError";
-
-const DEFAULT_SYSTEM_RULES = `
-Você é o primeiro atendente virtual da Fortmax Sistemas. Mantenha conversa contínua: responda TODA mensagem do cliente.
-Use a base de conhecimento abaixo como fonte principal — se o dado estiver lá, cite-o.
-Não repita saudações genéricas se o cliente já fez uma pergunta; responda a pergunta.
-Se faltar um detalhe, faça perguntas objetivas e continue ajudando — não encerre o atendimento.
-NUNCA diga que vai transferir, encaminhar ou chamar especialista, a menos que o cliente peça atendente/humano explicitamente.
-Nunca invente preços, prazos ou políticas que não estejam no contexto.
-Responda em português do Brasil.
-`;
+import { createEmbedding } from "./ModelGateway";
+import { buildAiSystemPrompt } from "./AiPromptBuilder";
+import { loadVerifiedMemoryForPrompt } from "./ContactMemory/ContactAiMemoryService";
+import { isContactMemoryEnabledForCompany } from "./ContactMemory/AiContactMemoryFeatureFlag";
+import { isToolsEnabledForCompany } from "./tools/AiToolsFeatureFlag";
+import { isWriteToolsEnabledForCompany } from "./tools/AiWriteToolsFeatureFlag";
+import { runToolLoop } from "./tools/ToolLoopService";
+import "./tools/registerPilotTools";
 
 export type SpecialistReplyChunk = {
   id: number;
@@ -35,6 +32,8 @@ export type SpecialistReplyResult = {
   model: string;
   latencyMs: number;
   systemPrompt: string;
+  toolCallsExecuted?: number;
+  handoffTriggered?: boolean;
 };
 
 export const generateSpecialistAiReply = async ({
@@ -42,13 +41,17 @@ export const generateSpecialistAiReply = async ({
   agent,
   userText,
   queueId,
-  orchestratorMode
+  orchestratorMode,
+  ticketId,
+  contactId
 }: {
   companyId: number;
   agent: AiAgent;
   userText: string;
   queueId?: number;
   orchestratorMode: boolean;
+  ticketId?: number;
+  contactId?: number;
 }): Promise<SpecialistReplyResult> => {
   const startedAt = Date.now();
 
@@ -85,40 +88,61 @@ export const generateSpecialistAiReply = async ({
         : contextBlock;
   }
 
-  const systemPrompt = [
-    agent.basePrompt || "",
-    getSpecialtyPromptRules(agent.specialty),
-    DEFAULT_SYSTEM_RULES,
-    `Base de conhecimento:\n${contextBlock}`
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+  const [verifiedMemory, memoryEnabled, toolsEnabled, writeToolsEnabled] =
+    await Promise.all([
+      contactId && (await isContactMemoryEnabledForCompany(companyId))
+        ? loadVerifiedMemoryForPrompt(companyId, contactId)
+        : Promise.resolve([]),
+      isContactMemoryEnabledForCompany(companyId),
+      isToolsEnabledForCompany(companyId),
+      isWriteToolsEnabledForCompany(companyId)
+    ]);
 
-  const completion = await chatCompletion(companyId, {
-    model: agent.textModel,
-    temperature: agent.temperature,
-    maxTokens: agent.maxTokens,
-    providerId: agent.provider,
+  const systemPrompt = buildAiSystemPrompt({
+    agent,
+    specialtyRules: getSpecialtyPromptRules(agent.specialty),
+    knowledgeContextBlock: contextBlock,
+    verifiedMemory: memoryEnabled ? verifiedMemory : [],
+    toolsEnabled,
+    writeToolsEnabled
+  });
+
+  const loopResult = await runToolLoop({
+    companyId,
+    agent,
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userText }
-    ]
+    ],
+    context: {
+      companyId,
+      aiAgentId: agent.id,
+      ticketId: ticketId || 0,
+      contactId: contactId || 0,
+      userText,
+      knowledgeBaseIds,
+      providerId: agent.provider
+    }
   });
 
-  if (!completion.content?.trim()) {
+  if (!loopResult.content?.trim() && !loopResult.handoffTriggered) {
     throw new AppError("Empty AI response", 502);
   }
 
   return {
-    response: completion.content.trim(),
+    response:
+      loopResult.content?.trim() ||
+      "Transferência para atendimento humano iniciada.",
     agent,
     knowledgeBaseIds,
     chunks,
-    tokensInput: completion.tokensInput || 0,
-    tokensOutput: completion.tokensOutput || 0,
-    model: completion.model,
+    tokensInput: loopResult.tokensInput,
+    tokensOutput: loopResult.tokensOutput,
+    model: loopResult.model,
     latencyMs: Date.now() - startedAt,
-    systemPrompt
+    systemPrompt,
+    toolCallsExecuted: loopResult.toolCallsExecuted,
+    handoffTriggered: loopResult.handoffTriggered
   };
 };
 

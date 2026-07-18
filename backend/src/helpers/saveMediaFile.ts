@@ -8,6 +8,10 @@ import {
   streamToBuffer,
   toStoredMediaReference
 } from "./mediaStorage";
+import {
+  persistUnifiedMediaFile,
+  resolveMediaTypeFromMime
+} from "../services/AiServices/media/UnifiedMediaPersistenceService";
 
 type SaveMediaOptions = {
   destination: Ticket | number;
@@ -50,6 +54,20 @@ export default async function saveMediaToFile(
     contentType: media.mimetype.split(";")[0] || "application/octet-stream",
     folder
   });
+
+  if (ticketId) {
+    await persistUnifiedMediaFile({
+      companyId,
+      ticketId,
+      mediaType: resolveMediaTypeFromMime(media.mimetype),
+      mimeType: media.mimetype.split(";")[0] || "application/octet-stream",
+      filename: media.filename,
+      storageKey: upload.key,
+      publicUrl: upload.publicUrl,
+      sizeBytes: buffer.length,
+      direction: "inbound"
+    });
+  }
 
   return toStoredMediaReference({
     key: upload.key,

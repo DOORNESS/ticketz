@@ -35,6 +35,19 @@
 | Migration | `20260718100000-ai-phase1-orchestrator.ts` |
 | Scripts | `COMPANY_ID=<id> npm run seed:ai-phase1`, `audit:ai-phase1` |
 
+## Fase 3 — Memória + Tools (backend)
+
+| Componente | Caminho |
+|------------|---------|
+| Memória contato | `ContactMemory/` — policy, sanitizer, Bull queue |
+| Tools | `tools/` — executor, loop, 4 pilot tools |
+| Prompt | `AiPromptBuilder.ts` |
+| Feature flags | `AI_CONTACT_MEMORY_ENABLED`, `AI_TOOLS_ENABLED` + settings |
+| Migration | `20260730100000-ai-phase3-memory-tools.ts` |
+| Scripts | `seed:ai-phase3`, `audit:ai-phase3` |
+
+Ver [`AI_PHASE3_ARCHITECTURE.md`](AI_PHASE3_ARCHITECTURE.md) e [`AI_PHASE3_REPORT.md`](AI_PHASE3_REPORT.md).
+
 ## Fase 2 — Knowledge CMS (backend)
 
 | Componente | Caminho |

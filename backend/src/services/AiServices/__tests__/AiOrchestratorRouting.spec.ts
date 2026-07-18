@@ -6,7 +6,9 @@ import {
   scoreSpecialtyKeywords
 } from "../AiOrchestratorService";
 
-const buildAgent = (partial: Partial<AiAgent> & Pick<AiAgent, "id" | "name" | "specialty">): AiAgent =>
+const buildAgent = (
+  partial: Partial<AiAgent> & Pick<AiAgent, "id" | "name" | "specialty">
+): AiAgent =>
   ({
     priority: 100,
     routingKeywords: [],

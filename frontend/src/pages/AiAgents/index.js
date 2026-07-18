@@ -23,7 +23,8 @@ import {
   Link,
   CircularProgress,
   Box,
-  Grid
+  Grid,
+  Chip
 } from "@material-ui/core";
 import { Alert } from "@material-ui/lab";
 import { DeleteOutline, Edit } from "@material-ui/icons";
@@ -72,6 +73,64 @@ const normalizeQueues = data => {
   return [];
 };
 
+const RISK_LABELS = {
+  read: "Leitura",
+  write: "Escrita",
+  handoff: "Handoff",
+  destructive: "Destrutiva"
+};
+
+const isWriteRisk = riskLevel =>
+  riskLevel === "write" || riskLevel === "destructive";
+
+const groupToolsByRisk = tools => {
+  const readTools = [];
+  const writeTools = [];
+
+  tools.forEach(tool => {
+    if (isWriteRisk(tool.riskLevel)) {
+      writeTools.push(tool);
+    } else {
+      readTools.push(tool);
+    }
+  });
+
+  return { readTools, writeTools };
+};
+
+const renderRiskBadge = riskLevel => (
+  <Chip
+    size="small"
+    label={RISK_LABELS[riskLevel] || riskLevel || "—"}
+    color={isWriteRisk(riskLevel) ? "secondary" : "default"}
+    style={{ marginLeft: 8 }}
+  />
+);
+
+const renderToolToggle = (tool, agentTools, setAgentTools) => (
+  <FormControlLabel
+    key={tool.id}
+    control={
+      <Switch
+        checked={agentTools[tool.id] !== false}
+        onChange={e =>
+          setAgentTools(prev => ({
+            ...prev,
+            [tool.id]: e.target.checked
+          }))
+        }
+        color="primary"
+      />
+    }
+    label={
+      <span>
+        {tool.name} — {tool.description}
+        {renderRiskBadge(tool.riskLevel)}
+      </span>
+    }
+  />
+);
+
 const SectionBlock = ({ title, subtitle, children }) => {
   const classes = useAiPageStyles();
 
@@ -97,6 +156,8 @@ const AiAgents = () => {
   const [knowledgeBases, setKnowledgeBases] = useState([]);
   const [publishedAssetsByBase, setPublishedAssetsByBase] = useState({});
   const [orchestratorStatus, setOrchestratorStatus] = useState(null);
+  const [registeredTools, setRegisteredTools] = useState([]);
+  const [agentTools, setAgentTools] = useState({});
   const [queuesLoading, setQueuesLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(defaultAgent);
@@ -160,12 +221,44 @@ const AiAgents = () => {
     }
   }, []);
 
+  const loadRegisteredTools = useCallback(async () => {
+    try {
+      const { data } = await api.get("/ai/tools");
+      setRegisteredTools(Array.isArray(data) ? data : []);
+    } catch (err) {
+      setRegisteredTools([]);
+    }
+  }, []);
+
+  const loadAgentTools = useCallback(async agentId => {
+    if (!agentId) {
+      setAgentTools({});
+      return;
+    }
+    try {
+      const { data } = await api.get(`/ai/agents/${agentId}/tools`);
+      const map = {};
+      (data?.tools || []).forEach(item => {
+        map[item.toolId] = item.enabled !== false;
+      });
+      setAgentTools(map);
+    } catch (err) {
+      setAgentTools({});
+    }
+  }, []);
+
   useEffect(() => {
     loadAgents();
     loadQueues();
     loadKnowledgeBases();
     loadOrchestratorStatus();
-  }, [loadQueues, loadKnowledgeBases, loadOrchestratorStatus]);
+    loadRegisteredTools();
+  }, [
+    loadQueues,
+    loadKnowledgeBases,
+    loadOrchestratorStatus,
+    loadRegisteredTools
+  ]);
 
   useEffect(() => {
     if (!open) {
@@ -206,8 +299,24 @@ const AiAgents = () => {
 
       if (editingId) {
         await api.put(`/ai/agents/${editingId}`, payload);
+        if (form.role !== "orchestrator") {
+          await api.put(`/ai/agents/${editingId}/tools`, {
+            tools: registeredTools.map(tool => ({
+              toolId: tool.id,
+              enabled: agentTools[tool.id] !== false
+            }))
+          });
+        }
       } else {
-        await api.post("/ai/agents", payload);
+        const { data: created } = await api.post("/ai/agents", payload);
+        if (created?.id && form.role !== "orchestrator") {
+          await api.put(`/ai/agents/${created.id}/tools`, {
+            tools: registeredTools.map(tool => ({
+              toolId: tool.id,
+              enabled: agentTools[tool.id] !== false
+            }))
+          });
+        }
       }
 
       toast.success("Agente salvo com sucesso");
@@ -251,6 +360,7 @@ const AiAgents = () => {
       ackEnabled: !!agent.ackEnabled,
       ackMessage: agent.ackMessage || ""
     });
+    loadAgentTools(agent.id);
     setOpen(true);
   };
 
@@ -267,6 +377,12 @@ const AiAgents = () => {
   const handleOpenNewAgent = () => {
     setEditingId(null);
     setForm(defaultAgent);
+    setAgentTools(
+      registeredTools.reduce((acc, tool) => {
+        acc[tool.id] = true;
+        return acc;
+      }, {})
+    );
     setSaveError("");
     setOpen(true);
   };
@@ -572,6 +688,43 @@ const AiAgents = () => {
               </>
             )}
           </SectionBlock>
+
+          {form.role !== "orchestrator" && registeredTools.length > 0 && (
+            <SectionBlock
+              title="Ferramentas (Fase 3/4)"
+              subtitle="Tools executáveis pelo especialista quando AI_TOOLS_ENABLED estiver ativo."
+            >
+              {(() => {
+                const { readTools, writeTools } =
+                  groupToolsByRisk(registeredTools);
+
+                return (
+                  <>
+                    {readTools.length > 0 && (
+                      <Box mb={1}>
+                        <Typography variant="body2" color="textSecondary">
+                          Leitura e consulta
+                        </Typography>
+                        {readTools.map(tool =>
+                          renderToolToggle(tool, agentTools, setAgentTools)
+                        )}
+                      </Box>
+                    )}
+                    {writeTools.length > 0 && (
+                      <Box>
+                        <Typography variant="body2" color="secondary">
+                          Escrita e mutação (requer AI_WRITE_TOOLS)
+                        </Typography>
+                        {writeTools.map(tool =>
+                          renderToolToggle(tool, agentTools, setAgentTools)
+                        )}
+                      </Box>
+                    )}
+                  </>
+                );
+              })()}
+            </SectionBlock>
+          )}
 
           <SectionBlock
             title="Modelos de IA"
