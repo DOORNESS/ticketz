@@ -47,13 +47,18 @@ export interface AiTool {
 const registeredTools: AiTool[] = [];
 
 const ensureToolsLoaded = (): void => {
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { ensurePilotToolsRegistered } = require("./registerPilotTools");
-    ensurePilotToolsRegistered();
-  } catch {
-    // Registration is optional until pilot tools module is imported.
-  }
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { ensurePilotToolsRegistered } = require("./registerPilotTools");
+  ensurePilotToolsRegistered();
+};
+
+export const resetToolRegistryForTests = (): void => {
+  registeredTools.length = 0;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const registerModule = require("./registerPilotTools") as {
+    resetPilotToolsRegistrationForTests?: () => void;
+  };
+  registerModule.resetPilotToolsRegistrationForTests?.();
 };
 
 export const registerTool = (tool: AiTool): void => {

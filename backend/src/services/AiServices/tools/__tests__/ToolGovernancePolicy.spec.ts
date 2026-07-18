@@ -21,7 +21,14 @@ jest.mock("../../../../models/Contact", () => ({
 
 jest.mock("../../../../models/Ticket", () => ({
   __esModule: true,
-  default: { findOne: jest.fn().mockResolvedValue(null) }
+  default: {
+    findOne: jest.fn().mockResolvedValue({
+      id: 10,
+      companyId: 1,
+      status: "open",
+      userId: null
+    })
+  }
 }));
 
 describe("ToolGovernancePolicy", () => {
@@ -73,5 +80,51 @@ describe("ToolGovernancePolicy", () => {
     });
 
     expect(decision.allowed).toBe(true);
+  });
+
+  it("blocks write tools when a human agent is assigned", async () => {
+    const Ticket = (await import("../../../../models/Ticket")).default;
+    (Ticket.findOne as jest.Mock).mockResolvedValueOnce({
+      id: 10,
+      companyId: 1,
+      status: "open",
+      userId: 99
+    });
+
+    const { isWriteToolsEnabledForCompany } =
+      await import("../AiWriteToolsFeatureFlag");
+    (isWriteToolsEnabledForCompany as jest.Mock).mockResolvedValueOnce(true);
+
+    const decision = await canExecuteTool({
+      companyId: 1,
+      tool: writeTool,
+      context: baseContext
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.errorCode).toBe("human_active");
+  });
+
+  it("blocks write tools when ticket is closed", async () => {
+    const Ticket = (await import("../../../../models/Ticket")).default;
+    (Ticket.findOne as jest.Mock).mockResolvedValueOnce({
+      id: 10,
+      companyId: 1,
+      status: "closed",
+      userId: null
+    });
+
+    const { isWriteToolsEnabledForCompany } =
+      await import("../AiWriteToolsFeatureFlag");
+    (isWriteToolsEnabledForCompany as jest.Mock).mockResolvedValueOnce(true);
+
+    const decision = await canExecuteTool({
+      companyId: 1,
+      tool: writeTool,
+      context: baseContext
+    });
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.errorCode).toBe("ticket_closed");
   });
 });

@@ -6,6 +6,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.4.2] — 2026-07-18
+
+### Validado (Fases 3 + 4)
+
+- Registro síncrono de tools (sem `setImmediate`) + bootstrap explícito
+- 103 testes backend PASS · 96 testes IA expandidos PASS
+- `docker-compose-test.yaml` + `npm run test:isolated`
+- Runbook: [`AI_PHASE34_ROLLOUT_RUNBOOK.md`](AI_PHASE34_ROLLOUT_RUNBOOK.md)
+- Relatório final: [`AI_PHASE34_FINAL_VALIDATION_REPORT.md`](AI_PHASE34_FINAL_VALIDATION_REPORT.md)
+
+---
+
 ## [1.4.1] — 2026-07-18
 
 ### Consolidado (Fases 3 + 4)

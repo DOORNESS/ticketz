@@ -624,6 +624,10 @@ const aiSlaMonitorJob = new CronJob("*/15 * * * * *", async () => {
 aiSlaMonitorJob.start();
 
 export async function startQueueProcess() {
+  const { ensurePilotToolsRegistered } =
+    await import("./services/AiServices/tools/registerPilotTools");
+  ensurePilotToolsRegistered();
+
   logger.info("Starting queue processing");
 
   startCampaignQueues().then(() => {

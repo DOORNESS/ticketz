@@ -43,6 +43,7 @@ Compact guidance for OpenCode sessions working in this repo.
 - `npm run seed:ai-phase2-permissions` / `npm run audit:ai-phase2` — Fase 2 CMS permissions and audit.
 - `npm run seed:ai-phase3` / `npm run audit:ai-phase3` — Fase 3 memory + tools (use `COMPANY_ID=<id>`).
 - `npm run seed:ai-phase4` / `npm run audit:ai-phase4` / `npm run backfill:legacy-media` / `npm run fix:agent-memory` — Fase 4 operations + observability.
+- `npm run test:isolated` — full backend test suite against Docker test DB (`docker compose -f docker-compose-test.yaml up -d` first).
 
 ### Runtime quirks
 - i18n is initialized asynchronously (`i18nReady`) before the HTTP server starts.

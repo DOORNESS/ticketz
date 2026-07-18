@@ -8,9 +8,12 @@ import {
   updateMigrationsPending
 } from "./AiPlatformState";
 import { ensureAiFirstResponderForAllCompanies } from "./EnsureAiFirstResponderService";
+import { ensurePilotToolsRegistered } from "./tools/registerPilotTools";
 import { logger } from "../../utils/logger";
 
 export const bootstrapAiPlatform = async (): Promise<void> => {
+  ensurePilotToolsRegistered();
+
   try {
     const migrationState = await initializeMigrations();
     const aiReady = await isAiSchemaReady();

@@ -9,7 +9,7 @@ import sequelize from "../database";
 import AiAgent from "../models/AiAgent";
 import { seedDefaultAgentTools } from "../services/AiServices/tools/AiAgentToolService";
 import { enqueueCompanyMetricsSnapshot } from "../services/AiServices/metrics/AiMetricsQueueService";
-import "../services/AiServices/tools/registerPilotTools";
+import { ensurePilotToolsRegistered } from "../services/AiServices/tools/registerPilotTools";
 
 const companyId = Number(process.env.COMPANY_ID);
 if (!Number.isFinite(companyId) || companyId <= 0) {
@@ -19,6 +19,7 @@ if (!Number.isFinite(companyId) || companyId <= 0) {
 
 (async () => {
   await sequelize.authenticate();
+  ensurePilotToolsRegistered();
 
   const agents = await AiAgent.findAll({
     where: { companyId, active: true },
