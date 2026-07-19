@@ -30,7 +30,7 @@ PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip()
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 DIST = BACKEND / "dist"
-CHUNK = int(os.environ.get("DEPLOY_B64_CHUNK", "2000"))
+CHUNK = int(os.environ.get("DEPLOY_B64_CHUNK", "1500"))
 
 # Hotfix paths — full dist sync is too slow over WinRM (600+ files).
 PATCH_PATHS = [

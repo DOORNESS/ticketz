@@ -127,6 +127,7 @@ jobs:
           SKIP_WHATSAPP_RESET: "1"
           DEPLOY_MODE: "patch"
           DEPLOY_USE_ZIP: "1"
+          DEPLOY_B64_CHUNK: "1500"
         run: |
           set -euo pipefail
           pip install pywinrm
