@@ -6,6 +6,26 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.0] — 2026-07-19
+
+### Adicionado (Repositório multimodal + painel unificado)
+
+- Repositório central de conteúdos (`ContentRepositoryItems`) separado da Base de Conhecimento
+- Envio de itens do Repositório dentro da conversa (`GET/POST /tickets/:id/repository`)
+- Ferramentas IA `search_repository` e `send_repository_item`
+- Painel administrativo unificado na conversa + modal Repositório
+- Botão **Sugerir resposta com IA** no campo de mensagem
+- Admin **Repositório** em `/ai/repository`
+- Associação opcional Repositório → Base de Conhecimento (ingestão via CMS existente)
+- Versionamento de itens (`ContentRepositoryItemVersions`)
+
+### Corrigido
+
+- Áudio gravado pelo atendente: `File` com MIME `audio/mpeg`, upload síncrono (sem race)
+- Upload de mídia no painel: removido `setTimeout(2000)` e compressão assíncrona quebrada
+
+---
+
 ## [1.4.4] — 2026-07-19
 
 ### Corrigido (CI deploy produção)

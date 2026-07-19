@@ -20,6 +20,7 @@ import * as AiLearningController from "../controllers/AiLearningController";
 import * as AiOrchestratorController from "../controllers/AiOrchestratorController";
 import * as ContactAiMemoryController from "../controllers/ContactAiMemoryController";
 import * as AiToolController from "../controllers/AiToolController";
+import * as ContentRepositoryController from "../controllers/ContentRepositoryController";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -168,5 +169,24 @@ aiRoutes.delete(
   ContactAiMemoryController.removeAll
 );
 aiRoutes.get("/ai/tool-executions", AiToolController.toolExecutions);
+
+aiRoutes.get("/ai/repository", ContentRepositoryController.index);
+aiRoutes.get("/ai/repository/:itemId", ContentRepositoryController.show);
+aiRoutes.post("/ai/repository", ContentRepositoryController.store);
+aiRoutes.post(
+  "/ai/repository/upload",
+  upload.single("file"),
+  ContentRepositoryController.storeUpload
+);
+aiRoutes.put(
+  "/ai/repository/:itemId",
+  upload.single("file"),
+  ContentRepositoryController.update
+);
+aiRoutes.delete("/ai/repository/:itemId", ContentRepositoryController.remove);
+aiRoutes.post(
+  "/ai/repository/:itemId/favorite",
+  ContentRepositoryController.favorite
+);
 
 export default aiRoutes;

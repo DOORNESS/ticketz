@@ -11,7 +11,9 @@ const PHASE3_TOOL_EXPORTS: ToolExport[] = [
     "./definitions/SearchPublishedKnowledgeTool",
     "SearchPublishedKnowledgeTool"
   ],
-  ["./definitions/RequestHumanHandoffTool", "RequestHumanHandoffTool"]
+  ["./definitions/RequestHumanHandoffTool", "RequestHumanHandoffTool"],
+  ["./definitions/SearchRepositoryTool", "SearchRepositoryTool"],
+  ["./definitions/SearchRepositoryTool", "SendRepositoryItemTool"]
 ];
 
 const PHASE4_WRITE_TOOL_EXPORTS: ToolExport[] = [

@@ -586,6 +586,15 @@ const MainListItems = props => {
                 />
                 <AiSubmenuItem
                   icon={<ListIcon />}
+                  label="Repositório"
+                  selected={
+                    location.pathname === "/ai/repository" ||
+                    location.pathname.startsWith("/ai/repository/")
+                  }
+                  onClick={() => history.push("/ai/repository")}
+                />
+                <AiSubmenuItem
+                  icon={<ListIcon />}
                   label="Ativos"
                   selected={
                     location.pathname === "/ai/assets" ||

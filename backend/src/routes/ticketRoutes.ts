@@ -3,6 +3,7 @@ import isAuth from "../middleware/isAuth";
 
 import * as TicketController from "../controllers/TicketController";
 import * as TicketAiController from "../controllers/TicketAiController";
+import * as ContentRepositoryController from "../controllers/ContentRepositoryController";
 import * as AiLearningController from "../controllers/AiLearningController";
 import isCompliant from "../middleware/isCompliant";
 
@@ -87,6 +88,20 @@ ticketRoutes.post(
   isAuth,
   isCompliant,
   TicketAiController.copilotAction
+);
+
+ticketRoutes.get(
+  "/tickets/:ticketId/repository",
+  isAuth,
+  isCompliant,
+  ContentRepositoryController.ticketIndex
+);
+
+ticketRoutes.post(
+  "/tickets/:ticketId/repository/:itemId/send",
+  isAuth,
+  isCompliant,
+  ContentRepositoryController.ticketSend
 );
 
 ticketRoutes.post(

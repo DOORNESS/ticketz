@@ -36,6 +36,7 @@ import AiDashboard from "../pages/AiDashboard";
 import AiKnowledgeBases from "../pages/AiKnowledgeBases";
 import AiKnowledgeDomains from "../pages/AiKnowledgeDomains";
 import AiAssets from "../pages/AiAssets";
+import AiRepository from "../pages/AiRepository";
 import AiLogs from "../pages/AiLogs";
 import AiLearnings from "../pages/AiLearnings";
 import AiReplay from "../pages/AiReplay";
@@ -134,6 +135,12 @@ const Routes = () => {
                   isPrivate
                 />
                 <Route exact path="/ai/assets" component={AiAssets} isPrivate />
+                <Route
+                  exact
+                  path="/ai/repository"
+                  component={AiRepository}
+                  isPrivate
+                />
                 <Route
                   exact
                   path="/ai/documents"

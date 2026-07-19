@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useRef } from "react";
+import React, { useState, useEffect, useContext, useRef, useImperativeHandle, forwardRef } from "react";
 import withWidth, { isWidthUp } from "@material-ui/core/withWidth";
 import MicRecorder from "mic-recorder-to-mp3";
 import clsx from "clsx";
@@ -24,7 +24,9 @@ import ClearIcon from "@material-ui/icons/Clear";
 import MicIcon from "@material-ui/icons/Mic";
 import CheckCircleOutlineIcon from "@material-ui/icons/CheckCircleOutline";
 import HighlightOffIcon from "@material-ui/icons/HighlightOff";
-import CameraAltIcon from "@material-ui/icons/CameraAlt";
+import DashboardIcon from "@material-ui/icons/Dashboard";
+import FolderSharedIcon from "@material-ui/icons/FolderShared";
+import AndroidIcon from "@material-ui/icons/Android";
 import {
   FormControlLabel,
   Switch,
@@ -42,6 +44,7 @@ import RecordingTimer from "./RecordingTimer";
 import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
+import { toast } from "react-toastify";
 import toastError from "../../errors/toastError";
 import { EditMessageContext } from "../../context/EditingMessage/EditingMessageContext";
 
@@ -812,8 +815,8 @@ const CustomInput = props => {
   );
 };
 
-const MessageInputCustom = props => {
-  const { ticket, showTabGroups } = props;
+const MessageInputCustom = forwardRef((props, ref) => {
+  const { ticket, showTabGroups, onOpenRepository, onOpenAdminPanel } = props;
   const { status: ticketStatus, id: ticketId } = ticket;
   const classes = useStyles();
 
@@ -917,66 +920,65 @@ const MessageInputCustom = props => {
     }
   };
 
+  const [suggestLoading, setSuggestLoading] = useState(false);
+
+  useImperativeHandle(ref, () => ({
+    applySuggestedText: text => {
+      if (!text) return;
+      setInputMessage(prev => (prev ? `${prev}\n${text}` : text));
+      inputRef.current?.focus();
+    }
+  }));
+
+  const isGroup = showTabGroups && ticket.isGroup;
+  const disableOption =
+    (!isGroup && loading) || ticketStatus === "closed" || props.observationMode;
+
   const handleUploadMedia = async e => {
+    if (disableOption || !medias.length) return;
     setLoading(true);
     e.preventDefault();
 
-    const formData = new FormData();
-    formData.append("fromMe", true);
+    try {
+      const formData = new FormData();
+      formData.append("fromMe", true);
 
-    medias.forEach(async (media, idx) => {
-      const file = media;
+      for (const media of medias) {
+        if (!media) continue;
 
-      if (!file) {
-        return;
-      }
-
-      if (media?.type.split("/")[0] == "image") {
-        new Compressor(file, {
-          quality: 0.7,
-
-          async success(media) {
-            //const formData = new FormData();
-            // The third parameter is required for server
-            //formData.append('file', result, result.name);
-
-            formData.append("medias", media, media.name);
-            formData.append("body", media.name);
-          },
-          error(err) {
-            alert("erro");
-          }
-        });
-      } else {
-        formData.append("medias", media);
-        formData.append("body", media.name);
-      }
-    });
-
-    setTimeout(async () => {
-      try {
-        await api
-          .post(`/messages/${ticketId}`, formData, {
-            onUploadProgress: event => {
-              let progress = Math.round((event.loaded * 100) / event.total);
-              setPercentLoading(progress);
-            }
-          })
-          .then(response => {
-            setLoading(false);
-            setMedias([]);
-            setPercentLoading(0);
-          })
-          .catch(err => {
-            setLoading(false);
-            setMedias([]);
-            setPercentLoading(0);
-            toastError(err);
+        if (media.type?.split("/")[0] === "image") {
+          await new Promise((resolve, reject) => {
+            new Compressor(media, {
+              quality: 0.7,
+              success(compressed) {
+                formData.append("medias", compressed, compressed.name);
+                formData.append("body", compressed.name);
+                resolve();
+              },
+              error(err) {
+                reject(err);
+              }
+            });
           });
-      } catch (err) {
-        toastError(err);
+        } else {
+          formData.append("medias", media, media.name);
+          formData.append("body", media.name);
+        }
       }
-    }, 2000);
+
+      await api.post(`/messages/${ticketId}`, formData, {
+        onUploadProgress: event => {
+          const progress = Math.round((event.loaded * 100) / event.total);
+          setPercentLoading(progress);
+        }
+      });
+      setMedias([]);
+      setPercentLoading(0);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handlePresenceUpdate = presence => {
@@ -1068,28 +1070,51 @@ const MessageInputCustom = props => {
     handlePresenceUpdate(null);
     try {
       const [, blob] = await Mp3Recorder.stop().getMp3();
-      if (blob.size < 500) {
-        toastError(
-          new Error("Áudio muito curto ou vazio. Tente gravar novamente.")
-        );
-        setLoading(false);
+      if (!blob || blob.size < 500) {
+        toast.error("Áudio muito curto ou vazio. Tente gravar novamente.");
         setRecording(false);
         return;
       }
 
+      const filename = `audio-record-site-${Date.now()}.mp3`;
+      const audioFile = new File([blob], filename, { type: "audio/mpeg" });
       const formData = new FormData();
-      const filename = `audio-record-site-${new Date().getTime()}.mp3`;
-      formData.append("medias", blob, filename);
+      formData.append("medias", audioFile, filename);
       formData.append("body", filename);
       formData.append("fromMe", true);
 
       await api.post(`/messages/${ticketId}`, formData);
+      toast.success("Áudio enviado");
     } catch (err) {
       toastError(err);
+    } finally {
+      setRecording(false);
+      setLoading(false);
     }
+  };
 
-    setRecording(false);
-    setLoading(false);
+  const handleSuggestReply = async () => {
+    if (!ticket?.id || disableOption) return;
+    setSuggestLoading(true);
+    try {
+      const { data } = await api.post(`/tickets/${ticket.id}/ai/copilot`, {
+        instruction:
+          "Analise a conversa e sugira a melhor resposta para o cliente agora. Seja claro e objetivo.",
+        refresh: true
+      });
+      const text = data?.suggestion?.suggestedResponse;
+      if (text) {
+        setInputMessage(prev => (prev ? `${prev}\n${text}` : text));
+        inputRef.current?.focus();
+        toast.success("Sugestão aplicada — revise antes de enviar");
+      } else {
+        toast.info("A IA não retornou sugestão no momento");
+      }
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setSuggestLoading(false);
+    }
   };
 
   const handleCancelAudio = async () => {
@@ -1101,10 +1126,6 @@ const MessageInputCustom = props => {
       toastError(err);
     }
   };
-
-  const isGroup = showTabGroups && ticket.isGroup;
-  const disableOption =
-    (!isGroup && loading) || ticketStatus === "closed" || props.observationMode;
 
   const renderReplyingMessage = message => {
     return (
@@ -1205,6 +1226,37 @@ const MessageInputCustom = props => {
             handleChangeMedias={handleChangeMedias}
           />
 
+          {!props.observationMode && ticket?.userId && ticketStatus === "open" && (
+            <>
+              <Tooltip title="Sugerir resposta com IA">
+                <IconButton
+                  size="small"
+                  disabled={disableOption || suggestLoading}
+                  onClick={handleSuggestReply}
+                >
+                  <AndroidIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Repositório">
+                <IconButton
+                  size="small"
+                  disabled={disableOption}
+                  onClick={onOpenRepository}
+                >
+                  <FolderSharedIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Painel administrativo">
+                <IconButton
+                  size="small"
+                  onClick={onOpenAdminPanel}
+                >
+                  <DashboardIcon />
+                </IconButton>
+              </Tooltip>
+            </>
+          )}
+
           <IconSwitch
             setter={setSignMessage}
             value={signMessage}
@@ -1241,6 +1293,6 @@ const MessageInputCustom = props => {
       </Paper>
     );
   }
-};
+});
 
 export default withWidth()(MessageInputCustom);

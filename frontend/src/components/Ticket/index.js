@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useEffect, useContext, useRef } from "react";
 import { useParams, useHistory } from "react-router-dom";
 
 import { toast } from "react-toastify";
@@ -20,9 +20,8 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { TagsContainer } from "../TagsContainer";
 import AiTicketContextBanner from "../AiTicketContextBanner";
 import ClosedTicketBar from "../ClosedTicketBar";
-import AiCopilotPanel from "../AiCopilotPanel";
-import AiExplainabilityPanel from "../AiExplainabilityPanel";
-import TicketAiTimeline from "../Ai/TicketAiTimeline";
+import RepositoryPanel from "../RepositoryPanel";
+import TicketAdminPanel from "../TicketAdminPanel";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import useSettings from "../../hooks/useSettings";
 import {
@@ -98,6 +97,9 @@ const Ticket = () => {
   const [ticket, setTicket] = useState({});
   const [showTabGroups, setShowTabGroups] = useState(false);
   const [tagsMode, setTagsMode] = useState("ticket");
+  const [adminPanelOpen, setAdminPanelOpen] = useState(false);
+  const [repositoryOpen, setRepositoryOpen] = useState(false);
+  const messageInputRef = useRef(null);
   const { getSetting } = useSettings();
 
   const socketManager = useContext(SocketContext);
@@ -240,6 +242,17 @@ const Ticket = () => {
     }
   };
 
+  useEffect(() => {
+    window.__ticketzApplySuggestedReply = text => {
+      if (messageInputRef.current?.applySuggestedText) {
+        messageInputRef.current.applySuggestedText(text);
+      }
+    };
+    return () => {
+      delete window.__ticketzApplySuggestedReply;
+    };
+  }, []);
+
   const renderMessagesList = () => {
     return (
       <>
@@ -250,9 +263,12 @@ const Ticket = () => {
           markAsRead={!isObserving}
         ></MessagesList>
         <MessageInput
+          ref={messageInputRef}
           ticket={ticket}
           showTabGroups
           observationMode={isObserving}
+          onOpenRepository={() => setRepositoryOpen(true)}
+          onOpenAdminPanel={() => setAdminPanelOpen(true)}
         />
       </>
     );
@@ -289,9 +305,6 @@ const Ticket = () => {
             setObservationMode(isTicketObservationMode(updated, user));
           }}
         />
-        <AiExplainabilityPanel ticket={ticket} />
-        <TicketAiTimeline ticketId={ticket?.id} />
-        <AiCopilotPanel ticket={ticket} />
         <Paper>
           <TagsContainer
             ticket={["ticket", "both"].includes(tagsMode) && ticket}
@@ -302,6 +315,22 @@ const Ticket = () => {
           <EditMessageProvider>{renderMessagesList()}</EditMessageProvider>
         </ReplyMessageProvider>
       </Paper>
+      <RepositoryPanel
+        open={repositoryOpen}
+        onClose={() => setRepositoryOpen(false)}
+        ticket={ticket}
+      />
+      <TicketAdminPanel
+        open={adminPanelOpen}
+        onClose={() => setAdminPanelOpen(false)}
+        ticket={ticket}
+        observationMode={isObserving}
+        onOpenRepository={() => {
+          setAdminPanelOpen(false);
+          setRepositoryOpen(true);
+        }}
+        actionButtons={null}
+      />
       <ContactDrawer
         open={drawerOpen}
         handleDrawerClose={handleDrawerClose}

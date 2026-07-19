@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Button,
+  Link,
   Table,
   TableBody,
   TableCell,
@@ -14,6 +15,7 @@ import {
   FormControlLabel,
   Switch
 } from "@material-ui/core";
+import { Link as RouterLink } from "react-router-dom";
 import { DeleteOutline, Edit } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
@@ -266,6 +268,17 @@ const AiKnowledgeBases = () => {
               label="Ativa"
             />
           </div>
+          {editingId && (
+            <div style={{ marginTop: 12 }}>
+              <Link component={RouterLink} to={`/ai/assets?knowledgeBaseId=${editingId}`}>
+                Gerenciar documentos desta base (PDF, DOCX, imagens)
+              </Link>
+              <br />
+              <Link component={RouterLink} to="/ai/repository">
+                Repositório de conteúdos enviáveis ao cliente
+              </Link>
+            </div>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setOpen(false)}>Cancelar</Button>

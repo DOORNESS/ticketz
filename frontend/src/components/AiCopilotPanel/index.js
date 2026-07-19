@@ -46,7 +46,12 @@ const useStyles = makeStyles(theme => ({
   }
 }));
 
-const AiCopilotPanel = ({ ticket }) => {
+const AiCopilotPanel = ({
+  ticket,
+  compact = false,
+  externalInstruction,
+  onApplySuggestion
+}) => {
   const classes = useStyles();
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
@@ -124,6 +129,12 @@ const AiCopilotPanel = ({ ticket }) => {
     };
   }, [ticket?.id, socketManager]);
 
+  useEffect(() => {
+    if (!externalInstruction) return;
+    const instruction = externalInstruction.replace(/-\d+$/, "");
+    requestCopilot({ instruction, refresh: true });
+  }, [externalInstruction, requestCopilot]);
+
   const runAction = async action => {
     if (!suggestion?.id) return;
 
@@ -156,51 +167,57 @@ const AiCopilotPanel = ({ ticket }) => {
 
   return (
     <Paper elevation={0} className={classes.root}>
-      <Typography className={classes.title}>
-        {i18n.t("aiCopilot.title")}
-      </Typography>
+      {!compact && (
+        <Typography className={classes.title}>
+          {i18n.t("aiCopilot.title")}
+        </Typography>
+      )}
 
-      <TextField
-        fullWidth
-        size="small"
-        variant="outlined"
-        label="Perguntar à IA"
-        value={instruction}
-        onChange={event => setInstruction(event.target.value)}
-        disabled={loading}
-      />
+      {!compact && (
+        <TextField
+          fullWidth
+          size="small"
+          variant="outlined"
+          label="Perguntar à IA"
+          value={instruction}
+          onChange={event => setInstruction(event.target.value)}
+          disabled={loading}
+        />
+      )}
 
-      <Box className={classes.actions}>
-        {quickActions.map(action => (
+      {!compact && (
+        <Box className={classes.actions}>
+          {quickActions.map(action => (
+            <Button
+              key={action}
+              size="small"
+              variant="outlined"
+              disabled={loading}
+              onClick={() =>
+                requestCopilot({ instruction: action, refresh: true })
+              }
+            >
+              {action}
+            </Button>
+          ))}
           <Button
-            key={action}
             size="small"
-            variant="outlined"
+            color="primary"
+            variant="contained"
             disabled={loading}
             onClick={() =>
-              requestCopilot({ instruction: action, refresh: true })
+              requestCopilot({
+                instruction:
+                  instruction.trim() ||
+                  "Analise a conversa e sugira a melhor resposta agora.",
+                refresh: true
+              })
             }
           >
-            {action}
+            Chamar IA
           </Button>
-        ))}
-        <Button
-          size="small"
-          color="primary"
-          variant="contained"
-          disabled={loading}
-          onClick={() =>
-            requestCopilot({
-              instruction:
-                instruction.trim() ||
-                "Analise a conversa e sugira a melhor resposta agora.",
-              refresh: true
-            })
-          }
-        >
-          Chamar IA
-        </Button>
-      </Box>
+        </Box>
+      )}
 
       {loading ? (
         <Box display="flex" justifyContent="center" p={1}>
@@ -269,6 +286,19 @@ const AiCopilotPanel = ({ ticket }) => {
             >
               {i18n.t("aiCopilot.copy")}
             </Button>
+            {onApplySuggestion && (
+              <Button
+                size="small"
+                variant="contained"
+                color="secondary"
+                onClick={() => {
+                  onApplySuggestion(suggestion.suggestedResponse);
+                  toast.success("Sugestão aplicada no campo de mensagem");
+                }}
+              >
+                Usar no campo
+              </Button>
+            )}
             <Button
               size="small"
               variant="contained"

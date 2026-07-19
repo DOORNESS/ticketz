@@ -66,6 +66,9 @@ import AiAgentTool from "../models/AiAgentTool";
 import AiToolExecutionLog from "../models/AiToolExecutionLog";
 import AiToolIdempotencyRecord from "../models/AiToolIdempotencyRecord";
 import AiTicketTimelineEvent from "../models/AiTicketTimelineEvent";
+import ContentRepositoryItem from "../models/ContentRepositoryItem";
+import ContentRepositoryItemVersion from "../models/ContentRepositoryItemVersion";
+import ContentRepositoryFavorite from "../models/ContentRepositoryFavorite";
 import AiMetricsSnapshot from "../models/AiMetricsSnapshot";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -141,7 +144,10 @@ const models = [
   AiToolExecutionLog,
   AiMetricsSnapshot,
   AiToolIdempotencyRecord,
-  AiTicketTimelineEvent
+  AiTicketTimelineEvent,
+  ContentRepositoryItem,
+  ContentRepositoryItemVersion,
+  ContentRepositoryFavorite
 ];
 
 sequelize.addModels(models);
