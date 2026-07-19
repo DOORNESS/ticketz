@@ -169,11 +169,17 @@ const UpdateTicketService = async ({
     if (user && ticket.status !== "pending") {
       const isAiTakeover =
         !ticket.userId && userId && (ticket.aiAgentId || ticket.aiHandoff);
+      const isReopeningClosed =
+        ticket.status === "closed" && status === "open";
+      const isAssignedAgent =
+        ticket.userId &&
+        Number(ticket.userId) === Number(user.id);
 
       if (
         !isAiTakeover &&
+        !isReopeningClosed &&
         user.profile !== "admin" &&
-        ticket.userId !== user.id
+        !isAssignedAgent
       ) {
         throw new AppError("ERR_FORBIDDEN", 403);
       }

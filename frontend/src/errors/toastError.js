@@ -54,7 +54,10 @@ const toastError = err => {
     const displayMsg =
       errorMsg === "Network Error"
         ? "Não foi possível conectar à API. Aguarde alguns segundos e tente novamente."
-        : errorMsg;
+        : err?.response?.status === 403 &&
+            !i18n.exists(`backendErrors.${errorMsg}`)
+          ? "Você não tem permissão para esta ação. Se o ticket estiver fechado, use Reabrir."
+          : errorMsg;
     toast.error(displayMsg, {
       ...toastOptions,
       toastId: displayMsg

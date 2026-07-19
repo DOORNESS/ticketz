@@ -19,6 +19,7 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { TagsContainer } from "../TagsContainer";
 import AiTicketContextBanner from "../AiTicketContextBanner";
+import ClosedTicketBar from "../ClosedTicketBar";
 import AiCopilotPanel from "../AiCopilotPanel";
 import AiExplainabilityPanel from "../AiExplainabilityPanel";
 import TicketAiTimeline from "../Ai/TicketAiTimeline";
@@ -131,12 +132,16 @@ const Ticket = () => {
           const { queueId } = data;
           const { queues, profile } = user;
 
+          const isAssignedToUser =
+            data.userId && Number(data.userId) === Number(user.id);
+
           if (queueId) {
             const queueAllowed = queues.find(q => q.id === queueId);
             if (
               queueAllowed === undefined &&
               profile !== "admin" &&
-              !user?.super
+              !user?.super &&
+              !isAssignedToUser
             ) {
               toast.error(i18n.t("common.accessNotAllowed"));
               history.push("/tickets");
@@ -146,7 +151,9 @@ const Ticket = () => {
             profile !== "admin" &&
             !user?.super &&
             !isAiHandlingTicket(data) &&
-            !isHandoffPendingTicket(data)
+            !isHandoffPendingTicket(data) &&
+            !isAssignedToUser &&
+            data.status !== "closed"
           ) {
             toast.error(i18n.t("common.accessNotAllowed"));
             history.push("/tickets");
@@ -273,6 +280,13 @@ const Ticket = () => {
           />
         </TicketHeader>
         <AiTicketContextBanner ticket={ticket} observationMode={isObserving} />
+        <ClosedTicketBar
+          ticket={ticket}
+          onReopened={updated => {
+            setTicket(updated);
+            setObservationMode(isTicketObservationMode(updated, user));
+          }}
+        />
         <AiExplainabilityPanel ticket={ticket} />
         <TicketAiTimeline ticketId={ticket?.id} />
         <AiCopilotPanel ticket={ticket} />

@@ -219,16 +219,22 @@ export const showFromUUID = async (
   const canSupervise = user.profile === "admin" || user.super === true;
   const isAiTicket =
     !!ticket.aiAgentId || !!ticket.aiHandoff || !!ticket.aiStartedAt;
+  const isAssignedAgent =
+    ticket.userId && Number(ticket.userId) === Number(userId);
+  const isHandoffPending =
+    !!ticket.aiHandoff && ticket.status === "pending" && !ticket.userId;
 
   if (ticket.queueId) {
     if (
       !userQueueIds.includes(ticket.queueId) &&
+      !isAssignedAgent &&
+      !isHandoffPending &&
       user.profile !== "admin" &&
       !user.super
     ) {
       throw new AppError("ERR_NO_PERMISSION", 403);
     }
-  } else if (!canSupervise && !isAiTicket) {
+  } else if (!canSupervise && !isAiTicket && !isAssignedAgent) {
     throw new AppError("ERR_NO_PERMISSION", 403);
   }
 

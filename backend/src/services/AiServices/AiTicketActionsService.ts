@@ -190,7 +190,8 @@ export const releaseTicketToAi = async ({
     throw new AppError("ERR_TICKET_CLOSED", 400);
   }
 
-  const isOwner = ticket.userId === user.id;
+  const isOwner =
+    ticket.userId && Number(ticket.userId) === Number(user.id);
   if (!isOwner && !canManageAi(user)) {
     throw new AppError("ERR_FORBIDDEN", 403);
   }

@@ -32,6 +32,7 @@ import AndroidIcon from "@material-ui/icons/Android";
 import VisibilityIcon from "@material-ui/icons/Visibility";
 import TicketMessagesDialog from "../TicketMessagesDialog";
 import DoneIcon from "@material-ui/icons/Done";
+import ReplayIcon from "@material-ui/icons/Replay";
 import ClearOutlinedIcon from "@material-ui/icons/ClearOutlined";
 import { generateColor } from "../../helpers/colorGenerator";
 import { getInitials } from "../../helpers/getInitials";
@@ -239,6 +240,25 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
           userId: user?.id
         });
       }
+    } catch (err) {
+      toastError(err);
+      return;
+    }
+
+    setObservationMode(false);
+    history.push(`/tickets/${ticket.uuid || ticket.id}`);
+    setTabOpen("open");
+  };
+
+  const handleReopenTicket = async (id, e) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    try {
+      await api.put(`/tickets/${id}`, {
+        status: "open",
+        userId: user?.id
+      });
     } catch (err) {
       toastError(err);
       return;
@@ -474,6 +494,29 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
                     backgroundColor: green[700],
                     cursor: "pointer",
                     //margin: '0 5 0 5',
+                    padding: 2,
+                    height: 23,
+                    width: 23,
+                    fontSize: 12,
+                    borderRadius: 50,
+                    right: 25,
+                    top: -8,
+                    position: "absolute"
+                  }}
+                />
+              </Tooltip>
+            )}
+
+          {ticket.status === "closed" &&
+            (groupActionButtons || !ticket.isGroup) && (
+              <Tooltip title={i18n.t("messagesList.header.buttons.reopen")}>
+                <ReplayIcon
+                  onClick={e => handleReopenTicket(ticket.id, e)}
+                  fontSize="small"
+                  style={{
+                    color: "#fff",
+                    backgroundColor: blue[700],
+                    cursor: "pointer",
                     padding: 2,
                     height: 23,
                     width: 23,

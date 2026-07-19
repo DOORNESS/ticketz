@@ -24,6 +24,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - WhatsApp QR: removido limite de 3 rotações que apagava credenciais; estado `PAIRING` protege scan; deploy WinRM usa part files isolados
 - WhatsApp pairing: proteção `PAIRING` não deixa mais socket morto (reinicia sessão em QR expirado/conflito/desconexão transitória); `QrcodeModal` força QR novo ao abrir e faz poll a cada 4s
 - Triagem v2 UX: confirmação antes de handoff (`explicar` / `atendente`); resposta a “quem está falando?”; Aceitar handoff via `/ai/assume` (sem 403); tickets handoff na aba Aguardando; reabrir resolvidos para qualquer agente; banner IA some após assumir; áudio outbound (typo `disableOption`)
+- Tickets fechados: barra Reabrir / Reabrir e chamar IA; botão na lista Resolvidos; 403 corrigido (reopen sem dono, agente atribuído abre ticket fora da fila)
 - Suporte Thiago: timeline IA sem 403, fechar ticket com `justClose`, botão Devolver para IA, Chamar IA ativo
 - Deploy VPS: `DEPLOY_MODE=patch` + zip único (`deploy-cache/`), chunks WinRM 2000, health poll (sem sleep 60s)
 - Read receipt WhatsApp adiado quando triagem v2 + IA ativa (`shouldDeferWhatsAppReadReceipt`)
