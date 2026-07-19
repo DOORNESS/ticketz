@@ -77,6 +77,8 @@ PATCH_PATHS = [
     "services/AiServices/AudioPipelineLogger.js",
     "services/AiServices/MediaInboundResolver.js",
     "services/AiServices/ProcessInboundMessageService.js",
+    "services/AiServices/sanitizeAiOutboundText.js",
+    "services/AiServices/AiPromptBuilder.js",
     "services/AiServices/AiTicketActionsService.js",
     "services/AiServices/AiTicketStateService.js",
     "services/AiServices/RepairAiTicketStatesService.js",
@@ -314,6 +316,9 @@ def collect_files() -> List[Path]:
         path = DIST / rel.replace("/", os.sep)
         if not path.is_file():
             raise FileNotFoundError(f"Missing build output: {path}")
+        add(path)
+
+    for path in sorted(DIST.glob("services/AiServices/*.js")):
         add(path)
 
     for pattern in (

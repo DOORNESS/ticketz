@@ -58,6 +58,10 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 - Copiloto: estados loading/empty separados, erro 422 visível, fallback de agente por `aiAgentId`
 - Badge `isAiHandlingTicket` alinhado ao backend (`aiHandoffMode === operational`)
 
+### Corrigido (hotfix deploy)
+
+- `deploy-vps-backend.py`: inclui `sanitizeAiOutboundText.js` e glob `services/AiServices/*.js` no patch (503 por módulo ausente)
+
 ---
 
 ## [1.5.2] — 2026-07-19
