@@ -84,6 +84,7 @@ import { shouldDeferWhatsAppReadReceipt } from "../AiServices/Triage/AiReadRecei
 import { _t } from "../TranslationServices/i18nService";
 import WhatsappLidMap from "../../models/WhatsappLidMap";
 import normalizePhone from "../../helpers/NormalizePhone";
+import { isHumanHandlingTicket } from "../../helpers/ticketHumanHandling";
 
 export interface ImessageUpsert {
   messages: proto.IWebMessageInfo[];
@@ -1186,6 +1187,10 @@ export const startQueue = async (
   queue: Queue = null,
   sendBackToMain = true
 ) => {
+  if (ticket.userId) {
+    return;
+  }
+
   if (!queue) {
     queue = await Queue.findByPk(ticket.queueId, {
       include: [
@@ -1992,6 +1997,14 @@ const handleMessage = async (
     }
 
     try {
+      if (ticket.userId) {
+        if (justCreated && newMessage) {
+          await newMessage.reload();
+          websocketCreateMessage(newMessage);
+        }
+        return;
+      }
+
       if (scheduleType) {
         const aiBypassLegacyBot = await shouldAiBypassLegacyBotMessages(
           ticket,
@@ -2023,7 +2036,9 @@ const handleMessage = async (
         }
 
         const isOpenOnline =
-          ticket.status === "open" && ticket.user.socketSessions.length > 0;
+          isHumanHandlingTicket(ticket) ||
+          (ticket.status === "open" &&
+            (ticket.user?.socketSessions?.length || 0) > 0);
 
         const avoidResend =
           !isOpenOnline && outOfHoursCache.get(`ticket-${ticket.id}`);

@@ -79,15 +79,24 @@ const TicketActionButtonsCustom = ({
   const handleUpdateTicketStatus = async (e, status, userId) => {
     setLoading(true);
     try {
-      await api.put(`/tickets/${ticket.id}`, {
-        status: status,
-        userId: userId || null
-      });
+      let updatedTicket;
+      if (status === "open" && ticket.status === "closed") {
+        const { data } = await api.post(`/tickets/${ticket.id}/reopen`, {
+          releaseToAi: false
+        });
+        updatedTicket = data.ticket;
+      } else {
+        const { data } = await api.put(`/tickets/${ticket.id}`, {
+          status: status,
+          userId: userId ?? null
+        });
+        updatedTicket = data;
+      }
 
       setLoading(false);
       if (status === "open") {
-        setObservationMode(false);
-        setCurrentTicket({ ...ticket, code: "#open" });
+        applyTicketUpdate(updatedTicket);
+        toast.success(i18n.t("closedTicketBar.reopened"));
       } else {
         setObservationMode(false);
         setCurrentTicket({ id: null, code: null });
@@ -185,13 +194,28 @@ const TicketActionButtonsCustom = ({
     }
   };
 
-  const handleCloseTicket = () => {
+  const handleCloseTicket = async () => {
     if (ticket.aiStartedAt && ticket.userId) {
       setLearningModalOpen(true);
       return;
     }
 
-    handleUpdateTicketStatus(null, "closed", user?.id);
+    setLoading(true);
+    try {
+      await api.put(`/tickets/${ticket.id}`, {
+        status: "closed",
+        justClose: true,
+        userId: ticket.userId || user?.id
+      });
+      setObservationMode(false);
+      setCurrentTicket({ id: null, code: null });
+      history.push("/tickets");
+      toast.success(i18n.t("messagesList.header.buttons.resolve"));
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleLearningComplete = () => {

@@ -24,7 +24,8 @@ export const isHandoffPendingTicket = ticket =>
   !ticket?.userId;
 
 export const isHumanHandlingTicket = ticket =>
-  !!ticket?.userId && ticket?.status === "open";
+  !!ticket?.userId &&
+  (ticket?.status === "open" || ticket?.status === "pending");
 
 export const isAiPausedTicket = ticket =>
   !!ticket?.aiPaused && ticket?.status !== "closed";

@@ -47,6 +47,7 @@ PATCH_PATHS = [
     "helpers/buildInfo.js",
     "services/TicketServices/TicketOperationalStateService.js",
     "helpers/assertCanAcceptTicket.js",
+    "helpers/ticketHumanHandling.js",
     "helpers/routeReadiness.js",
     "helpers/mediaConversion.js",
     "models/Message.js",

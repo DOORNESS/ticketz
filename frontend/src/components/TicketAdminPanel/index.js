@@ -13,6 +13,7 @@ import DashboardIcon from "@material-ui/icons/Dashboard";
 import AiExplainabilityPanel from "../AiExplainabilityPanel";
 import TicketAiTimeline from "../Ai/TicketAiTimeline";
 import AiCopilotPanel from "../AiCopilotPanel";
+import { canUserOperateTicket } from "../../helpers/ticketListVisibility";
 
 const useStyles = makeStyles(theme => ({
   drawer: {
@@ -89,7 +90,9 @@ const TicketAdminPanel = ({
         <Divider />
 
         <Box className={classes.section}>
-          <Typography className={classes.sectionTitle}>IA e Copiloto</Typography>
+          <Typography className={classes.sectionTitle}>
+            IA e Copiloto
+          </Typography>
           <Box className={classes.actionRow} mb={1}>
             <Button
               size="small"
@@ -160,7 +163,9 @@ const TicketAdminPanel = ({
             variant="contained"
             color="primary"
             onClick={onOpenRepository}
-            disabled={observationMode || ticket?.status === "closed"}
+            disabled={
+              ticket?.status === "closed" || !canUserOperateTicket(ticket, user)
+            }
           >
             Abrir Repositório
           </Button>

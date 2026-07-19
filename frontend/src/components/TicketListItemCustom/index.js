@@ -46,6 +46,10 @@ import {
   isAiHandlingTicket,
   isHandoffPendingTicket
 } from "../../helpers/aiTicketStatus";
+import {
+  isUserTicketOwner,
+  isTicketObservationMode
+} from "../../helpers/ticketListVisibility";
 
 const useStyles = makeStyles(theme => ({
   ticket: {
@@ -219,12 +223,14 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
       await api.put(`/tickets/${id}`, {
         status: "closed",
         justClose: true,
-        userId: user?.id
+        userId: ticket.userId || user?.id
       });
+      if (String(ticketId) !== String(id)) {
+        history.push(`/tickets/`);
+      }
     } catch (err) {
       toastError(err);
     }
-    history.push(`/tickets/`);
   };
 
   const handleAcceptTicket = async (id, e) => {
@@ -255,28 +261,29 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
       e.stopPropagation();
     }
     try {
-      await api.put(`/tickets/${id}`, {
-        status: "open",
-        userId: user?.id
+      const { data } = await api.post(`/tickets/${id}/reopen`, {
+        releaseToAi: false
       });
+      setObservationMode(false);
+      const routeId = data.ticket?.uuid || data.ticket?.id || ticket.uuid || id;
+      history.push(`/tickets/${routeId}`);
+      setTabOpen("open");
     } catch (err) {
       toastError(err);
-      return;
     }
-
-    setObservationMode(false);
-    history.push(`/tickets/${ticket.uuid || ticket.id}`);
-    setTabOpen("open");
   };
+
+  const canCloseTicket =
+    profile === "admin" ||
+    user?.super ||
+    isUserTicketOwner(ticket, user) ||
+    (ticket.status === "pending" && !ticket.userId);
 
   const handleSelectTicket = selected => {
     const code = uuidv4();
     const { id, uuid } = selected;
     const routeId = uuid || String(id);
-    const observing =
-      (selected.status === "pending" && !selected.userId) ||
-      isAiHandlingTicket(selected) ||
-      isHandoffPendingTicket(selected);
+    const observing = isTicketObservationMode(selected, user);
 
     setObservationMode(observing);
     setCurrentTicket({ id, uuid: routeId, code });
@@ -432,6 +439,7 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
             />
           )}
           {ticket.status === "pending" &&
+            canCloseTicket &&
             (groupActionButtons || !ticket.isGroup) && (
               <Tooltip title={i18n.t("ticketsList.tooltips.closeConversation")}>
                 <ClearOutlinedIcon
@@ -463,6 +471,7 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
             </Tooltip>
           )}
           {ticket.status === "open" &&
+            canCloseTicket &&
             (groupActionButtons || !ticket.isGroup) && (
               <Tooltip title={i18n.t("ticketsList.tooltips.closeConversation")}>
                 <ClearOutlinedIcon

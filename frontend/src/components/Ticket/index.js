@@ -239,7 +239,7 @@ const Ticket = () => {
     };
   }, [ticketId, ticket, history, socketManager, user, setObservationMode]);
 
-  const isObserving = observationMode || isTicketObservationMode(ticket, user);
+  const isObserving = isTicketObservationMode(ticket, user);
 
   const handleDrawerOpen = () => {
     setDrawerOpen(true);

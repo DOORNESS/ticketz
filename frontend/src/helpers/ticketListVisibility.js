@@ -72,16 +72,27 @@ export const shouldShowTicketInList = ({
   return true;
 };
 
+export const isUserTicketOwner = (ticket, user) =>
+  !!ticket?.userId && !!user?.id && Number(ticket.userId) === Number(user.id);
+
+export const canUserOperateTicket = (ticket, user) => {
+  if (!ticket?.id || !user?.id || ticket.status === "closed") {
+    return false;
+  }
+
+  if (isUserTicketOwner(ticket, user)) {
+    return ticket.status === "open";
+  }
+
+  return false;
+};
+
 export const isTicketObservationMode = (ticket, user) => {
   if (!ticket?.id || !user?.id) {
     return false;
   }
 
-  if (
-    ticket.status === "open" &&
-    ticket.userId &&
-    Number(ticket.userId) === Number(user.id)
-  ) {
+  if (isUserTicketOwner(ticket, user)) {
     return false;
   }
 

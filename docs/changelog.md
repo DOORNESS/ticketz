@@ -48,6 +48,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.5] — 2026-07-19
+
+### Corrigido
+
+- Modo observação stale não bloqueia mais atendente dono do ticket (input, repositório, fechar)
+- Mensagens fora do horário não disparam após humano assumir (`ticket.userId` + heal `pending→open`)
+- Fechar/Reabrir: endpoint `/reopen`, permissões e erros traduzidos (`ERR_TICKET_NOT_ASSIGNED`)
+- Assumir da IA usa `aiHandoffMode: operational` (estado consistente pós-handoff)
+
+---
+
 ## [1.5.4] — 2026-07-19
 
 ### Adicionado

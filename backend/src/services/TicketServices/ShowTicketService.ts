@@ -7,6 +7,7 @@ import Tag from "../../models/Tag";
 import Whatsapp from "../../models/Whatsapp";
 import UserSocketSession from "../../models/UserSocketSession";
 import Company from "../../models/Company";
+import { healHumanAssignedTicketStatus } from "../../helpers/ticketHumanHandling";
 
 const ShowTicketService = async (
   id: string | number,
@@ -84,7 +85,7 @@ const ShowTicketService = async (
     throw new AppError("ERR_NO_TICKET_FOUND", 404);
   }
 
-  return ticket;
+  return healHumanAssignedTicketStatus(ticket);
 };
 
 export default ShowTicketService;

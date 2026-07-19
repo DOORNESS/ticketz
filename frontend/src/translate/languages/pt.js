@@ -1266,6 +1266,8 @@ const messages = {
         placeholderOpen: "Digite uma mensagem",
         placeholderClosed:
           "Reabra ou aceite esse ticket para enviar uma mensagem.",
+        placeholderObservation:
+          "Aceite ou assuma este ticket para enviar uma mensagem.",
         signMessage: "Assinar",
         replying: "Respondendo",
         editing: "Editando"
@@ -1417,6 +1419,12 @@ const messages = {
           "Este tipo de conteúdo não pode ser enviado ao cliente.",
         ERR_REPOSITORY_EMPTY_PAYLOAD:
           "Conteúdo vazio — adicione legenda, descrição ou URL antes de enviar.",
+        ERR_FORBIDDEN:
+          "Você não tem permissão para esta ação neste ticket.",
+        ERR_TICKET_NOT_OPEN:
+          "Este ticket não está aberto. Reabra ou aceite antes de enviar mensagens.",
+        ERR_TICKET_NOT_ASSIGNED:
+          "Este ticket não está atribuído a você. Aceite ou assuma o atendimento.",
         ERR_DUPLICATED_CONTACT: "Já existe um contato com este número.",
         ERR_NO_SETTING_FOUND: "Nenhuma configuração encontrada com este ID.",
         ERR_NO_CONTACT_FOUND: "Nenhum contato encontrado com este ID.",

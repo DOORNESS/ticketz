@@ -1,4 +1,11 @@
-import React, { useState, useEffect, useContext, useRef, useImperativeHandle, forwardRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useContext,
+  useRef,
+  useImperativeHandle,
+  forwardRef
+} from "react";
 import withWidth, { isWidthUp } from "@material-ui/core/withWidth";
 import MicRecorder from "mic-recorder-to-mp3";
 import clsx from "clsx";
@@ -58,6 +65,7 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faSignature } from "@fortawesome/free-solid-svg-icons";
 import { isMobile } from "../../helpers/isMobile";
 import { SocketContext } from "../../context/Socket/SocketContext";
+import { canUserOperateTicket } from "../../helpers/ticketListVisibility";
 
 const Mp3Recorder = new MicRecorder({ bitRate: 128 });
 
@@ -400,7 +408,8 @@ const CustomInput = props => {
     handleInputPaste,
     handleChangeMedias,
     handlePresenceUpdate,
-    disableOption
+    disableOption,
+    placeholder
   } = props;
   const classes = useStyles();
   const [quickMessages, setQuickMessages] = useState([]);
@@ -477,6 +486,9 @@ const CustomInput = props => {
   };
 
   const renderPlaceholder = () => {
+    if (props.placeholder) {
+      return props.placeholder;
+    }
     if (ticketStatus === "open") {
       return i18n.t("messagesInput.placeholderOpen");
     }
@@ -932,8 +944,15 @@ const MessageInputCustom = forwardRef((props, ref) => {
   }));
 
   const isGroup = showTabGroups && ticket.isGroup;
-  const disableOption =
-    (!isGroup && loading) || ticketStatus === "closed" || props.observationMode;
+  const userCanSend = isGroup
+    ? ticketStatus !== "closed"
+    : canUserOperateTicket(ticket, user);
+  const disableOption = loading || !userCanSend;
+  const inputPlaceholder = userCanSend
+    ? i18n.t("messagesInput.placeholderOpen")
+    : props.observationMode
+      ? i18n.t("messagesInput.placeholderObservation")
+      : i18n.t("messagesInput.placeholderClosed");
 
   const handleUploadMedia = async e => {
     if (disableOption || !medias.length) return;
@@ -1227,7 +1246,7 @@ const MessageInputCustom = forwardRef((props, ref) => {
             handleChangeMedias={handleChangeMedias}
           />
 
-          {!props.observationMode && ticket?.userId && ticketStatus === "open" && (
+          {!props.observationMode && userCanSend && (
             <>
               <Tooltip title="Sugerir resposta com IA">
                 <IconButton
@@ -1248,10 +1267,7 @@ const MessageInputCustom = forwardRef((props, ref) => {
                 </IconButton>
               </Tooltip>
               <Tooltip title="Painel administrativo">
-                <IconButton
-                  size="small"
-                  onClick={onOpenAdminPanel}
-                >
+                <IconButton size="small" onClick={onOpenAdminPanel}>
                   <DashboardIcon />
                 </IconButton>
               </Tooltip>
@@ -1277,6 +1293,7 @@ const MessageInputCustom = forwardRef((props, ref) => {
             handleChangeMedias={handleChangeMedias}
             handlePresenceUpdate={handlePresenceUpdate}
             disableOption={disableOption}
+            placeholder={inputPlaceholder}
           />
 
           <ActionButtons

@@ -49,7 +49,7 @@ export const assumeTicketFromBot = async ({
       status: "open",
       userId: user.id,
       aiHandoff: true,
-      aiHandoffMode: "definitive",
+      aiHandoffMode: "operational",
       aiHandoffOriginalReason:
         ticket.aiHandoffOriginalReason || ticket.aiHandoffReason,
       aiHandoffReason: AI_HANDOFF_REASONS.manual_takeover,

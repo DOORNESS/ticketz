@@ -48,7 +48,9 @@ export const buildTicketOperationalState = (
 
   const aiActive = isAiHandlingTicket(ticket);
   const handoffPending = isHandoffPendingTicketState(ticket);
-  const humanHandling = !!ticket.userId && ticket.status === "open";
+  const humanHandling =
+    !!ticket.userId &&
+    (ticket.status === "open" || ticket.status === "pending");
   const viewerIsOwner =
     !!viewerUserId && Number(ticket.userId) === Number(viewerUserId);
 

@@ -9,6 +9,7 @@ import {
   isAiHandlingTicket,
   isHandoffPendingTicket
 } from "../../helpers/aiTicketStatus";
+import { canUserOperateTicket } from "../../helpers/ticketListVisibility";
 
 const useStyles = makeStyles(theme => ({
   root: {
@@ -51,8 +52,7 @@ const TicketConversationToolbar = ({
   const handoffActive = isHandoffPendingTicket(ticket);
   const canUseRepository =
     ticket?.status !== "closed" &&
-    (!observationMode ||
-      (ticket?.userId && Number(ticket.userId) === Number(user?.id)));
+    (canUserOperateTicket(ticket, user) || isAiHandlingTicket(ticket));
 
   return (
     <Box className={classes.root}>

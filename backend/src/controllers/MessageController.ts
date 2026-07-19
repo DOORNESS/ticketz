@@ -136,6 +136,32 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   const ticket = await ShowTicketService(ticketId, companyId);
   const { channel } = ticket;
+
+  if (!ticket.isGroup && ticket.status !== "open" && channel === "whatsapp") {
+    throw new AppError("ERR_TICKET_NOT_OPEN", 400);
+  }
+
+  const requestUser = await User.findByPk(userId);
+  if (
+    !ticket.isGroup &&
+    ticket.userId &&
+    Number(ticket.userId) !== Number(userId) &&
+    requestUser?.profile !== "admin" &&
+    !requestUser?.super
+  ) {
+    throw new AppError("ERR_TICKET_NOT_ASSIGNED", 403);
+  }
+
+  if (
+    !ticket.isGroup &&
+    !ticket.userId &&
+    ticket.status === "open" &&
+    requestUser?.profile !== "admin" &&
+    !requestUser?.super
+  ) {
+    throw new AppError("ERR_TICKET_NOT_ASSIGNED", 403);
+  }
+
   if (channel === "whatsapp") {
     await SetTicketMessagesAsRead(ticket);
     if (!ticket.isGroup) {
