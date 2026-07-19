@@ -31,7 +31,8 @@ const AI_MIGRATION_NAMES = new Set([
   "20260725100000-ai-phase2-knowledge-cms",
   "20260730100000-ai-phase3-memory-tools",
   "20260815100000-ai-phase4-operations-observability",
-  "20260818100000-ai-phase34-consolidation"
+  "20260818100000-ai-phase34-consolidation",
+  "20260719100000-ai-triage-v2-professional-flow"
 ]);
 
 const listMigrationFiles = (): string[] => {
