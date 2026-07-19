@@ -43,11 +43,24 @@ const QrcodeModal = ({ open, onClose, whatsAppId, connectorReady = false }) => {
   useEffect(() => {
     if (!open || !whatsAppId) return undefined;
 
+    const refreshSession = async () => {
+      try {
+        await api.put(`/whatsappsession/${whatsAppId}`);
+      } catch (err) {
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
+      }
+    };
+
     const fetchSession = async () => {
       try {
         const { data } = await api.get(`/whatsapp/${whatsAppId}`);
         if (data.status === "qrcode" && data.qrcode) {
           setQrCode(data.qrcode);
+        }
+        if (data.status === "CONNECTED") {
+          onClose();
         }
       } catch (err) {
         if (err?.response?.status !== 403) {
@@ -56,10 +69,12 @@ const QrcodeModal = ({ open, onClose, whatsAppId, connectorReady = false }) => {
       }
     };
 
-    fetchSession();
+    setQrCode("");
+    refreshSession();
+    const poll = setInterval(fetchSession, 4000);
 
-    return undefined;
-  }, [open, whatsAppId]);
+    return () => clearInterval(poll);
+  }, [open, whatsAppId, onClose]);
 
   useEffect(() => {
     if (!whatsAppId) return;

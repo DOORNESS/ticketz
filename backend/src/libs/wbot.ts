@@ -482,22 +482,17 @@ export const initWASocket = async (
                 const keyCount = await BaileysKeys.count({
                   where: { whatsappId: id }
                 });
-
-                if (pairingProtected || whatsapp.status === "PAIRING") {
-                  logger.info(
-                    { whatsappId: id, statusCode },
-                    `Session QR expired during pairing — keeping socket alive for ${name}`
-                  );
-                  return;
-                }
+                const pairingWait =
+                  pairingProtected || whatsapp.status === "PAIRING" ? 8000 : 12000;
 
                 logger.info(
-                  { whatsappId: id, statusCode, keyCount },
+                  { whatsappId: id, statusCode, keyCount, pairingWait },
                   `Session QR expired — refreshing QR for ${name}`
                 );
                 await removeWbot(id, false);
                 await whatsapp.update({
                   status: "OPENING",
+                  qrcode: "",
                   retries: 0
                 });
                 await whatsapp.reload();
@@ -508,27 +503,23 @@ export const initWASocket = async (
                     session: whatsapp
                   }
                 );
-                scheduleSessionRestart(whatsapp, 12000, keyCount > 0);
+                scheduleSessionRestart(whatsapp, pairingWait, keyCount > 0);
                 return;
               }
 
               if (isConflict) {
-                if (pairingProtected || whatsapp.status === "PAIRING") {
-                  logger.warn(
-                    { whatsappId: id, statusCode },
-                    `Session conflict during pairing — waiting for ${name}`
-                  );
-                  return;
-                }
+                const pairingWait =
+                  pairingProtected || whatsapp.status === "PAIRING" ? 10000 : 15000;
                 logger.warn(
-                  { whatsappId: id, statusCode },
-                  `Session conflict — reconnecting with existing creds for ${name}`
+                  { whatsappId: id, statusCode, pairingWait },
+                  `Session conflict — scheduling reconnect for ${name}`
                 );
                 cancelSessionRestart(id);
                 await removeWbot(id, false);
                 await whatsapp.update({
-                  status: "PENDING",
-                  qrcode: ""
+                  status: "OPENING",
+                  qrcode: "",
+                  retries: 0
                 });
                 await whatsapp.reload();
                 io.to(`company-${whatsapp.companyId}-admin`).emit(
@@ -538,20 +529,17 @@ export const initWASocket = async (
                     session: whatsapp
                   }
                 );
-                scheduleSessionRestart(whatsapp, 15000, true);
+                scheduleSessionRestart(whatsapp, pairingWait, false);
                 return;
               }
 
               if (statusCode !== DisconnectReason.loggedOut) {
-                if (pairingProtected || whatsapp.status === "PAIRING") {
-                  logger.info(
-                    { whatsappId: id, statusCode },
-                    `Transient disconnect during pairing — no restart for ${name}`
-                  );
-                  return;
-                }
-                // connection dropped without logging out
-                await whatsapp.update({ status: "PENDING" });
+                const pairingWait =
+                  pairingProtected || whatsapp.status === "PAIRING" ? 8000 : 8000;
+                await whatsapp.update({
+                  status: pairingProtected ? "OPENING" : "PENDING",
+                  qrcode: pairingProtected ? "" : whatsapp.qrcode
+                });
                 await whatsapp.reload();
                 io.to(`company-${whatsapp.companyId}-admin`).emit(
                   `company-${whatsapp.companyId}-whatsappSession`,
@@ -562,9 +550,9 @@ export const initWASocket = async (
                 );
                 removeWbot(id, false).then(() => {
                   logger.info(
-                    `Reconnecting ${name} after transient disconnect`
+                    `Reconnecting ${name} after transient disconnect (${pairingWait}ms)`
                   );
-                  scheduleSessionRestart(whatsapp, 8000, true);
+                  scheduleSessionRestart(whatsapp, pairingWait, false);
                 });
               } else {
                 // logged out
