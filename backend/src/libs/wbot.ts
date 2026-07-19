@@ -284,7 +284,6 @@ export const initWASocket = async (
         logger.info(`using WA v${version.join(".")}`);
         logger.info(`isLegacy: ${isLegacy}`);
         logger.info(`Starting session ${name}`);
-        let retriesQrCode = 0;
         let initResolved = false;
 
         let wsocket: Session = null;
@@ -473,14 +472,28 @@ export const initWASocket = async (
               }
 
               if (statusCode === 428) {
+                cancelSessionRestart(id);
+                await whatsapp.reload();
+                const keyCount = await BaileysKeys.count({
+                  where: { whatsappId: id }
+                });
+
+                if (whatsapp.status === "PAIRING") {
+                  logger.info(
+                    { whatsappId: id, statusCode },
+                    `Session QR expired during pairing — deferring restart for ${name}`
+                  );
+                  scheduleSessionRestart(whatsapp, 20000, keyCount > 0);
+                  return;
+                }
+
                 logger.info(
-                  { whatsappId: id, statusCode },
+                  { whatsappId: id, statusCode, keyCount },
                   `Session QR expired — refreshing QR for ${name}`
                 );
                 await removeWbot(id, false);
                 await whatsapp.update({
                   status: "OPENING",
-                  qrcode: "",
                   retries: 0
                 });
                 await whatsapp.reload();
@@ -491,7 +504,7 @@ export const initWASocket = async (
                     session: whatsapp
                   }
                 );
-                scheduleSessionRestart(whatsapp, 5000, true);
+                scheduleSessionRestart(whatsapp, 12000, keyCount > 0);
                 return;
               }
 
@@ -552,6 +565,19 @@ export const initWASocket = async (
                   }
                 );
               }
+            }
+
+            if (connection === "connecting") {
+              cancelSessionRestart(id);
+              await whatsapp.update({ status: "PAIRING" });
+              await whatsapp.reload();
+              io.to(`company-${whatsapp.companyId}-admin`).emit(
+                `company-${whatsapp.companyId}-whatsappSession`,
+                {
+                  action: "update",
+                  session: whatsapp
+                }
+              );
             }
 
             if (connection === "open") {
@@ -653,51 +679,34 @@ export const initWASocket = async (
             }
 
             if (qr !== undefined) {
-              if (retriesQrCodeMap.get(id) && retriesQrCodeMap.get(id) >= 3) {
-                await whatsappUpdate.update({
-                  status: "DISCONNECTED",
-                  qrcode: ""
-                });
-                await DeleteBaileysService(whatsappUpdate.id);
-                io.emit("whatsappSession", {
+              logger.info(`Session QRCode Generate ${name}`);
+
+              await whatsapp.update({
+                qrcode: qr,
+                status: "qrcode",
+                retries: 0
+              });
+              await whatsapp.reload();
+              const sessionIndex = sessions.findIndex(
+                s => s.id === whatsapp.id
+              );
+
+              if (sessionIndex === -1) {
+                wsocket.id = whatsapp.id;
+                sessions.push(wsocket);
+              }
+
+              io.to(`company-${whatsapp.companyId}-admin`).emit(
+                `company-${whatsapp.companyId}-whatsappSession`,
+                {
                   action: "update",
-                  session: whatsappUpdate
-                });
-                wsocket.ev.removeAllListeners("connection.update");
-                wsocket.ws.close();
-                wsocket = null;
-                retriesQrCodeMap.delete(id);
-              } else {
-                logger.info(`Session QRCode Generate ${name}`);
-                retriesQrCodeMap.set(id, (retriesQrCode += 1));
-
-                await whatsapp.update({
-                  qrcode: qr,
-                  status: "qrcode",
-                  retries: 0
-                });
-                await whatsapp.reload();
-                const sessionIndex = sessions.findIndex(
-                  s => s.id === whatsapp.id
-                );
-
-                if (sessionIndex === -1) {
-                  wsocket.id = whatsapp.id;
-                  sessions.push(wsocket);
+                  session: whatsapp
                 }
+              );
 
-                io.to(`company-${whatsapp.companyId}-admin`).emit(
-                  `company-${whatsapp.companyId}-whatsappSession`,
-                  {
-                    action: "update",
-                    session: whatsapp
-                  }
-                );
-
-                if (!initResolved) {
-                  initResolved = true;
-                  resolve(wsocket);
-                }
+              if (!initResolved) {
+                initResolved = true;
+                resolve(wsocket);
               }
             }
           }

@@ -50,14 +50,15 @@ const QrcodeModal = ({ open, onClose, whatsAppId, connectorReady = false }) => {
           setQrCode(data.qrcode);
         }
       } catch (err) {
-        toastError(err);
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       }
     };
 
     fetchSession();
-    const poll = setInterval(fetchSession, 3000);
 
-    return () => clearInterval(poll);
+    return undefined;
   }, [open, whatsAppId]);
 
   useEffect(() => {
