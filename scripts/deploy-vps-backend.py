@@ -91,6 +91,7 @@ PATCH_PATHS = [
     "libs/wbot.js",
     "helpers/bufferToReadStreamTmp.js",
     "services/WbotServices/StartWhatsAppSession.js",
+    "services/WbotServices/StartAllWhatsAppsSessions.js",
     "services/WbotServices/WhatsAppSessionWatchdogService.js",
 ]
 
@@ -141,10 +142,11 @@ Remove-Item '{tmp_path}' -Force -ErrorAction SilentlyContinue
     total_chunks = (len(b64) + CHUNK - 1) // CHUNK
     for idx, i in enumerate(range(0, len(b64), CHUNK), start=1):
         chunk = b64[i : i + CHUNK].replace("'", "''")
-        code, _, err = run_ps(
-            s,
-            f"Add-Content -Path '{b64_path}' -Value '{chunk}' -NoNewline",
-        )
+        if idx == 1:
+            write_ps = f"[IO.File]::WriteAllText('{b64_path}', '{chunk}')"
+        else:
+            write_ps = f"[IO.File]::AppendAllText('{b64_path}', '{chunk}')"
+        code, _, err = run_ps(s, write_ps)
         if code != 0:
             raise RuntimeError(
                 f"Chunk {idx}/{total_chunks} upload failed for {local_path}: {err}"
