@@ -341,6 +341,7 @@ const Ticket = () => {
         open={adminPanelOpen}
         onClose={() => setAdminPanelOpen(false)}
         ticket={ticket}
+        user={user}
         observationMode={isObserving}
         onOpenRepository={() => {
           setAdminPanelOpen(false);

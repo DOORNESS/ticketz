@@ -56,7 +56,7 @@ const TicketAdminPanel = ({
   open,
   onClose,
   ticket,
-  observationMode,
+  user,
   onOpenRepository,
   actionButtons
 }) => {
