@@ -16,6 +16,7 @@ import {
   generateKnowledgeSuggestion,
   getKnowledgeSuggestionForTicket
 } from "../services/AiServices/AiKnowledgeSuggestionService";
+import { transcribeTicketMessage } from "../services/AiServices/AiManualTranscriptionService";
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import formatBody from "../helpers/Mustache";
 import User from "../models/User";
@@ -152,6 +153,26 @@ export const copilotAction = async (
   }
 
   return res.status(200).json({ success: true });
+};
+
+export const transcribeMessage = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticket, user } = await loadTicketForUser(req);
+  const { messageId } = req.body || {};
+
+  if (!messageId) {
+    throw new AppError("ERR_INVALID_TRANSCRIBE_REQUEST", 400);
+  }
+
+  const result = await transcribeTicketMessage({
+    ticket,
+    messageId: String(messageId),
+    user
+  });
+
+  return res.status(200).json(result);
 };
 
 export const knowledgeSuggestion = async (

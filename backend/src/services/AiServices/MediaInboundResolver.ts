@@ -165,6 +165,7 @@ export const resolveInboundMessageText = async ({
   }
 
   if (message.mediaType === "audio") {
+    await ticket.reload();
     const transcriptionPolicy = await evaluateAudioTranscriptionPolicy({
       ticket,
       messageId: message.messageId

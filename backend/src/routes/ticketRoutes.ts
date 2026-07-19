@@ -75,6 +75,13 @@ ticketRoutes.post(
   TicketAiController.copilotAction
 );
 
+ticketRoutes.post(
+  "/tickets/:ticketId/ai/transcribe",
+  isAuth,
+  isCompliant,
+  TicketAiController.transcribeMessage
+);
+
 ticketRoutes.get(
   "/tickets/:ticketId/ai/knowledge-suggestion",
   isAuth,

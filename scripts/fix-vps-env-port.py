@@ -20,7 +20,9 @@ if (Test-Path $backup) { Copy-Item $backup $envFile -Force }
 $c = Get-Content $envFile -Raw -EA SilentlyContinue
 if (-not $c) { Write-Output 'env missing'; exit 1 }
 if ($c -notmatch '(?m)^PORT=') { $c = "PORT=8080`n" + $c }
-if ($c -match '(?m)^HOST=') { $c = $c -replace '(?m)^HOST=.*','HOST=127.0.0.1' } else { $c = "HOST=127.0.0.1`n" + $c }
+if ($c -notmatch '(?m)^HOST=') { $c = "HOST=127.0.0.1`n" + $c } else { $c = $c -replace '(?m)^HOST=.*','HOST=127.0.0.1' }
+if ($c -notmatch '(?m)^FRONTEND_URL=') { $c += "`nFRONTEND_URL=https://suporte.fortmax.com.br`n" } else { $c = $c -replace '(?m)^FRONTEND_URL=.*','FRONTEND_URL=https://suporte.fortmax.com.br' }
+if ($c -notmatch '(?m)^BACKEND_URL=') { $c += "BACKEND_URL=https://api.fortmax.com.br`n" } else { $c = $c -replace '(?m)^BACKEND_URL=.*','BACKEND_URL=https://api.fortmax.com.br' }
 if ($c -notmatch '(?m)^TURNSTILE_ENABLED=') { $c += "`nTURNSTILE_ENABLED=true`n" }
 if ($c -notmatch '(?m)^TURNSTILE_SITE_KEY=') { $c += "TURNSTILE_SITE_KEY=0x4AAAAAADhSILt9PsBiVeID`n" }
 if ($c -notmatch '(?m)^TURNSTILE_SECRET_KEY=') { $c += "TURNSTILE_SECRET_KEY=0x4AAAAAADhSIMRIuil81syEGDWePGiCHeE`n" }
@@ -38,6 +40,8 @@ $Root = 'C:\ticketz'
 cd /d C:\ticketz\backend
 set HOST=127.0.0.1
 set PORT=8080
+set FRONTEND_URL=https://suporte.fortmax.com.br
+set BACKEND_URL=https://api.fortmax.com.br
 node dist\server.js
 '@ | Set-Content "$Root\start-backend.cmd" -Encoding ASCII
 @'
@@ -45,6 +49,8 @@ node dist\server.js
 cd /d C:\ticketz\backend
 set HOST=127.0.0.1
 set PORT=8080
+set FRONTEND_URL=https://suporte.fortmax.com.br
+set BACKEND_URL=https://api.fortmax.com.br
 :loop
 node dist\server.js 1>> ..\logs\backend.log 2>> ..\logs\backend.err.log
 timeout /t 5 /nobreak >nul
