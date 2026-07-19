@@ -4,6 +4,7 @@
 import base64
 import hashlib
 import os
+import random
 import sys
 import time
 import zipfile
@@ -127,7 +128,7 @@ def upload_file(s, local_path: Path, remote_path: str) -> None:
     data = local_path.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     b64 = base64.b64encode(data).decode("ascii")
-    upload_id = int(time.time())
+    upload_id = f"{int(time.time())}-{os.getpid()}-{random.randint(1000, 9999)}"
     b64_dir = rf"C:\ticketz\deploy-cache\upload-{upload_id}"
     tmp_path = f"{remote_path}.new"
     expected_b64_len = len(b64)
@@ -135,6 +136,8 @@ def upload_file(s, local_path: Path, remote_path: str) -> None:
     run_ps(
         s,
         f"""
+Get-ChildItem 'C:\\ticketz\\deploy-cache\\upload-*' -ErrorAction SilentlyContinue |
+  Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item '{b64_dir}' -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item '{tmp_path}' -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path '{b64_dir}' | Out-Null
@@ -167,6 +170,9 @@ if ((Get-Item '{part_path}').Length -ne {len(chunk)}) {{
         s,
         f"""
 $parts = Get-ChildItem '{b64_dir}\\part*.txt' | Sort-Object Name
+if ($parts.Count -ne {total_chunks}) {{
+  throw "part count mismatch expected={total_chunks} got=$($parts.Count)"
+}}
 $b64raw = -join ($parts | ForEach-Object {{
   [IO.File]::ReadAllText($_.FullName, [Text.UTF8Encoding]::new($false))
 }})
