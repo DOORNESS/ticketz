@@ -23,6 +23,7 @@ import formatBody from "../helpers/Mustache";
 import User from "../models/User";
 import Ticket from "../models/Ticket";
 import { listToolExecutionLogs } from "../services/AiServices/tools/ToolExecutorService";
+import canAccessTicketAiData from "../helpers/canAccessTicketAiData";
 
 const loadTicketForUser = async (req: Request) => {
   const { ticketId } = req.params;
@@ -35,20 +36,6 @@ const loadTicketForUser = async (req: Request) => {
   }
 
   return { ticket, user };
-};
-
-const canAccessTicketAiData = (ticket: Ticket, user: User): boolean => {
-  if (user.profile === "admin" || user.super) {
-    return true;
-  }
-
-  if (ticket.userId && ticket.userId === user.id) {
-    return true;
-  }
-
-  return (
-    !ticket.userId && Boolean(ticket.aiAgentId || ticket.aiHandoff)
-  );
 };
 
 export const toolExecutions = async (
@@ -127,6 +114,10 @@ export const copilot = async (
 ): Promise<Response> => {
   const { ticket, user } = await loadTicketForUser(req);
   const { instruction, refresh } = req.body || {};
+
+  if (!canAccessTicketAiData(ticket, user)) {
+    throw new AppError("ERR_FORBIDDEN", 403);
+  }
 
   if (refresh || instruction) {
     const suggestion = await generateCopilotSuggestion({

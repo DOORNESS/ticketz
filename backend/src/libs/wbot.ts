@@ -84,6 +84,9 @@ const sessions: Session[] = [];
 const retriesQrCodeMap = new Map<number, number>();
 const sessionRestartAt = new Map<number, number>();
 const sessionRestartTimers = new Map<number, NodeJS.Timeout>();
+const pairingProtectedUntil = new Map<number, number>();
+
+const PAIRING_PROTECT_MS = 120000;
 
 const MIN_SESSION_RESTART_MS = 8000;
 
@@ -446,6 +449,8 @@ export const initWASocket = async (
             if (connection === "close") {
               const disconnectError = lastDisconnect?.error as Boom | undefined;
               const statusCode = disconnectError?.output?.statusCode;
+              const pairingProtected =
+                Date.now() < (pairingProtectedUntil.get(id) || 0);
               const isConflict =
                 statusCode === 440 ||
                 JSON.stringify(lastDisconnect?.error ?? "")
@@ -478,12 +483,11 @@ export const initWASocket = async (
                   where: { whatsappId: id }
                 });
 
-                if (whatsapp.status === "PAIRING") {
+                if (pairingProtected || whatsapp.status === "PAIRING") {
                   logger.info(
                     { whatsappId: id, statusCode },
-                    `Session QR expired during pairing — deferring restart for ${name}`
+                    `Session QR expired during pairing — keeping socket alive for ${name}`
                   );
-                  scheduleSessionRestart(whatsapp, 20000, keyCount > 0);
                   return;
                 }
 
@@ -509,6 +513,13 @@ export const initWASocket = async (
               }
 
               if (isConflict) {
+                if (pairingProtected || whatsapp.status === "PAIRING") {
+                  logger.warn(
+                    { whatsappId: id, statusCode },
+                    `Session conflict during pairing — waiting for ${name}`
+                  );
+                  return;
+                }
                 logger.warn(
                   { whatsappId: id, statusCode },
                   `Session conflict — reconnecting with existing creds for ${name}`
@@ -532,6 +543,13 @@ export const initWASocket = async (
               }
 
               if (statusCode !== DisconnectReason.loggedOut) {
+                if (pairingProtected || whatsapp.status === "PAIRING") {
+                  logger.info(
+                    { whatsappId: id, statusCode },
+                    `Transient disconnect during pairing — no restart for ${name}`
+                  );
+                  return;
+                }
                 // connection dropped without logging out
                 await whatsapp.update({ status: "PENDING" });
                 await whatsapp.reload();
@@ -569,6 +587,7 @@ export const initWASocket = async (
 
             if (connection === "connecting") {
               cancelSessionRestart(id);
+              pairingProtectedUntil.set(id, Date.now() + PAIRING_PROTECT_MS);
               await whatsapp.update({ status: "PAIRING" });
               await whatsapp.reload();
               io.to(`company-${whatsapp.companyId}-admin`).emit(
@@ -583,6 +602,7 @@ export const initWASocket = async (
             if (connection === "open") {
               cancelSessionRestart(id);
               retriesQrCodeMap.delete(id);
+              pairingProtectedUntil.delete(id);
 
               wsocket.fetchAccountReachoutTimelock().then(timelock => {
                 handleReachoutTimelock(timelock, { timelock });

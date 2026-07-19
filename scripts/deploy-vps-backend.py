@@ -45,6 +45,7 @@ PATCH_PATHS = [
     "helpers/servePublicMedia.js",
     "helpers/mediaStorage.js",
     "helpers/buildInfo.js",
+    "helpers/canAccessTicketAiData.js",
     "helpers/routeReadiness.js",
     "helpers/mediaConversion.js",
     "models/Message.js",

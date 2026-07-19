@@ -77,7 +77,9 @@ const AiCopilotPanel = ({ ticket }) => {
         );
         setSuggestion(data?.suggestion || null);
       } catch (err) {
-        toastError(err);
+        if (err?.response?.status !== 403) {
+          toastError(err);
+        }
       } finally {
         setLoading(false);
       }
