@@ -118,7 +118,16 @@ export const sendRepositoryItemToTicket = async (
       ticket,
       userId: input.sentByAi ? null : input.userId
     });
-    await recordRepositoryUsage(item);
+    await recordRepositoryUsage({
+      item,
+      companyId: input.companyId,
+      ticketId: input.ticketId,
+      userId: input.sentByAi ? null : input.userId,
+      channel: ticket.channel,
+      source: input.sentByAi ? "ai" : "human",
+      aiAgentId: input.aiAgentId,
+      success: true
+    });
     await logRepositorySend(input, item, "text");
     return { item, messageType: "text" };
   }
@@ -150,7 +159,16 @@ export const sendRepositoryItemToTicket = async (
     }
   }
 
-  await recordRepositoryUsage(item);
+  await recordRepositoryUsage({
+    item,
+    companyId: input.companyId,
+    ticketId: input.ticketId,
+    userId: input.sentByAi ? null : input.userId,
+    channel: ticket.channel,
+    source: input.sentByAi ? "ai" : "human",
+    aiAgentId: input.aiAgentId,
+    success: true
+  });
   await logRepositorySend(input, item, "media");
   return { item, messageType: "media" };
 };

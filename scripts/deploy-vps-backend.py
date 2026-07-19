@@ -67,6 +67,7 @@ PATCH_PATHS = [
     "services/TicketServices/UpdateTicketService.js",
     "services/TicketServices/ListTicketsService.js",
     "services/TicketServices/ReopenTicketFromCustomerMessageService.js",
+    "services/TicketServices/ReopenClosedTicketManuallyService.js",
     "helpers/CheckContactOpenTickets.js",
     "services/WbotServices/wbotMessageListener.js",
     "services/WbotServices/SendWhatsAppMedia.js",
@@ -100,6 +101,19 @@ PATCH_PATHS = [
     "services/WbotServices/StartWhatsAppSession.js",
     "services/WbotServices/StartAllWhatsAppsSessions.js",
     "services/WbotServices/WhatsAppSessionWatchdogService.js",
+    "models/ContentRepositoryItem.js",
+    "models/ContentRepositoryItemVersion.js",
+    "models/ContentRepositoryFavorite.js",
+    "models/ContentRepositoryCategory.js",
+    "models/ContentRepositoryUsageLog.js",
+    "models/ContentRepositoryPermission.js",
+    "controllers/ContentRepositoryController.js",
+    "routes/aiRoutes.js",
+    "services/ContentRepository/ContentRepositoryService.js",
+    "services/ContentRepository/ContentRepositoryPermissionService.js",
+    "services/ContentRepository/SendContentRepositoryItemService.js",
+    "services/AiServices/Tools/SearchRepositoryTool.js",
+    "services/AiServices/Tools/registerPilotTools.js",
 ]
 
 

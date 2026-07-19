@@ -1,5 +1,11 @@
 import React, { useContext, useState } from "react";
-import { Box, Typography, makeStyles } from "@material-ui/core";
+import {
+  Box,
+  CircularProgress,
+  IconButton,
+  Tooltip,
+  makeStyles
+} from "@material-ui/core";
 import { Android, Replay } from "@material-ui/icons";
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
@@ -7,32 +13,21 @@ import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import { toast } from "react-toastify";
-import ButtonWithSpinner from "../ButtonWithSpinner";
 
 const useStyles = makeStyles(theme => ({
   root: {
-    padding: theme.spacing(1.5, 2),
-    backgroundColor: theme.palette.type === "dark" ? "#1b2838" : "#e3f2fd",
-    borderBottom: `1px solid ${theme.palette.divider}`,
     display: "flex",
-    flexWrap: "wrap",
     alignItems: "center",
-    gap: theme.spacing(1)
-  },
-  text: {
-    flex: 1,
-    minWidth: 200
-  },
-  actions: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: theme.spacing(1)
+    justifyContent: "flex-end",
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(0.25, 1),
+    borderBottom: `1px solid ${theme.palette.divider}`,
+    minHeight: 36
   }
 }));
 
 const ClosedTicketBar = ({ ticket, onReopened }) => {
   const classes = useStyles();
-  const { user } = useContext(AuthContext);
   const { setObservationMode } = useContext(TicketsContext);
   const [loading, setLoading] = useState(false);
 
@@ -43,24 +38,13 @@ const ClosedTicketBar = ({ ticket, onReopened }) => {
   const handleReopen = async (releaseToAi = false) => {
     setLoading(true);
     try {
-      const { data: fresh } = await api.get(`/tickets/${ticket.id}`);
-
-      if (fresh.status !== "closed") {
-        if (onReopened) {
-          onReopened(fresh);
-        }
-        setObservationMode(false);
-        toast.success(i18n.t("closedTicketBar.alreadyOpen"));
-        return;
-      }
-
-      const { data } = await api.put(`/tickets/${ticket.id}`, {
-        status: "open",
-        userId: user?.id
+      const { data } = await api.post(`/tickets/${ticket.id}/reopen`, {
+        releaseToAi
       });
 
-      if (releaseToAi) {
-        await api.post(`/tickets/${ticket.id}/ai/release`);
+      if (data.alreadyOpen) {
+        toast.success(i18n.t("closedTicketBar.alreadyOpen"));
+      } else if (data.releasedToAi) {
         setObservationMode(true);
         toast.success(i18n.t("closedTicketBar.reopenedWithAi"));
       } else {
@@ -68,8 +52,8 @@ const ClosedTicketBar = ({ ticket, onReopened }) => {
         toast.success(i18n.t("closedTicketBar.reopened"));
       }
 
-      if (onReopened) {
-        onReopened(releaseToAi ? { ...data, userId: null } : data);
+      if (onReopened && data.ticket) {
+        onReopened(data.ticket);
       }
     } catch (err) {
       toastError(err);
@@ -80,31 +64,33 @@ const ClosedTicketBar = ({ ticket, onReopened }) => {
 
   return (
     <Box className={classes.root}>
-      <Typography className={classes.text} variant="body2">
-        {i18n.t("closedTicketBar.message")}
-      </Typography>
-      <Box className={classes.actions}>
-        <ButtonWithSpinner
-          loading={loading}
-          size="small"
-          variant="contained"
-          color="primary"
-          startIcon={<Replay />}
-          onClick={() => handleReopen(false)}
-        >
-          {i18n.t("messagesList.header.buttons.reopen")}
-        </ButtonWithSpinner>
-        <ButtonWithSpinner
-          loading={loading}
-          size="small"
-          variant="outlined"
-          color="primary"
-          startIcon={<Android />}
-          onClick={() => handleReopen(true)}
-        >
-          {i18n.t("closedTicketBar.reopenWithAi")}
-        </ButtonWithSpinner>
-      </Box>
+      <Tooltip title={i18n.t("messagesList.header.buttons.reopen")}>
+        <span>
+          <IconButton
+            size="small"
+            color="primary"
+            disabled={loading}
+            onClick={() => handleReopen(false)}
+          >
+            {loading ? (
+              <CircularProgress size={18} />
+            ) : (
+              <Replay fontSize="small" />
+            )}
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title={i18n.t("closedTicketBar.reopenWithAi")}>
+        <span>
+          <IconButton
+            size="small"
+            disabled={loading}
+            onClick={() => handleReopen(true)}
+          >
+            <Android fontSize="small" />
+          </IconButton>
+        </span>
+      </Tooltip>
     </Box>
   );
 };

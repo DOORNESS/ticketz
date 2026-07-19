@@ -69,6 +69,9 @@ import AiTicketTimelineEvent from "../models/AiTicketTimelineEvent";
 import ContentRepositoryItem from "../models/ContentRepositoryItem";
 import ContentRepositoryItemVersion from "../models/ContentRepositoryItemVersion";
 import ContentRepositoryFavorite from "../models/ContentRepositoryFavorite";
+import ContentRepositoryCategory from "../models/ContentRepositoryCategory";
+import ContentRepositoryUsageLog from "../models/ContentRepositoryUsageLog";
+import ContentRepositoryPermission from "../models/ContentRepositoryPermission";
 import AiMetricsSnapshot from "../models/AiMetricsSnapshot";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -147,7 +150,10 @@ const models = [
   AiTicketTimelineEvent,
   ContentRepositoryItem,
   ContentRepositoryItemVersion,
-  ContentRepositoryFavorite
+  ContentRepositoryFavorite,
+  ContentRepositoryCategory,
+  ContentRepositoryUsageLog,
+  ContentRepositoryPermission
 ];
 
 sequelize.addModels(models);

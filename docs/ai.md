@@ -11,6 +11,7 @@
 | Handoff | [§30 — Handoff IA → humano](MANUAL_PLATAFORMA.md#30-fluxo-handoff-ia--humano) |
 | Copilot | [§31 — Fluxo Copilot](MANUAL_PLATAFORMA.md#31-fluxo-copilot) |
 | Playground | [§32 — Fluxo Playground](MANUAL_PLATAFORMA.md#32-fluxo-playground) |
+| Repositório multimodal | [§45 — Repositório](MANUAL_PLATAFORMA.md#45-repositório-multimodal-de-conteúdos-v15) |
 | Env vars IA | [§38 — Variáveis de ambiente](MANUAL_PLATAFORMA.md#38-variáveis-de-ambiente--ia-e-storage) |
 | Pontos de extensão | [§40 — Pontos de extensão](MANUAL_PLATAFORMA.md#40-pontos-de-extensão-existentes) |
 | Schema / tabelas | [§33–§34](MANUAL_PLATAFORMA.md#33-banco-de-dados--módulo-ia) |

@@ -12,6 +12,8 @@ import ShowUserService from "../services/UserServices/ShowUserService";
 import UpdateTicketService from "../services/TicketServices/UpdateTicketService";
 import AppError from "../errors/AppError";
 import ListTicketsServiceKanban from "../services/TicketServices/ListTicketsServiceKanban";
+import reopenClosedTicketManually from "../services/TicketServices/ReopenClosedTicketManuallyService";
+import User from "../models/User";
 
 type IndexQuery = {
   isSearch?: string;
@@ -282,4 +284,22 @@ export const remove = async (
     });
 
   return res.status(200).json({ message: "ticket deleted" });
+};
+
+export const reopen = async (req: Request, res: Response): Promise<Response> => {
+  const { ticketId } = req.params;
+  const { releaseToAi } = req.body || {};
+  const user = await User.findByPk(req.user.id);
+
+  if (!user) {
+    throw new AppError("ERR_NO_USER", 404);
+  }
+
+  const result = await reopenClosedTicketManually({
+    ticketId: Number(ticketId),
+    user,
+    releaseToAi: releaseToAi === true
+  });
+
+  return res.status(200).json(result);
 };

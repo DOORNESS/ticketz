@@ -26,7 +26,27 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-## [1.4.4] — 2026-07-19
+## [1.5.1] — 2026-07-19
+
+### Corrigido
+
+- **Reabrir ticket (400):** novo `POST /tickets/:id/reopen` via `ReopenClosedTicketManuallyService` — fecha ticket conflitante (`justClose`) antes de reabrir; corrige `ERR_OTHER_OPEN_TICKET`
+- **Reabrir e chamar IA:** fluxo unificado no mesmo endpoint (`releaseToAi: true`)
+- **Topo da conversa compacto:** `ClosedTicketBar` só ícones; `TicketConversationToolbar`; tags colapsadas; diagnóstico IA no drawer
+- Build frontend: ícone `Android` (MUI v4), import `CameraAltIcon` em `MessageInputCustom`
+- Deploy VPS: `PATCH_PATHS` inclui Repositório + `ReopenClosedTicketManuallyService`
+
+### Adicionado
+
+- Migration v2 esqueleto: categorias, usage logs, permissões granulares
+- `ContentRepositoryUsageLog` registrado em envios (humano/IA)
+- Testes unitários: `ReopenClosedTicketManuallyService` (3), `ContentRepositoryService` (5), `CheckContactOpenTickets` (1)
+
+### Manual
+
+- §8 reabertura manual + UI compacta; §45 Repositório multimodal; versão manual **1.5**
+
+---
 
 ### Corrigido (CI deploy produção)
 

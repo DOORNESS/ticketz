@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.4 — auditada contra o código  
+**Versão:** 1.5 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -307,7 +307,18 @@ Ordem real em `wbotMessageListener.ts` → `handleMessage` (linhas ~1655–2184)
 ## 8. Tickets e atendimento humano
 
 ### Rotas (`routes/ticketRoutes.ts`)
-CRUD + ações IA em `/tickets/:id/ai/*` (assume, pause, resume, copilot, learning, explainability).
+CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado; fecha ticket conflitante do mesmo contato com `justClose`) + ações IA em `/tickets/:id/ai/*` (assume, pause, resume, copilot, learning, explainability) + Repositório em `/tickets/:id/repository`.
+
+### Reabertura manual
+- **`POST /tickets/:ticketId/reopen`** — body opcional `{ releaseToAi: boolean }`
+- Serviço: `ReopenClosedTicketManuallyService.ts`
+- Resolve `ERR_OTHER_OPEN_TICKET` (400) fechando o outro ticket aberto/pending do mesmo contato antes de reabrir
+- `releaseToAi: true` reabre em `pending` sem `userId`, reengajando IA quando permitido
+
+### UI da conversa (compacta)
+- Barra de ticket fechado: apenas ícones (Reabrir / Reabrir e chamar IA)
+- `TicketConversationToolbar`: ícones para Repositório, Tags (colapsável), Painel administrativo e estado IA
+- Diagnóstico IA (timeline, explicabilidade, copiloto) concentrados no drawer `TicketAdminPanel`, não no topo da conversa
 
 ### Controllers
 `TicketController.ts`, `TicketAiController.ts`, `AiLearningController.ts`
@@ -394,6 +405,7 @@ IA só opera quando `AiPlatformState.aiFeaturesEnabled === true` (setado em `boo
 | Diagnóstico | `AiDiagnosticsService` | ✅ |
 | Aprendizado | `AiLearningService` | ✅ |
 | Replay | `AiReplayService` | ✅ |
+| Repositório multimodal | `ContentRepositoryService`, tools `search_repository` / `send_repository_item` | ✅ (v1.5) |
 | ACK por agente | `AiInboundQueueService` + campos `ackEnabled` | ✅ |
 | SLA handoff | `AiSlaMonitorService` | ✅ |
 | Follow-up proativo | `AiProactiveFollowUpService` | ✅ |
@@ -1386,6 +1398,46 @@ Este manual (`docs/MANUAL_PLATAFORMA.md` v1.3) reflete a plataforma após Fase 3
 - Documentos comerciais (`Ticketz PRO.md`) podem divergir do OSS (Mercado Pago)
 - Scripts locais não versionados podem existir fora deste manual
 - Qualquer commit futuro **invalida** parcialmente este congelamento — revisar se houver merge
+
+---
+
+## 45. Repositório multimodal de conteúdos (v1.5)
+
+Repositório operacional separado da Base de Conhecimento RAG. Itens podem ser enviados manualmente na conversa ou pela IA (tools).
+
+### Tabelas (migration `20260719180000-content-repository.ts`)
+
+| Tabela | Função |
+|--------|--------|
+| `ContentRepositoryItems` | Item principal (tipo, storage, flags `allowHumanUse` / `allowAiUse` / `useForKnowledge`) |
+| `ContentRepositoryItemVersions` | Histórico imutável por edição |
+| `ContentRepositoryFavorites` | Favoritos por usuário |
+
+Migration v2 (`20260719200000-content-repository-v2.ts`): `ContentRepositoryCategories`, `ContentRepositoryUsageLogs`, `ContentRepositoryPermissions`.
+
+### Endpoints
+
+| Método | Rota | Uso |
+|--------|------|-----|
+| GET/POST/PUT/DELETE | `/ai/repository/*` | Admin CRUD (admin auth) |
+| GET | `/tickets/:ticketId/repository` | Busca itens permitidos na conversa |
+| POST | `/tickets/:ticketId/repository/:itemId/send` | Envio manual com legenda opcional |
+
+### Tools IA
+
+- `search_repository` — busca itens ativos com filtros de fila/agente
+- `send_repository_item` — envia item validado; registra timeline
+
+### Frontend
+
+- Admin: `/ai/repository` (`pages/AiRepository`)
+- Conversa: modal `RepositoryPanel`, toolbar compacta, painel `TicketAdminPanel`
+
+### Limitações conhecidas (homologação jul/2026)
+
+- E2E WhatsApp (áudio/repositório) depende de sessão conectada no ambiente
+- Permissões granulares v2 (`ContentRepositoryPermissions`) criadas; integração completa em evolução
+- UI Favoritos/Recentes/Mais usados parcial no `RepositoryPanel`
 
 ---
 

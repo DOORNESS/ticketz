@@ -35,6 +35,13 @@ ticketRoutes.put(
 );
 
 ticketRoutes.post(
+  "/tickets/:ticketId/reopen",
+  isAuth,
+  isCompliant,
+  TicketController.reopen
+);
+
+ticketRoutes.post(
   "/tickets/:ticketId/ai/assume",
   isAuth,
   isCompliant,

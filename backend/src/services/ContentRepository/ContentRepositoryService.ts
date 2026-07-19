@@ -6,6 +6,8 @@ import ContentRepositoryItem, {
 } from "../../models/ContentRepositoryItem";
 import ContentRepositoryItemVersion from "../../models/ContentRepositoryItemVersion";
 import ContentRepositoryFavorite from "../../models/ContentRepositoryFavorite";
+import ContentRepositoryCategory from "../../models/ContentRepositoryCategory";
+import ContentRepositoryUsageLog from "../../models/ContentRepositoryUsageLog";
 import User from "../../models/User";
 import Ticket from "../../models/Ticket";
 import { KnowledgeAssetType } from "../../models/KnowledgeAsset";
@@ -506,12 +508,32 @@ export const archiveRepositoryItem = async (
   await item.update({ active: false, archivedAt: new Date() });
 };
 
-export const recordRepositoryUsage = async (
-  item: ContentRepositoryItem
-): Promise<void> => {
-  await item.update({
-    usageCount: (item.usageCount || 0) + 1,
+export const recordRepositoryUsage = async (input: {
+  item: ContentRepositoryItem;
+  companyId: number;
+  ticketId?: number;
+  userId?: number;
+  channel?: string;
+  source?: "human" | "ai";
+  aiAgentId?: number;
+  success?: boolean;
+  errorCode?: string;
+}): Promise<void> => {
+  await input.item.update({
+    usageCount: (input.item.usageCount || 0) + 1,
     lastUsedAt: new Date()
+  });
+
+  await ContentRepositoryUsageLog.create({
+    companyId: input.companyId,
+    repositoryItemId: input.item.id,
+    ticketId: input.ticketId || null,
+    userId: input.userId || null,
+    channel: input.channel || null,
+    source: input.source || "human",
+    aiAgentId: input.aiAgentId || null,
+    success: input.success !== false,
+    errorCode: input.errorCode || null
   });
 };
 

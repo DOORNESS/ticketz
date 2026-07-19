@@ -18,8 +18,8 @@ import { EditMessageProvider } from "../../context/EditingMessage/EditingMessage
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { TagsContainer } from "../TagsContainer";
-import AiTicketContextBanner from "../AiTicketContextBanner";
 import ClosedTicketBar from "../ClosedTicketBar";
+import TicketConversationToolbar from "../TicketConversationToolbar";
 import RepositoryPanel from "../RepositoryPanel";
 import TicketAdminPanel from "../TicketAdminPanel";
 import { SocketContext } from "../../context/Socket/SocketContext";
@@ -99,6 +99,7 @@ const Ticket = () => {
   const [tagsMode, setTagsMode] = useState("ticket");
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [repositoryOpen, setRepositoryOpen] = useState(false);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
   const messageInputRef = useRef(null);
   const { getSetting } = useSettings();
 
@@ -297,7 +298,6 @@ const Ticket = () => {
             observationMode={isObserving}
           />
         </TicketHeader>
-        <AiTicketContextBanner ticket={ticket} observationMode={isObserving} />
         <ClosedTicketBar
           ticket={ticket}
           onReopened={updated => {
@@ -305,12 +305,22 @@ const Ticket = () => {
             setObservationMode(isTicketObservationMode(updated, user));
           }}
         />
-        <Paper>
-          <TagsContainer
-            ticket={["ticket", "both"].includes(tagsMode) && ticket}
-            contact={tagsMode === "contact" && contact}
-          />
-        </Paper>
+        <TicketConversationToolbar
+          ticket={ticket}
+          observationMode={isObserving}
+          tagsExpanded={tagsExpanded}
+          onToggleTags={() => setTagsExpanded(prev => !prev)}
+          onOpenAdminPanel={() => setAdminPanelOpen(true)}
+          onOpenRepository={() => setRepositoryOpen(true)}
+        />
+        {tagsExpanded && (
+          <Paper elevation={0} square>
+            <TagsContainer
+              ticket={["ticket", "both"].includes(tagsMode) && ticket}
+              contact={tagsMode === "contact" && contact}
+            />
+          </Paper>
+        )}
         <ReplyMessageProvider>
           <EditMessageProvider>{renderMessagesList()}</EditMessageProvider>
         </ReplyMessageProvider>
