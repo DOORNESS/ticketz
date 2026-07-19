@@ -43,6 +43,17 @@ const ClosedTicketBar = ({ ticket, onReopened }) => {
   const handleReopen = async (releaseToAi = false) => {
     setLoading(true);
     try {
+      const { data: fresh } = await api.get(`/tickets/${ticket.id}`);
+
+      if (fresh.status !== "closed") {
+        if (onReopened) {
+          onReopened(fresh);
+        }
+        setObservationMode(false);
+        toast.success(i18n.t("closedTicketBar.alreadyOpen"));
+        return;
+      }
+
       const { data } = await api.put(`/tickets/${ticket.id}`, {
         status: "open",
         userId: user?.id

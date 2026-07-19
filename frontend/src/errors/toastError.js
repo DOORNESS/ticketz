@@ -50,6 +50,10 @@ export const resolveErrorMessage = err => {
 const toastError = err => {
   const errorMsg = resolveErrorMessage(err);
 
+  if (errorMsg === "ERR_OTHER_OPEN_TICKET") {
+    return "Já existe um atendimento aberto para este contato. Use a aba Aguardando ou Atendendo.";
+  }
+
   if (errorMsg) {
     const displayMsg =
       errorMsg === "Network Error"

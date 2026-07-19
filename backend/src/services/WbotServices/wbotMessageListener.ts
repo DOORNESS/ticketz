@@ -38,6 +38,7 @@ import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
 import UpdateTicketService, {
   UpdateTicketData
 } from "../TicketServices/UpdateTicketService";
+import ReopenTicketFromCustomerMessageService from "../TicketServices/ReopenTicketFromCustomerMessageService";
 import formatBody from "../../helpers/Mustache";
 import TicketTraking from "../../models/TicketTraking";
 import UserRating from "../../models/UserRating";
@@ -800,6 +801,17 @@ export const verifyMediaMessage = async (
     }
   }
 
+  if (!msg.key.fromMe && ticket.status === "closed") {
+    await ReopenTicketFromCustomerMessageService(ticket);
+    await ticket.reload({
+      include: [
+        { model: Queue, as: "queue" },
+        { model: User, as: "user" },
+        { model: Contact, as: "contact" }
+      ]
+    });
+  }
+
   const messageData = {
     id: msg.key.id,
     ticketId: ticket.id,
@@ -828,34 +840,6 @@ export const verifyMediaMessage = async (
     skipWebsocket
   });
 
-  if (!msg.key.fromMe && ticket.status === "closed") {
-    await updateTicket(ticket, { status: "pending" });
-    await ticket.reload({
-      include: [
-        { model: Queue, as: "queue" },
-        { model: User, as: "user" },
-        { model: Contact, as: "contact" }
-      ]
-    });
-
-    io.to(`company-${ticket.companyId}-closed`)
-      .to(`queue-${ticket.queueId}-closed`)
-      .emit(`company-${ticket.companyId}-ticket`, {
-        action: "delete",
-        ticket,
-        ticketId: ticket.id
-      });
-
-    io.to(`company-${ticket.companyId}-${ticket.status}`)
-      .to(`queue-${ticket.queueId}-${ticket.status}`)
-      .to(ticket.id.toString())
-      .emit(`company-${ticket.companyId}-ticket`, {
-        action: "update",
-        ticket,
-        ticketId: ticket.id
-      });
-  }
-
   return newMessage;
 };
 
@@ -865,9 +849,19 @@ export const verifyMessage = async (
   contact: Contact,
   { userId, skipWebsocket }: VerifyMessageOptions = {}
 ) => {
-  const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg, ticket);
   const body = await getBodyMessage(msg?.message);
+
+  if (!msg.key.fromMe && ticket.status === "closed") {
+    await ReopenTicketFromCustomerMessageService(ticket);
+    await ticket.reload({
+      include: [
+        { model: Queue, as: "queue" },
+        { model: User, as: "user" },
+        { model: Contact, as: "contact" }
+      ]
+    });
+  }
 
   const messageData = {
     id: msg.key.id,
@@ -895,34 +889,6 @@ export const verifyMessage = async (
     companyId: ticket.companyId,
     skipWebsocket
   });
-
-  if (!msg.key.fromMe && ticket.status === "closed") {
-    await updateTicket(ticket, { status: "pending" });
-    await ticket.reload({
-      include: [
-        { model: Queue, as: "queue" },
-        { model: User, as: "user" },
-        { model: Contact, as: "contact" }
-      ]
-    });
-
-    io.to(`company-${ticket.companyId}-closed`)
-      .to(`queue-${ticket.queueId}-closed`)
-      .emit(`company-${ticket.companyId}-ticket`, {
-        action: "delete",
-        ticket,
-        ticketId: ticket.id
-      });
-
-    io.to(`company-${ticket.companyId}-${ticket.status}`)
-      .to(`queue-${ticket.queueId}-${ticket.status}`)
-      .to(ticket.id.toString())
-      .emit(`company-${ticket.companyId}-ticket`, {
-        action: "update",
-        ticket,
-        ticketId: ticket.id
-      });
-  }
 
   return newMessage;
 };

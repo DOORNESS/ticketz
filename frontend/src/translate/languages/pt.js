@@ -1244,7 +1244,8 @@ const messages = {
           "Este atendimento está fechado. Reabra para continuar conversando com o cliente.",
         reopened: "Atendimento reaberto.",
         reopenedWithAi: "Atendimento reaberto e devolvido para a IA.",
-        reopenWithAi: "Reabrir e chamar IA"
+        reopenWithAi: "Reabrir e chamar IA",
+        alreadyOpen: "Este atendimento já foi reaberto. Atualizando..."
       },
       messagesList: {
         header: {

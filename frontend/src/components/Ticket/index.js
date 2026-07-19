@@ -134,6 +134,7 @@ const Ticket = () => {
 
           const isAssignedToUser =
             data.userId && Number(data.userId) === Number(user.id);
+          const isHandoffPending = isHandoffPendingTicket(data);
 
           if (queueId) {
             const queueAllowed = queues.find(q => q.id === queueId);
@@ -141,7 +142,8 @@ const Ticket = () => {
               queueAllowed === undefined &&
               profile !== "admin" &&
               !user?.super &&
-              !isAssignedToUser
+              !isAssignedToUser &&
+              !isHandoffPending
             ) {
               toast.error(i18n.t("common.accessNotAllowed"));
               history.push("/tickets");

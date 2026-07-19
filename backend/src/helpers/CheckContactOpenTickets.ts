@@ -5,7 +5,8 @@ import Ticket from "../models/Ticket";
 const CheckContactOpenTickets = async (
   contactId: number,
   whatsappId?: number,
-  returnTicket = false
+  returnTicket = false,
+  excludeTicketId?: number
 ): Promise<Ticket> => {
   const where: WhereOptions<Ticket> = {
     contactId,
@@ -14,6 +15,10 @@ const CheckContactOpenTickets = async (
 
   if (whatsappId) {
     where.whatsappId = whatsappId;
+  }
+
+  if (excludeTicketId) {
+    where.id = { [Op.ne]: excludeTicketId };
   }
 
   const ticket = await Ticket.findOne({

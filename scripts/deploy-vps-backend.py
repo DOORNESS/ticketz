@@ -66,6 +66,8 @@ PATCH_PATHS = [
     "routes/heavyRoutes.js",
     "services/TicketServices/UpdateTicketService.js",
     "services/TicketServices/ListTicketsService.js",
+    "services/TicketServices/ReopenTicketFromCustomerMessageService.js",
+    "helpers/CheckContactOpenTickets.js",
     "services/WbotServices/wbotMessageListener.js",
     "services/WbotServices/SendWhatsAppMedia.js",
     "services/MigrationServices/ApplyAiSchemaService.js",

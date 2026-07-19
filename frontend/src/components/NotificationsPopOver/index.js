@@ -148,12 +148,39 @@ const NotificationsPopOver = props => {
     };
 
     const onCompanyTicketNotificationsPopover = data => {
-      if (data.action === "update" || data.ticket?.status === "closed") {
-        clearTicket(data.ticket.id);
+      if (data.action === "delete") {
+        clearTicket(data.ticketId);
+        return;
       }
 
-      if (data.action === "updateUnread" || data.action === "delete") {
+      if (data.action === "updateUnread") {
         clearTicket(data.ticketId);
+        return;
+      }
+
+      if (data.action === "update" && data.ticket) {
+        setNotifications(prevState => {
+          const ticketIndex = prevState.findIndex(t => t.id === data.ticket.id);
+
+          if (data.ticket.status === "closed" && !data.ticket.unreadMessages) {
+            if (ticketIndex === -1) {
+              return prevState;
+            }
+            return prevState.filter(t => t.id !== data.ticket.id);
+          }
+
+          if (ticketIndex !== -1) {
+            const next = [...prevState];
+            next[ticketIndex] = data.ticket;
+            return next;
+          }
+
+          if (data.ticket.unreadMessages > 0) {
+            return [data.ticket, ...prevState];
+          }
+
+          return prevState;
+        });
       }
     };
 
