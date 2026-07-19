@@ -32,7 +32,6 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 DIST = BACKEND / "dist"
 CHUNK = int(os.environ.get("DEPLOY_B64_CHUNK", "1500"))
-UPLOAD_BATCH = max(1, int(os.environ.get("DEPLOY_UPLOAD_BATCH", "10")))
 DEPLOY_LOCK = r"C:\ticketz\deploy-cache\.deploy.lock"
 
 # Hotfix paths — full dist sync is too slow over WinRM (600+ files).
@@ -157,8 +156,8 @@ def upload_file(s, local_path: Path, remote_path: str) -> None:
     data = local_path.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     b64 = base64.b64encode(data).decode("ascii")
-    upload_id = f"{int(time.time())}-{os.getpid()}-{random.randint(1000, 9999)}"
-    b64_dir = rf"C:\ticketz\deploy-cache\upload-{upload_id}"
+    upload_id = f"{int(time.time())}-{random.randint(1000, 9999)}"
+    b64_dir = rf"C:\ticketz\dc\{upload_id}"
     tmp_path = f"{remote_path}.new"
     expected_b64_len = len(b64)
 
@@ -173,36 +172,31 @@ if (-not (Test-Path '{b64_dir}')) {{ throw "failed to create upload dir" }}
     )
 
     total_chunks = (len(b64) + CHUNK - 1) // CHUNK
-    for batch_start in range(1, total_chunks + 1, UPLOAD_BATCH):
-        batch_end = min(batch_start + UPLOAD_BATCH - 1, total_chunks)
-        batch_lines = []
-        for idx in range(batch_start, batch_end + 1):
-            i = (idx - 1) * CHUNK
-            chunk = b64[i : i + CHUNK]
-            part_path = rf"{b64_dir}\part{idx:04d}.txt"
-            chunk_b64 = base64.b64encode(chunk.encode("ascii")).decode("ascii")
-            batch_lines.append(
-                f"""
-$dir = Split-Path -Parent '{part_path}'
-New-Item -ItemType Directory -Force -Path $dir | Out-Null
-$part = [Text.Encoding]::ASCII.GetString([Convert]::FromBase64String('{chunk_b64}'))
-[IO.File]::WriteAllText('{part_path}', $part, [Text.UTF8Encoding]::new($false))
-if ((Get-Item '{part_path}').Length -ne {len(chunk)}) {{
-  throw "part {idx} size mismatch"
-}}
-"""
-            )
-        code, _, err = run_ps(s, "\n".join(batch_lines))
+    for idx in range(1, total_chunks + 1):
+        i = (idx - 1) * CHUNK
+        chunk = b64[i : i + CHUNK]
+        part_path = rf"{b64_dir}\{idx:04d}.txt"
+        chunk_b64 = base64.b64encode(chunk.encode("ascii")).decode("ascii")
+        code, _, err = run_ps(
+            s,
+            f"""
+New-Item -ItemType Directory -Force -Path '{b64_dir}' | Out-Null
+$p = [Text.Encoding]::ASCII.GetString([Convert]::FromBase64String('{chunk_b64}'))
+[IO.File]::WriteAllText('{part_path}', $p, [Text.UTF8Encoding]::new($false))
+if ((Get-Item '{part_path}').Length -ne {len(chunk)}) {{ throw "part {idx} size mismatch" }}
+""",
+        )
         if code != 0:
             raise RuntimeError(
-                f"Chunks {batch_start}-{batch_end}/{total_chunks} upload failed for {local_path}: {err}"
+                f"Chunk {idx}/{total_chunks} upload failed for {local_path}: {err}"
             )
-        print(f"    upload {batch_end}/{total_chunks} chunks", flush=True)
+        if idx == 1 or idx == total_chunks or idx % 20 == 0:
+            print(f"    upload {idx}/{total_chunks} chunks", flush=True)
 
     code, out, err = run_ps(
         s,
         f"""
-$parts = Get-ChildItem '{b64_dir}\\part*.txt' | Sort-Object Name
+$parts = Get-ChildItem '{b64_dir}\\*.txt' | Sort-Object Name
 if ($parts.Count -ne {total_chunks}) {{
   throw "part count mismatch expected={total_chunks} got=$($parts.Count)"
 }}
