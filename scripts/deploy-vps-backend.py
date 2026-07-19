@@ -87,6 +87,7 @@ PATCH_PATHS = [
     "services/AiServices/HandoffToHumanService.js",
     "services/AiServices/AiHelpers.js",
     "controllers/TicketAiController.js",
+    "controllers/TicketController.js",
     "controllers/MessageController.js",
     "routes/ticketRoutes.js",
     "services/AiServices/AiTicketActionsService.js",

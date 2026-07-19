@@ -1,6 +1,6 @@
 import React, { useContext, useState } from "react";
 import { Box, Typography, makeStyles } from "@material-ui/core";
-import { Replay, SmartToy } from "@material-ui/icons";
+import { Android, Replay } from "@material-ui/icons";
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
@@ -88,7 +88,7 @@ const ClosedTicketBar = ({ ticket, onReopened }) => {
           size="small"
           variant="outlined"
           color="primary"
-          startIcon={<SmartToy />}
+          startIcon={<Android />}
           onClick={() => handleReopen(true)}
         >
           {i18n.t("closedTicketBar.reopenWithAi")}
