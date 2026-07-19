@@ -80,12 +80,20 @@ export const shouldRunCopilot = (ticket: Ticket): boolean =>
 
 export const generateCopilotSuggestion = async ({
   ticket,
-  agent
+  agent,
+  instruction,
+  requestedByUserId
 }: {
   ticket: Ticket;
   agent?: AiAgent | null;
+  instruction?: string;
+  requestedByUserId?: number;
 }): Promise<AiCopilotSuggestion | null> => {
-  if (!shouldRunCopilot(ticket)) {
+  if (!shouldRunCopilot(ticket) && !instruction) {
+    return null;
+  }
+
+  if (instruction && !ticket.userId) {
     return null;
   }
 
@@ -96,6 +104,16 @@ export const generateCopilotSuggestion = async ({
   }
 
   try {
+    if (requestedByUserId) {
+      await ticket.update({
+        aiAssistActive: true,
+        aiAssistMode: "private",
+        aiAssistRequestedAt: new Date(),
+        aiAssistRequestedBy: requestedByUserId,
+        aiAssistAgentId: activeAgent.id
+      } as any);
+    }
+
     const history = await buildHistory(ticket.id);
     const latestUser = await Message.findOne({
       where: { ticketId: ticket.id, fromMe: false },
@@ -128,7 +146,9 @@ export const generateCopilotSuggestion = async ({
           content: [
             `Histórico:\n${history}`,
             `Base de conhecimento:\n${knowledgeContext.contextBlock || "sem contexto"}`,
-            "Gere sugestão para a última mensagem do cliente."
+            instruction
+              ? `Instrução do atendente:\n${instruction}`
+              : "Gere sugestão para a última mensagem do cliente."
           ].join("\n\n")
         }
       ]

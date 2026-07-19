@@ -5,6 +5,7 @@ import {
   Chip,
   CircularProgress,
   Paper,
+  TextField,
   Typography,
   makeStyles
 } from "@material-ui/core";
@@ -49,7 +50,40 @@ const AiCopilotPanel = ({ ticket }) => {
   const classes = useStyles();
   const [loading, setLoading] = useState(false);
   const [suggestion, setSuggestion] = useState(null);
+  const [instruction, setInstruction] = useState("");
   const socketManager = useContext(SocketContext);
+
+  const quickActions = [
+    "Resumir atendimento",
+    "Sugerir resposta",
+    "Procurar solução",
+    "Buscar documento",
+    "Analisar imagem",
+    "Transcrever áudio",
+    "Preparar handoff"
+  ];
+
+  const requestCopilot = useCallback(
+    async (payload = {}) => {
+      if (!ticket?.id || !ticket?.userId || ticket.status !== "open") {
+        return;
+      }
+
+      try {
+        setLoading(true);
+        const { data } = await api.post(
+          `/tickets/${ticket.id}/ai/copilot`,
+          payload
+        );
+        setSuggestion(data?.suggestion || null);
+      } catch (err) {
+        toastError(err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [ticket?.id, ticket?.userId, ticket?.status]
+  );
 
   const loadSuggestion = useCallback(async () => {
     if (!ticket?.id || !ticket?.userId || ticket.status !== "open") {
@@ -123,6 +157,43 @@ const AiCopilotPanel = ({ ticket }) => {
       <Typography className={classes.title}>
         {i18n.t("aiCopilot.title")}
       </Typography>
+
+      <TextField
+        fullWidth
+        size="small"
+        variant="outlined"
+        label="Perguntar à IA"
+        value={instruction}
+        onChange={event => setInstruction(event.target.value)}
+        disabled={loading}
+      />
+
+      <Box className={classes.actions}>
+        {quickActions.map(action => (
+          <Button
+            key={action}
+            size="small"
+            variant="outlined"
+            disabled={loading}
+            onClick={() =>
+              requestCopilot({ instruction: action, refresh: true })
+            }
+          >
+            {action}
+          </Button>
+        ))}
+        <Button
+          size="small"
+          color="primary"
+          variant="contained"
+          disabled={loading || !instruction.trim()}
+          onClick={() =>
+            requestCopilot({ instruction: instruction.trim(), refresh: true })
+          }
+        >
+          Chamar IA
+        </Button>
+      </Box>
 
       {loading ? (
         <Box display="flex" justifyContent="center" p={1}>

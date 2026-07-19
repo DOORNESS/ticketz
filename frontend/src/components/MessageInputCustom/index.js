@@ -1068,7 +1068,8 @@ const MessageInputCustom = props => {
     handlePresenceUpdate(null);
     try {
       const [, blob] = await Mp3Recorder.stop().getMp3();
-      if (blob.size < 10000) {
+      if (blob.size < 500) {
+        toastError(new Error("Áudio muito curto ou vazio. Tente gravar novamente."));
         setLoading(false);
         setRecording(false);
         return;

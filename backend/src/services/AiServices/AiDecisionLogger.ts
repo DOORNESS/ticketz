@@ -9,6 +9,7 @@ export type AiDecisionAction =
   | "job_failed"
   | "process_skipped"
   | "handoff"
+  | "investigate"
   | "respond"
   | "no_response";
 

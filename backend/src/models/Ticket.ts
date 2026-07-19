@@ -186,6 +186,51 @@ class Ticket extends Model<Ticket> {
   @Column
   aiLastSlaAlertAt: Date;
 
+  @Column
+  aiHandoffMode: string;
+
+  @Column
+  aiHandoffOriginalReason: string;
+
+  @Column(DataType.JSONB)
+  aiCaseCompleteness: object;
+
+  @Default(0)
+  @Column
+  aiInvestigationRound: number;
+
+  @Column
+  aiCorrelationId: string;
+
+  @Column
+  aiProcessingState: string;
+
+  @Default(false)
+  @Column
+  aiSkipLegacyOutOfHoursOnHandoff: boolean;
+
+  @Default(false)
+  @Column
+  aiAssistActive: boolean;
+
+  @Column
+  aiAssistMode: string;
+
+  @Column
+  aiAssistRequestedAt: Date;
+
+  @Column
+  aiAssistRequestedBy: number;
+
+  @Column
+  aiAssistAgentId: number;
+
+  @Column
+  aiHumanAssumedAt: Date;
+
+  @Column
+  aiHumanAssumedBy: number;
+
   @Default(uuidv4())
   @Column
   uuid: string;

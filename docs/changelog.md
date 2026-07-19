@@ -6,6 +6,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.4.3] — 2026-07-19
+
+### Adicionado (Triagem IA v2 + áudio/copiloto)
+
+- Módulo `backend/src/services/AiServices/Triage/` (completude do caso, política de handoff, timeline, read receipt, transcrição condicional)
+- Migration `20260719100000-ai-triage-v2-professional-flow.ts`
+- Handoff operacional vs definitivo; preservação de `aiHandoffOriginalReason`
+- Correção áudio outbound do painel (validação ffmpeg + Opus/PTT)
+- Copiloto on-demand via `POST /tickets/:id/ai/copilot`
+- Manual §30 (triagem v2), §31 (copiloto ampliado)
+
+---
+
 ## [1.4.2] — 2026-07-18
 
 ### Validado (Fases 3 + 4)

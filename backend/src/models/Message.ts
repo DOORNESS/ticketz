@@ -108,6 +108,24 @@ class Message extends Model {
   @Column
   isEdited: boolean;
 
+  @Column
+  transcriptionStatus: string;
+
+  @Column(DataType.TEXT)
+  transcriptionText: string;
+
+  @Column
+  transcriptionRequestedBy: number;
+
+  @Column
+  transcriptionReason: string;
+
+  @Column
+  aiProcessedAt: Date;
+
+  @Column
+  aiReadAt: Date;
+
   @CreatedAt
   @Column(DataType.DATE(6))
   createdAt: Date;

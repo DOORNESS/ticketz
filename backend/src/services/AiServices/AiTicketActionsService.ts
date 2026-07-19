@@ -37,12 +37,17 @@ export const assumeTicketFromBot = async ({
       status: "open",
       userId: user.id,
       aiHandoff: true,
+      aiHandoffOriginalReason:
+        ticket.aiHandoffOriginalReason || ticket.aiHandoffReason,
       aiHandoffReason: AI_HANDOFF_REASONS.manual_takeover,
       aiPaused: true,
       aiWaitingSince: null,
       aiSlaEscalationLevel: 0,
       aiSlaBreached: false,
-      aiLastSlaAlertAt: null
+      aiLastSlaAlertAt: null,
+      aiHumanAssumedAt: new Date(),
+      aiHumanAssumedBy: user.id,
+      aiProcessingState: "awaiting_human"
     } as any
   });
 

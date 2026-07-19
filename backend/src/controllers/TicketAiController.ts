@@ -77,7 +77,17 @@ export const copilot = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
-  const { ticket } = await loadTicketForUser(req);
+  const { ticket, user } = await loadTicketForUser(req);
+  const { instruction, refresh } = req.body || {};
+
+  if (refresh || instruction) {
+    const suggestion = await generateCopilotSuggestion({
+      ticket,
+      instruction,
+      requestedByUserId: user.id
+    });
+    return res.status(200).json({ suggestion });
+  }
 
   let suggestion = await getLatestCopilotSuggestion(
     ticket.id,
@@ -85,7 +95,10 @@ export const copilot = async (
   );
 
   if (!suggestion) {
-    suggestion = await generateCopilotSuggestion({ ticket });
+    suggestion = await generateCopilotSuggestion({
+      ticket,
+      requestedByUserId: user.id
+    });
   }
 
   return res.status(200).json({ suggestion });

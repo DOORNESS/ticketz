@@ -48,6 +48,16 @@ import { isToolsEnabledForCompany } from "./tools/AiToolsFeatureFlag";
 import { runToolLoop } from "./tools/ToolLoopService";
 import "./tools/registerPilotTools";
 import crypto from "crypto";
+import {
+  bootstrapTriageContext,
+  evaluateTriageHandoff,
+  executeHandoffDecision,
+  finalizeAiResponse,
+  isTriageV2Active,
+  sendInvestigationResponse
+} from "./Triage/TriageOrchestratorService";
+import { HandoffPolicyDecision } from "./Triage/AiTriageTypes";
+import { logAiTicketTimelineEvent } from "./Triage/AiTicketTimelineService";
 
 export type InboundMessageItem = {
   messageBody: string;
@@ -154,6 +164,124 @@ const buildConversationText = async (
   return lines.join("\n");
 };
 
+const hasInboundMediaEvidence = (messages: InboundMessageItem[]): boolean =>
+  messages.some(
+    message =>
+      message.mediaType &&
+      !["text", "chat", "extendedTextMessage"].includes(message.mediaType)
+  );
+
+const applyTriageDecision = async ({
+  companyId,
+  ticket,
+  agent,
+  userText,
+  conversationText,
+  messageId,
+  decision,
+  snapshot,
+  usedChunks,
+  model
+}: {
+  companyId: number;
+  ticket: Ticket;
+  agent: AiAgent;
+  userText: string;
+  conversationText: string;
+  messageId?: string;
+  decision: HandoffPolicyDecision;
+  snapshot: import("./Triage/AiTriageTypes").CaseCompletenessSnapshot;
+  usedChunks?: unknown;
+  model?: string;
+}): Promise<boolean> => {
+  if (decision.action === "none") {
+    return false;
+  }
+
+  if (decision.action === "investigate") {
+    await sendInvestigationResponse({
+      ticket,
+      agent,
+      snapshot,
+      messageId,
+      companyId,
+      userText
+    });
+    return true;
+  }
+
+  await executeHandoffDecision({
+    ticket,
+    agent,
+    decision,
+    userText,
+    messageId,
+    conversationText,
+    usedChunks,
+    model,
+    caseSnapshot: snapshot
+  });
+  return true;
+};
+
+const runTriageGate = async ({
+  companyId,
+  ticket,
+  agent,
+  userText,
+  conversationText,
+  messageId,
+  messages,
+  proposedReason,
+  forceHandoff: forceHandoffFlag,
+  providerError,
+  confidenceScore,
+  hasReliableContext,
+  hasReadyDocuments
+}: {
+  companyId: number;
+  ticket: Ticket;
+  agent: AiAgent;
+  userText: string;
+  conversationText: string;
+  messageId?: string;
+  messages: InboundMessageItem[];
+  proposedReason?: string;
+  forceHandoff?: boolean;
+  providerError?: unknown;
+  confidenceScore?: number;
+  hasReliableContext?: boolean;
+  hasReadyDocuments?: boolean;
+}): Promise<boolean> => {
+  if (!(await isTriageV2Active(companyId))) {
+    return false;
+  }
+
+  const { decision, snapshot } = await evaluateTriageHandoff({
+    ticket,
+    userText,
+    conversationText,
+    hasMediaEvidence: hasInboundMediaEvidence(messages),
+    proposedReason,
+    forceHandoff: forceHandoffFlag,
+    providerError,
+    confidenceScore,
+    hasReliableContext,
+    hasReadyDocuments
+  });
+
+  return applyTriageDecision({
+    companyId,
+    ticket,
+    agent,
+    userText,
+    conversationText,
+    messageId,
+    decision,
+    snapshot
+  });
+};
+
 const ProcessInboundMessageService = async ({
   ticket,
   companyId,
@@ -213,8 +341,14 @@ const ProcessInboundMessageService = async ({
   >["routing"];
 
   let userText = "";
+  const triageV2Enabled = await isTriageV2Active(companyId);
 
   try {
+    if (triageV2Enabled) {
+      await bootstrapTriageContext(ticket, primaryMessageId);
+      await ticket.update({ aiProcessingState: "processing" } as any);
+    }
+
     userText = await resolveInboundText({
       companyId,
       ticket,
@@ -227,6 +361,18 @@ const ProcessInboundMessageService = async ({
         body: formatBody(AUDIO_USER_FALLBACK, ticket),
         ticket
       });
+
+      if (triageV2Enabled) {
+        await logAiTicketTimelineEvent({
+          companyId,
+          ticketId: ticket.id,
+          eventType: "transcription_failed",
+          stage: "media",
+          operation: "audio_transcription",
+          messageId: primaryMessageId
+        });
+        await finalizeAiResponse(ticket, primaryMessageId);
+      }
 
       await persistAiDecisionLog({
         companyId,
@@ -252,23 +398,56 @@ const ProcessInboundMessageService = async ({
       detectHumanHandoffRequest(userText) ||
       detectSensitiveTopic(userText)
     ) {
-      const resolvedHandoffReason = detectSensitiveTopic(userText)
-        ? AI_HANDOFF_REASONS.sensitive_subject
-        : detectHumanHandoffRequest(userText)
-          ? AI_HANDOFF_REASONS.customer_requested_human
-          : (handoffReason as any) ||
-            AI_HANDOFF_REASONS.customer_requested_human;
-
-      await HandoffToHumanService({
+      const handledByTriage = await runTriageGate({
+        companyId,
         ticket,
         agent,
-        userMessage: maskSensitiveLog(userText),
+        userText,
+        conversationText,
         messageId: primaryMessageId,
-        reason: handoffReason || "handoff_requested_or_sensitive",
-        handoffReason: resolvedHandoffReason,
-        conversationText
+        messages,
+        forceHandoff
       });
+
+      if (handledByTriage) {
+        return;
+      }
+
+      if (!triageV2Enabled) {
+        const resolvedHandoffReason = detectSensitiveTopic(userText)
+          ? AI_HANDOFF_REASONS.sensitive_subject
+          : detectHumanHandoffRequest(userText)
+            ? AI_HANDOFF_REASONS.customer_requested_human
+            : (handoffReason as any) ||
+              AI_HANDOFF_REASONS.customer_requested_human;
+
+        await HandoffToHumanService({
+          ticket,
+          agent,
+          userMessage: maskSensitiveLog(userText),
+          messageId: primaryMessageId,
+          reason: handoffReason || "handoff_requested_or_sensitive",
+          handoffReason: resolvedHandoffReason,
+          conversationText
+        });
+      }
       return;
+    }
+
+    if (triageV2Enabled) {
+      const handledByTriage = await runTriageGate({
+        companyId,
+        ticket,
+        agent,
+        userText,
+        conversationText,
+        messageId: primaryMessageId,
+        messages
+      });
+
+      if (handledByTriage) {
+        return;
+      }
     }
 
     if (detectCustomerResolution(userText)) {
@@ -361,17 +540,36 @@ const ProcessInboundMessageService = async ({
       !hasReliableContext &&
       userText.length > 20
     ) {
-      await HandoffToHumanService({
+      const handledByTriage = await runTriageGate({
+        companyId,
         ticket,
         agent,
-        userMessage: maskSensitiveLog(userText),
-        messageId: primaryMessageId,
-        handoffReason: AI_HANDOFF_REASONS.no_knowledge_found,
-        reason: "no_knowledge_found",
+        userText,
         conversationText,
-        usedChunks
+        messageId: primaryMessageId,
+        messages,
+        proposedReason: AI_HANDOFF_REASONS.no_knowledge_found,
+        hasReliableContext,
+        hasReadyDocuments: knowledgeContext.hasReadyDocuments
       });
-      return;
+
+      if (handledByTriage) {
+        return;
+      }
+
+      if (!triageV2Enabled) {
+        await HandoffToHumanService({
+          ticket,
+          agent,
+          userMessage: maskSensitiveLog(userText),
+          messageId: primaryMessageId,
+          handoffReason: AI_HANDOFF_REASONS.no_knowledge_found,
+          reason: "no_knowledge_found",
+          conversationText,
+          usedChunks
+        });
+        return;
+      }
     }
     const contextHint = contextBlock
       ? contextBlock
@@ -435,17 +633,43 @@ const ProcessInboundMessageService = async ({
     };
 
     if (!aiResponse || detectLowConfidenceResponse(aiResponse)) {
-      await HandoffToHumanService({
+      const confidence = computeConfidenceScore({
+        topSimilarity: usedChunks[0]?.similarity || 0,
+        hasReliableContext,
+        responseLength: aiResponse?.length || 0
+      });
+
+      const handledByTriage = await runTriageGate({
+        companyId,
         ticket,
         agent,
-        userMessage: maskSensitiveLog(userText),
-        messageId: primaryMessageId,
-        handoffReason: AI_HANDOFF_REASONS.low_confidence,
-        reason: "low_confidence",
+        userText,
         conversationText,
-        usedChunks,
-        model: completion.model
+        messageId: primaryMessageId,
+        messages,
+        proposedReason: AI_HANDOFF_REASONS.low_confidence,
+        confidenceScore: confidence,
+        hasReliableContext,
+        hasReadyDocuments: knowledgeContext.hasReadyDocuments
       });
+
+      if (handledByTriage) {
+        return;
+      }
+
+      if (!triageV2Enabled) {
+        await HandoffToHumanService({
+          ticket,
+          agent,
+          userMessage: maskSensitiveLog(userText),
+          messageId: primaryMessageId,
+          handoffReason: AI_HANDOFF_REASONS.low_confidence,
+          reason: "low_confidence",
+          conversationText,
+          usedChunks,
+          model: completion.model
+        });
+      }
       return;
     }
 
@@ -466,6 +690,10 @@ const ProcessInboundMessageService = async ({
       body: formatBody(outboundText, ticket),
       ticket
     });
+
+    if (triageV2Enabled) {
+      await finalizeAiResponse(ticket, primaryMessageId);
+    }
 
     if (!ticket.aiStartedAt) {
       await logAiOperationalEvent({
@@ -616,15 +844,35 @@ const ProcessInboundMessageService = async ({
       providedAgent || (await getActiveAgent(companyId, ticket.queueId));
 
     if (agent) {
-      await HandoffToHumanService({
+      const conversationText =
+        userText || (await buildConversationText(ticket.id, userText));
+
+      const handledByTriage = await runTriageGate({
+        companyId,
         ticket,
         agent,
-        userMessage: maskSensitiveLog(userText),
+        userText: userText || "processing_error",
+        conversationText,
         messageId: primaryMessageId,
-        handoffReason: AI_HANDOFF_REASONS.provider_error,
-        reason: "provider_error",
-        conversationText: userText
+        messages,
+        providerError: error
       });
+
+      if (handledByTriage) {
+        return;
+      }
+
+      if (!(await isTriageV2Active(companyId))) {
+        await HandoffToHumanService({
+          ticket,
+          agent,
+          userMessage: maskSensitiveLog(userText),
+          messageId: primaryMessageId,
+          handoffReason: AI_HANDOFF_REASONS.provider_error,
+          reason: "provider_error",
+          conversationText: userText
+        });
+      }
       return;
     }
 

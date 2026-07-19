@@ -44,17 +44,21 @@ const SENSITIVE_KEYWORDS = [
 
 export const canAiEngageTicket = (ticket: Ticket): boolean => {
   if (ticket.userId) return false;
-  if (ticket.aiHandoff) return false;
   if (ticket.aiPaused) return false;
   if (ticket.isGroup) return false;
   if (ticket.status === "closed") return false;
   if (ticket.contact?.disableBot) return false;
+
+  if (ticket.aiHandoff) {
+    return ticket.aiHandoffMode === "operational";
+  }
+
   return true;
 };
 
 export const isAiHandlingTicket = (ticket: Ticket): boolean =>
   !!ticket.aiAgentId &&
-  !ticket.aiHandoff &&
+  (!ticket.aiHandoff || ticket.aiHandoffMode === "operational") &&
   !ticket.aiPaused &&
   !ticket.userId &&
   ticket.status !== "closed";

@@ -43,6 +43,20 @@ export interface UpdateTicketData {
   aiHandoffSummary?: string | null;
   aiPriority?: string | null;
   aiLastConfidence?: number | null;
+  aiHandoffMode?: string | null;
+  aiHandoffOriginalReason?: string | null;
+  aiCaseCompleteness?: object | null;
+  aiInvestigationRound?: number;
+  aiCorrelationId?: string | null;
+  aiProcessingState?: string | null;
+  aiSkipLegacyOutOfHoursOnHandoff?: boolean;
+  aiAssistActive?: boolean;
+  aiAssistMode?: string | null;
+  aiAssistRequestedAt?: Date | null;
+  aiAssistRequestedBy?: number | null;
+  aiAssistAgentId?: number | null;
+  aiHumanAssumedAt?: Date | null;
+  aiHumanAssumedBy?: number | null;
 }
 
 interface Request {
@@ -328,6 +342,14 @@ const UpdateTicketService = async ({
       userId !== oldUserId &&
       (ticket.aiAgentId || ticket.aiHandoff);
 
+    if (humanAccepted) {
+      ticketData.aiHumanAssumedAt = new Date();
+      ticketData.aiHumanAssumedBy = userId;
+      if (ticket.aiHandoffReason && !ticket.aiHandoffOriginalReason) {
+        ticketData.aiHandoffOriginalReason = ticket.aiHandoffReason;
+      }
+    }
+
     const normalizedTicketData = normalizeAiTicketFields(ticket, {
       status,
       queueId,
@@ -365,7 +387,52 @@ const UpdateTicketService = async ({
         aiWaitingSince !== undefined ? aiWaitingSince : ticket.aiWaitingSince,
       aiStartedAt: aiStartedAt !== undefined ? aiStartedAt : ticket.aiStartedAt,
       aiSlaBreached:
-        aiSlaBreached !== undefined ? aiSlaBreached : ticket.aiSlaBreached
+        aiSlaBreached !== undefined ? aiSlaBreached : ticket.aiSlaBreached,
+      ...(ticketData.aiHandoffMode !== undefined
+        ? { aiHandoffMode: ticketData.aiHandoffMode }
+        : {}),
+      ...(ticketData.aiHandoffOriginalReason !== undefined
+        ? { aiHandoffOriginalReason: ticketData.aiHandoffOriginalReason }
+        : {}),
+      ...(ticketData.aiCaseCompleteness !== undefined
+        ? { aiCaseCompleteness: ticketData.aiCaseCompleteness }
+        : {}),
+      ...(ticketData.aiInvestigationRound !== undefined
+        ? { aiInvestigationRound: ticketData.aiInvestigationRound }
+        : {}),
+      ...(ticketData.aiCorrelationId !== undefined
+        ? { aiCorrelationId: ticketData.aiCorrelationId }
+        : {}),
+      ...(ticketData.aiProcessingState !== undefined
+        ? { aiProcessingState: ticketData.aiProcessingState }
+        : {}),
+      ...(ticketData.aiSkipLegacyOutOfHoursOnHandoff !== undefined
+        ? {
+            aiSkipLegacyOutOfHoursOnHandoff:
+              ticketData.aiSkipLegacyOutOfHoursOnHandoff
+          }
+        : {}),
+      ...(ticketData.aiAssistActive !== undefined
+        ? { aiAssistActive: ticketData.aiAssistActive }
+        : {}),
+      ...(ticketData.aiAssistMode !== undefined
+        ? { aiAssistMode: ticketData.aiAssistMode }
+        : {}),
+      ...(ticketData.aiAssistRequestedAt !== undefined
+        ? { aiAssistRequestedAt: ticketData.aiAssistRequestedAt }
+        : {}),
+      ...(ticketData.aiAssistRequestedBy !== undefined
+        ? { aiAssistRequestedBy: ticketData.aiAssistRequestedBy }
+        : {}),
+      ...(ticketData.aiAssistAgentId !== undefined
+        ? { aiAssistAgentId: ticketData.aiAssistAgentId }
+        : {}),
+      ...(ticketData.aiHumanAssumedAt !== undefined
+        ? { aiHumanAssumedAt: ticketData.aiHumanAssumedAt }
+        : {}),
+      ...(ticketData.aiHumanAssumedBy !== undefined
+        ? { aiHumanAssumedBy: ticketData.aiHumanAssumedBy }
+        : {})
     });
 
     if (oldStatus !== status) {
@@ -464,7 +531,8 @@ const UpdateTicketService = async ({
       !dontRunChatbot &&
       !ticket.userId &&
       ticket.queueId &&
-      ticket.queueId !== oldQueueId
+      ticket.queueId !== oldQueueId &&
+      !ticket.aiSkipLegacyOutOfHoursOnHandoff
     ) {
       const wbot = await GetTicketWbot(ticket);
       if (wbot) {

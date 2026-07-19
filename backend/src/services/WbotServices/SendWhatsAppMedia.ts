@@ -5,6 +5,7 @@ import {
 } from "libzapitu-rf";
 import fs from "fs";
 import { exec } from "child_process";
+import { promisify } from "util";
 import path from "path";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import mime from "mime-types";
@@ -33,23 +34,85 @@ export type MediaInfo = {
   filename: string;
 };
 
+const execAsync = promisify(exec);
+
 const publicFolder = __dirname.endsWith("/dist")
   ? path.resolve(__dirname, "..", "public")
   : path.resolve(__dirname, "..", "..", "..", "public");
 
 const supportedImages = ["image/png", "image/jpg", "image/jpeg", "image/webp"];
 
-const processRecordedAudio = async (audio: string): Promise<Readable> => {
-  const outputAudio = `${publicFolder}/${new Date().getTime()}.ogg`;
-  return new Promise((resolve, reject) => {
-    exec(
-      `${ffmpegPath.path} -i "${audio}" -vn -ar 16000 -ac 1 -c:a libopus -b:a 0 ${outputAudio}`,
-      (error, _stdout, _stderr) => {
-        if (error) reject(error);
-        resolve(fs.createReadStream(outputAudio));
-      }
-    );
-  });
+const MIN_AUDIO_BYTES = 256;
+const MIN_AUDIO_DURATION_SEC = 0.3;
+
+const isPanelRecordedAudio = (fileName: string, mimetype?: string): boolean => {
+  const normalized = (fileName || "").toLowerCase();
+  const mime = (mimetype || "").toLowerCase();
+  return (
+    normalized.includes("audio-record-site") ||
+    (mime.includes("audio/mpeg") && normalized.endsWith(".mp3"))
+  );
+};
+
+const probeAudioDuration = async (filePath: string): Promise<number> => {
+  const { stderr, stdout } = await execAsync(
+    `"${ffmpegPath.path}" -hide_banner -i "${filePath}" 2>&1 || true`
+  );
+  const output = `${stderr || ""}\n${stdout || ""}`;
+  const match = output.match(/Duration:\s(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)/);
+
+  if (!match) {
+    throw new AppError("ERR_INVALID_AUDIO_FILE", 400);
+  }
+
+  return Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
+};
+
+const validateOutboundAudio = async (
+  filePath: string,
+  fileName: string
+): Promise<void> => {
+  const stats = fs.statSync(filePath);
+  if (!stats.size || stats.size < MIN_AUDIO_BYTES) {
+    throw new AppError("ERR_EMPTY_AUDIO_FILE", 400);
+  }
+
+  const duration = await probeAudioDuration(filePath);
+  if (!Number.isFinite(duration) || duration < MIN_AUDIO_DURATION_SEC) {
+    throw new AppError("ERR_AUDIO_TOO_SHORT", 400);
+  }
+
+  logger.info(
+    {
+      fileName,
+      sizeBytes: stats.size,
+      durationSec: duration
+    },
+    "Outbound audio validated"
+  );
+};
+
+const processRecordedAudio = async (
+  audio: string
+): Promise<{
+  stream: Readable;
+  outputPath: string;
+}> => {
+  const outputAudio = path.join(
+    publicFolder,
+    `ticketz-audio-${Date.now()}.ogg`
+  );
+
+  await execAsync(
+    `"${ffmpegPath.path}" -y -i "${audio}" -vn -ar 16000 -ac 1 -c:a libopus -b:a 24k "${outputAudio}"`
+  );
+
+  await validateOutboundAudio(outputAudio, path.basename(outputAudio));
+
+  return {
+    stream: fs.createReadStream(outputAudio),
+    outputPath: outputAudio
+  };
 };
 
 export const getMessageFileOptions = async (
@@ -64,6 +127,8 @@ export const getMessageFileOptions = async (
     url: pathMedia
   };
 
+  let tempConvertedPath: string | null = null;
+
   try {
     let options: AnyMediaMessageContent;
 
@@ -72,25 +137,34 @@ export const getMessageFileOptions = async (
         fileName,
         video: url || { stream: fs.createReadStream(pathMedia) }
       };
-    } else if (mimetype === "audio/ogg") {
-      options = {
-        fileName,
-        audio: url || { stream: fs.createReadStream(pathMedia) },
-        mimetype: "audio/ogg; codecs=opus",
-        ptt: true
-      };
     } else if (mimetype.startsWith("audio/")) {
-      const needConvert = fileName.includes("audio-record-site");
-      options = {
-        fileName,
-        audio: url || {
-          stream: needConvert
-            ? await processRecordedAudio(pathMedia)
-            : fs.createReadStream(pathMedia)
-        },
-        mimetype: !url && needConvert ? "audio/ogg; codecs=opus" : mimetype,
-        ptt: (!url && needConvert) || !!ptt
-      };
+      const needConvert = !url && isPanelRecordedAudio(fileName, mimetype);
+
+      if (needConvert) {
+        await validateOutboundAudio(pathMedia, fileName);
+        const converted = await processRecordedAudio(pathMedia);
+        tempConvertedPath = converted.outputPath;
+        options = {
+          fileName: fileName.replace(/\.[^.]+$/, ".ogg"),
+          audio: { stream: converted.stream },
+          mimetype: "audio/ogg; codecs=opus",
+          ptt: true
+        };
+      } else if (mimetype === "audio/ogg") {
+        options = {
+          fileName,
+          audio: url || { stream: fs.createReadStream(pathMedia) },
+          mimetype: "audio/ogg; codecs=opus",
+          ptt: ptt ?? true
+        };
+      } else {
+        options = {
+          fileName,
+          audio: url || { stream: fs.createReadStream(pathMedia) },
+          mimetype,
+          ptt: !!ptt
+        };
+      }
     } else if (supportedImages.includes(mimetype)) {
       options = {
         fileName,
@@ -106,11 +180,10 @@ export const getMessageFileOptions = async (
 
     return options;
   } catch (error) {
-    logger.error(
-      { message: error.message },
-      "Error getting message file options"
-    );
-    return null;
+    if (tempConvertedPath && fs.existsSync(tempConvertedPath)) {
+      fs.unlinkSync(tempConvertedPath);
+    }
+    throw error;
   }
 };
 
@@ -175,11 +248,18 @@ export const SendWhatsAppMedia = async ({
         { message: error.message },
         "Error converting filename to UTF-8:"
       );
+      fileName = media.originalname;
+    }
+
+    if (
+      media.mimetype?.startsWith("audio/") &&
+      isPanelRecordedAudio(fileName, media.mimetype)
+    ) {
+      await validateOutboundAudio(pathMedia, fileName);
     }
 
     const fileLimit = parseInt(await CheckSettings("uploadLimit", "15"), 10);
 
-    // convert multer file to Readable
     const readableFile = fs.createReadStream(pathMedia);
     const savedPath = await saveMediaToFile(
       {
@@ -210,14 +290,22 @@ export const SendWhatsAppMedia = async ({
       fileName,
       pathMedia,
       media.mimetype,
-      ptt
+      ptt ?? isPanelRecordedAudio(fileName, media.mimetype)
     );
+
+    if (!options) {
+      throw new AppError("ERR_INVALID_AUDIO_FILE", 400);
+    }
+
     return sendWhatsappFile(ticket, mediaInfo, {
       caption: caption || undefined,
       fileName,
       ...options
     } as AnyMediaMessageContent);
   } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
     logger.error({ message: error.message }, "Error sending WhatsApp media");
     throw new AppError("ERR_SENDING_WAPP_MSG");
   }

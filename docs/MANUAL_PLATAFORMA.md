@@ -892,6 +892,50 @@ sequenceDiagram
 
 ## 30. Fluxo handoff IA → humano
 
+### Triagem profissional v2 (feature flag)
+
+Ativada por `AI_TRIAGE_V2_ENABLED=true` ou setting `aiTriageV2Enabled=enabled`.
+
+Componentes em `backend/src/services/AiServices/Triage/`:
+
+| Serviço | Função |
+|---------|--------|
+| `CaseCompletenessEngine` | Detecta mensagens vagas e campos faltantes do caso |
+| `HandoffPolicyService` | Decide `investigate`, `operational`, `definitive` ou `none` |
+| `TriageOrchestratorService` | Integra triagem em `ProcessInboundMessageService` |
+| `AiReadReceiptService` | Marca leitura WhatsApp quando a IA responde |
+| `AudioTranscriptionPolicyService` | Transcreve áudio só quando a IA precisa processar |
+
+**Regras principais:**
+
+- Mensagens genéricas (`Estou com problema`, `Não consigo entrar`) **não** geram handoff imediato.
+- Handoff **operacional** (`aiHandoffMode=operational`): ticket entra na fila, IA continua (`canAiEngageTicket`), sem mensagem legada de fora do horário (`aiSkipLegacyOutOfHoursOnHandoff`).
+- Handoff **definitivo** (`aiHandoffMode=definitive`): IA para (`aiPaused=true`).
+- `aiHandoffOriginalReason` preserva motivo original; assunção humana grava `aiHumanAssumedAt/By` sem sobrescrever motivo original na UI.
+- Timeline auditável em `AiTicketTimelineEvents` com `correlationId`.
+
+**Settings por empresa:** `aiTriageMaxInvestigationRounds`, `aiTriageMinConfidenceForHandoff`, `aiTranscribeOnlyWhenAiActive`, `aiMarkReadWhenAiResponds`, etc.
+
+```mermaid
+sequenceDiagram
+  participant P as ProcessInboundMessageService
+  participant T as TriageOrchestratorService
+  participant H as HandoffPolicyService
+  participant C as CaseCompletenessEngine
+  participant HH as HandoffToHumanService
+
+  P->>T: bootstrapTriageContext
+  P->>C: evaluateCaseCompleteness
+  P->>H: evaluateHandoffPolicy
+  alt investigate
+    P->>P: sendInvestigationResponse
+  else operational/definitive
+    P->>HH: executeHandoffDecision
+  else continue
+    P->>P: RAG + ToolLoop + resposta
+  end
+```
+
 ```mermaid
 sequenceDiagram
   participant P as ProcessInboundMessageService
@@ -910,7 +954,9 @@ sequenceDiagram
   H->>H: AiConversationLog transferredToHuman=true
 ```
 
-**Gatilhos:** keywords handoff, temas sensíveis, `no_knowledge_found`, `low_confidence`, `provider_error`, pedido explícito forceHandoff.
+**Gatilhos legados (sem triagem v2):** keywords handoff, temas sensíveis, `no_knowledge_found`, `low_confidence`, `provider_error`, pedido explícito forceHandoff.
+
+**Com triagem v2:** os gatilhos acima passam por `HandoffPolicyService`, que pode redirecionar para investigação conversacional antes do handoff.
 
 ---
 
@@ -924,15 +970,17 @@ sequenceDiagram
   participant MG as ModelGateway
   participant IO as Socket.io
 
-  A->>TC: GET /tickets/:id/ai/copilot
+  A->>TC: POST /tickets/:id/ai/copilot (instruction)
   TC->>CP: generateCopilotSuggestion
-  Note over CP: shouldRunCopilot:\nuserId + open +\naiStartedAt ou aiHandoff
+  Note over CP: Modo privado por padrão\n(aiAssistActive, aiAssistMode=private)
   CP->>CP: buildHistory 12 msgs
   CP->>CP: buildKnowledgeContextForQuery
   CP->>MG: chatCompletion JSON
   CP->>CP: AiCopilotSuggestion.create
   CP->>IO: company-{id}-ai-copilot
 ```
+
+**UI:** painel `AiCopilotPanel` com botão **Chamar IA**, ações rápidas e campo de instrução. Resposta privada; envio ao cliente exige ação explícita (`copilot/action` com `send`).
 
 **Trigger automático adicional:** `CreateMessageService.ts:169` ao criar mensagem inbound em ticket aberto com humano.
 

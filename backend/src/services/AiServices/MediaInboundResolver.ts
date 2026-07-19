@@ -1,3 +1,5 @@
+import { evaluateAudioTranscriptionPolicy } from "./Triage/AudioTranscriptionPolicyService";
+import Message from "../../models/Message";
 import MessageMediaFile from "../../models/MessageMediaFile";
 import StorageService from "../StorageService/StorageService";
 import { analyzeInboundImage } from "./AiVisionOcrService";
@@ -163,6 +165,27 @@ export const resolveInboundMessageText = async ({
   }
 
   if (message.mediaType === "audio") {
+    const transcriptionPolicy = await evaluateAudioTranscriptionPolicy({
+      ticket,
+      messageId: message.messageId
+    });
+
+    if (!transcriptionPolicy.shouldTranscribe) {
+      if (message.messageId) {
+        await Message.update(
+          {
+            transcriptionStatus:
+              transcriptionPolicy.reason === "human_mode"
+                ? "skipped_human_mode"
+                : "not_required"
+          } as any,
+          { where: { id: message.messageId, ticketId: ticket.id } }
+        );
+      }
+
+      return messageText || "[Áudio recebido]";
+    }
+
     const audioResult = await resolveInboundAudioText({
       companyId,
       ticketId: ticket.id,

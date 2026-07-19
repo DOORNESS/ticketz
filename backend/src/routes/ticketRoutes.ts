@@ -62,6 +62,13 @@ ticketRoutes.get(
 );
 
 ticketRoutes.post(
+  "/tickets/:ticketId/ai/copilot",
+  isAuth,
+  isCompliant,
+  TicketAiController.copilot
+);
+
+ticketRoutes.post(
   "/tickets/:ticketId/ai/copilot/action",
   isAuth,
   isCompliant,

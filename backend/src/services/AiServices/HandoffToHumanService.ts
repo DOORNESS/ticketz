@@ -18,6 +18,11 @@ import { logAiOperationalEvent } from "./AiOperationalLogService";
 import { getIO } from "../../libs/socket";
 import { generateHandoffSummary } from "./AiHandoffSummaryService";
 import { classifyTicketPriority } from "./AiPriorityClassifierService";
+import {
+  AiHandoffMode,
+  CaseCompletenessSnapshot
+} from "./Triage/AiTriageTypes";
+import { getAiScheduleContext } from "./AiScheduleContextService";
 
 type HandoffParams = {
   ticket: Ticket;
@@ -29,6 +34,9 @@ type HandoffParams = {
   usedChunks?: unknown;
   model?: string;
   conversationText?: string;
+  handoffMode?: AiHandoffMode;
+  skipLegacyOutOfHours?: boolean;
+  caseCompleteness?: CaseCompletenessSnapshot;
 };
 
 const normalizeHandoffReason = (
@@ -78,9 +86,15 @@ const HandoffToHumanService = async ({
   handoffReason,
   usedChunks,
   model,
-  conversationText
+  conversationText,
+  handoffMode = "definitive",
+  skipLegacyOutOfHours = false,
+  caseCompleteness
 }: HandoffParams): Promise<Ticket> => {
   const resolvedReason = normalizeHandoffReason(reason, handoffReason);
+  const scheduleContext = await getAiScheduleContext(ticket);
+  const effectiveMode: AiHandoffMode =
+    handoffMode === "operational" ? "operational" : "definitive";
 
   const routing = await ResolveHandoffQueueService({
     companyId: ticket.companyId,
@@ -103,8 +117,10 @@ const HandoffToHumanService = async ({
   }
 
   const handoffMessage =
-    agent.handoffMessage?.trim() ||
-    "Entendi. Para resolver isso com segurança, vou transferir seu atendimento para o setor responsável. Um atendente dará continuidade em instantes.";
+    effectiveMode === "operational" && !scheduleContext.inBusinessHours
+      ? "Não consegui concluir esta solução com segurança. Nosso suporte humano atende de segunda a sexta-feira, das 08h às 17h. Seu atendimento já ficou registrado e será analisado no próximo período disponível. Enquanto isso, posso continuar coletando informações ou ajudar em outras dúvidas."
+      : agent.handoffMessage?.trim() ||
+        "Entendi. Para resolver isso com segurança, vou transferir seu atendimento para o setor responsável. Um atendente dará continuidade em instantes.";
 
   try {
     await SendWhatsAppMessage({
@@ -126,7 +142,9 @@ const HandoffToHumanService = async ({
     ticketData: {
       aiHandoff: true,
       aiHandoffReason: resolvedReason,
-      aiPaused: false,
+      aiHandoffOriginalReason: ticket.aiHandoffOriginalReason || resolvedReason,
+      aiHandoffMode: effectiveMode,
+      aiPaused: effectiveMode === "definitive",
       chatbot: false,
       status: "pending",
       queueId: targetQueueId,
@@ -135,7 +153,11 @@ const HandoffToHumanService = async ({
       aiWaitingSince: now,
       aiSlaBreached: false,
       aiSlaEscalationLevel: 0,
-      aiLastSlaAlertAt: null
+      aiLastSlaAlertAt: null,
+      aiSkipLegacyOutOfHoursOnHandoff: skipLegacyOutOfHours,
+      aiCaseCompleteness: caseCompleteness || ticket.aiCaseCompleteness,
+      aiProcessingState:
+        effectiveMode === "operational" ? "awaiting_human" : "awaiting_human"
     } as any
   });
 
@@ -155,7 +177,8 @@ const HandoffToHumanService = async ({
   await updatedTicket.update({
     aiHandoffSummary: summary,
     aiPriority: priority,
-    aiEndedAt: new Date()
+    aiEndedAt:
+      effectiveMode === "definitive" ? new Date() : updatedTicket.aiEndedAt
   });
   await updatedTicket.reload({
     include: ["contact", "queue", "whatsapp", "user"]
