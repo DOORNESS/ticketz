@@ -69,6 +69,7 @@ contactRoutes.delete(
   "/contacts/:contactId",
   apiTokenAuth,
   isAuth,
+  isAdmin,
   ContactController.remove
 );
 

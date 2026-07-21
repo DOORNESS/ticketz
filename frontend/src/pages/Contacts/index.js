@@ -34,6 +34,7 @@ import MainContainer from "../../components/MainContainer";
 import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../../components/Can";
+import { resolvePermissionRole } from "../../helpers/ticketListVisibility";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import { generateColor } from "../../helpers/colorGenerator";
 import { getInitials } from "../../helpers/getInitials";
@@ -490,7 +491,7 @@ const Contacts = () => {
                       <EditIcon />
                     </IconButton>
                     <Can
-                      role={user.profile}
+                      role={resolvePermissionRole(user)}
                       perform="contacts-page:deleteContact"
                       yes={() => (
                         <IconButton

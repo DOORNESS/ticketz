@@ -14,6 +14,14 @@ import { decodeToken } from "react-jwt";
 
 let apiInterceptorsRegistered = false;
 const TOKEN_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
+const warmingUpErrors = new Set([
+  "ERR_API_WARMING_UP",
+  "ERR_HEAVY_ROUTES_LOADING",
+  "ERR_API_ROUTES_LOADING"
+]);
+
+const isWarmingUpError = error =>
+  warmingUpErrors.has(error?.response?.data?.error);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const parseStoredToken = () => {
@@ -57,6 +65,7 @@ const buildUserFromToken = token => {
       name: decoded.username || "",
       email: decoded.email || "",
       profile: decoded.profile || "user",
+      super: decoded.super === true,
       companyId: decoded.companyId,
       queues: []
     };
@@ -92,7 +101,7 @@ const useAuth = () => {
         return data;
       } catch (error) {
         const status = error?.response?.status;
-        const warmingUp = error?.response?.data?.error === "ERR_API_WARMING_UP";
+        const warmingUp = isWarmingUpError(error);
 
         if ((status === 503 || status === 502 || warmingUp) && retryCount < 8) {
           await sleep(2500);
@@ -138,15 +147,8 @@ const useAuth = () => {
           originalRequest._retry = true;
 
           try {
-            const { data } = await api.post("/auth/refresh_token");
+            const data = await refreshSession();
             if (data?.token) {
-              localStorage.setItem("token", JSON.stringify(data.token));
-              api.defaults.headers.Authorization = `Bearer ${data.token}`;
-              socketManager.syncCurrentSocketToken?.(data.token);
-              setIsAuth(true);
-              if (data.user) {
-                setUser(data.user);
-              }
               originalRequest.headers.Authorization = `Bearer ${data.token}`;
               return api(originalRequest);
             }
@@ -173,7 +175,7 @@ const useAuth = () => {
         return Promise.reject(error);
       }
     );
-  }, [socketManager]);
+  }, [socketManager, refreshSession]);
 
   useEffect(() => {
     const bootstrapAuth = async () => {

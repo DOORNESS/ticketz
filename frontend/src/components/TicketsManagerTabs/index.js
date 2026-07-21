@@ -18,6 +18,7 @@ import NewTicketModal from "../NewTicketModal";
 import TicketsList from "../TicketsListCustom";
 import TabPanel from "../TabPanel";
 
+import { resolvePermissionRole } from "../../helpers/ticketListVisibility";
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
@@ -137,6 +138,8 @@ const TicketsManagerTabs = () => {
   const { user } = useContext(AuthContext);
   const { listSubTab, setListSubTab } = useContext(TicketsContext);
   const { profile } = user || {};
+  const permissionRole = resolvePermissionRole(user);
+  const isMasterAdmin = user?.super === true || profile === "admin";
   const userQueues = user?.queues ?? [];
   const tabOpen = listSubTab;
 
@@ -164,7 +167,7 @@ const TicketsManagerTabs = () => {
   }, []);
 
   useEffect(() => {
-    if (user?.profile?.toUpperCase() === "ADMIN") {
+    if (isMasterAdmin) {
       setShowAllTickets(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -301,7 +304,7 @@ const TicketsManagerTabs = () => {
             </Button>
             {tab === "open" && (
               <Can
-                role={user.profile}
+                role={permissionRole}
                 perform="tickets-manager:showall"
                 yes={() => (
                   <FormControlLabel
@@ -386,7 +389,8 @@ const TicketsManagerTabs = () => {
         <Paper className={classes.ticketsWrapper}>
           <TicketsList
             status="open"
-            showAll={showAllTickets}
+            showAll={showAllTickets || user?.super}
+            supervision={user?.super}
             selectedQueueIds={selectedQueueIds}
             updateCount={val => setOpenCount(val)}
             style={applyPanelStyle("open")}
@@ -395,6 +399,7 @@ const TicketsManagerTabs = () => {
           />
           <TicketsList
             status="pending"
+            supervision={user?.super}
             selectedQueueIds={selectedQueueIds}
             updateCount={val => setPendingCount(val)}
             style={applyPanelStyle("pending")}
@@ -404,6 +409,7 @@ const TicketsManagerTabs = () => {
           <TicketsList
             listMode="ai"
             aiFilter="ai_handling"
+            supervision={user?.super}
             selectedQueueIds={selectedQueueIds}
             updateCount={val => setAiCount(val)}
             style={applyPanelStyle("ai")}
@@ -438,7 +444,7 @@ const TicketsManagerTabs = () => {
           />
         </Box>
         <TagsFilter onFiltered={handleSelectedTags} />
-        {profile === "admin" && (
+        {(profile === "admin" || user?.super) && (
           <UsersFilter onFiltered={handleSelectedUsers} />
         )}
         <TicketsList

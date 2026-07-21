@@ -19,6 +19,13 @@ export const ticketMatchesSelectedQueues = (
   return selectedQueueIds.includes(ticket.queueId);
 };
 
+export const resolvePermissionRole = user => {
+  if (user?.super) {
+    return "super";
+  }
+  return user?.profile || "user";
+};
+
 export const shouldShowTicketInList = ({
   ticket,
   status,
@@ -27,7 +34,8 @@ export const shouldShowTicketInList = ({
   selectedQueueIds,
   profile,
   showAll,
-  userId
+  userId,
+  superUser
 }) => {
   if (!ticket) {
     return false;
@@ -53,7 +61,7 @@ export const shouldShowTicketInList = ({
     return false;
   }
 
-  if (supervision) {
+  if (supervision || superUser) {
     return true;
   }
 
@@ -66,7 +74,7 @@ export const shouldShowTicketInList = ({
       return false;
     }
 
-    if (showAll && profile === "admin") {
+    if (showAll && (profile === "admin" || superUser)) {
       return true;
     }
 

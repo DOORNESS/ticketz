@@ -7,8 +7,8 @@ const isAdmin = async (
   res: Response,
   next: NextFunction
 ): Promise<any> => {
-  const { profile } = await User.findByPk(req.user.id);
-  if (profile !== "admin") {
+  const { profile, super: isSuper } = await User.findByPk(req.user.id);
+  if (profile !== "admin" && !isSuper) {
     throw new AppError("Acesso não permitido", 403);
   }
 

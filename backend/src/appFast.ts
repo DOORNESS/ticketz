@@ -323,9 +323,15 @@ const isFastShellPath = (req: express.Request): boolean =>
   req.path.startsWith("/public-settings/") ||
   (req.method === "POST" && req.path === "/auth/login");
 
+const isCoreAuthPath = (req: express.Request): boolean =>
+  req.path === "/auth/refresh_token" ||
+  req.path === "/auth/me" ||
+  req.path === "/auth/logout" ||
+  req.path.startsWith("/auth/impersonate");
+
 app.use(async (req, res, next) => {
   if (isFastShellPath(req)) {
-    return;
+    return next();
   }
 
   try {
@@ -336,6 +342,10 @@ app.use(async (req, res, next) => {
       error: "ERR_API_ROUTES_LOADING",
       message: error instanceof Error ? error.message : String(error)
     });
+  }
+
+  if (isCoreAuthPath(req)) {
+    return next();
   }
 
   const heavy = getHeavyRoutesState();

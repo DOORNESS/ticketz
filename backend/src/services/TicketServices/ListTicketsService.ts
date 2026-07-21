@@ -100,6 +100,7 @@ const ListTicketsService = async ({
   const isSupervision =
     supervision === true ||
     supervision === "true" ||
+    user.super === true ||
     (aiFilter && aiFilter !== AI_TICKET_FILTERS.all);
 
   const isAiHandlingList = aiFilter === AI_TICKET_FILTERS.ai_handling;
@@ -175,7 +176,11 @@ const ListTicketsService = async ({
     }
   ];
 
-  if (showAll === "true" && user.profile === "admin" && status === "open") {
+  if (
+    showAll === "true" &&
+    (user.profile === "admin" || user.super === true) &&
+    status === "open"
+  ) {
     andedOrs.length = 0;
     andedOrs.push({ status: "open" });
   }
@@ -201,10 +206,7 @@ const ListTicketsService = async ({
           aiPaused: false,
           userId: null,
           status: { [Op.ne]: "closed" },
-          [Op.or]: [
-            { aiHandoff: false },
-            { aiHandoffMode: "operational" }
-          ]
+          [Op.or]: [{ aiHandoff: false }, { aiHandoffMode: "operational" }]
         });
         break;
       case AI_TICKET_FILTERS.ai_resolved:
@@ -223,7 +225,9 @@ const ListTicketsService = async ({
       case AI_TICKET_FILTERS.handoff_pending:
         Object.assign(aiConditions, {
           aiHandoff: true,
-          aiHandoffMode: { [Op.or]: [{ [Op.ne]: "operational" }, { [Op.is]: null }] },
+          aiHandoffMode: {
+            [Op.or]: [{ [Op.ne]: "operational" }, { [Op.is]: null }]
+          },
           status: "pending",
           userId: null
         });

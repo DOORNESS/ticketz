@@ -52,6 +52,23 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+---
+
+## [1.5.8] — 2026-07-20
+
+### Corrigido
+
+- **Login 503:** rotas core de auth (`/auth/refresh_token`, `/auth/me`) liberadas antes das heavy routes; frontend reconhece `ERR_HEAVY_ROUTES_LOADING` e retenta refresh
+- **Admin master (`user.super`):** vê todos os atendimentos (Atendendo, Aguardando, IA) com supervisão automática e toggle “Todos”
+- **Excluir contato:** botão visível para super admin; `DELETE /contacts/:id` exige admin ou super
+- **`GET /auth/me`:** validação de cookie antes de decodificar token
+
+### Manual
+
+- Versão manual **1.5.8**
+
+---
+
 ## [1.5.7] — 2026-07-19
 
 ### Corrigido

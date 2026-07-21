@@ -23,7 +23,9 @@ function isBackendHealthy(response) {
 
   if (
     response.status === 503 &&
-    response.data?.error === "ERR_API_WARMING_UP"
+    (response.data?.error === "ERR_API_WARMING_UP" ||
+      response.data?.error === "ERR_HEAVY_ROUTES_LOADING" ||
+      response.data?.error === "ERR_API_ROUTES_LOADING")
   ) {
     return true;
   }
