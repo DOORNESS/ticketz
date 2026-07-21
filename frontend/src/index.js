@@ -6,6 +6,8 @@ import { loadConfig } from "./helpers/loadConfig";
 import { i18n } from "./translate/i18n";
 import axios from "axios";
 
+import { API_WARMUP_ERRORS } from "./helpers/apiWarmup";
+
 const BACKEND_RETRY_INTERVAL_SECONDS = 15;
 const BACKEND_PROBE_TIMEOUT_MS = 45000;
 let backendRetryTimeout = null;
@@ -21,12 +23,7 @@ function isBackendHealthy(response) {
     return true;
   }
 
-  if (
-    response.status === 503 &&
-    (response.data?.error === "ERR_API_WARMING_UP" ||
-      response.data?.error === "ERR_HEAVY_ROUTES_LOADING" ||
-      response.data?.error === "ERR_API_ROUTES_LOADING")
-  ) {
+  if (response.status === 503 && API_WARMUP_ERRORS.has(response.data?.error)) {
     return true;
   }
 

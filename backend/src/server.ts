@@ -1,10 +1,6 @@
 import http from "http";
 import gracefulShutdown from "http-graceful-shutdown";
-import appFast, { ensureCoreRoutes } from "./appFast";
-import {
-  markHeavyRoutesFailed,
-  markHeavyRoutesReady
-} from "./helpers/routeReadiness";
+import appFast, { ensureCoreRoutes, ensureHeavyRoutes } from "./appFast";
 import { logger } from "./utils/logger";
 
 if (!process.env.PORT) {
@@ -190,26 +186,17 @@ setImmediate(() => {
       initIO(server);
       logger.info("Core routes attached (auth + public settings)");
 
-      setImmediate(() => {
-        import("./routes/heavyRoutes")
-          .then(({ default: heavyRoutes }) => {
-            appFast.use(heavyRoutes);
-            markHeavyRoutesReady();
-            logger.info("Heavy routes attached");
-          })
-          .catch(error => {
-            markHeavyRoutesFailed(error);
-            logger.error({ error }, "Heavy routes failed to attach");
-          });
-
-        import("./app")
-          .then(({ default: fullApp }) => {
-            appFast.set("queues", fullApp.get("queues"));
-          })
-          .catch(error => {
-            logger.warn({ error }, "Queue registry deferred");
-          });
+      await ensureHeavyRoutes().catch(error => {
+        logger.error({ error }, "Heavy routes preload failed");
       });
+
+      import("./app")
+        .then(({ default: fullApp }) => {
+          appFast.set("queues", fullApp.get("queues"));
+        })
+        .catch(error => {
+          logger.warn({ error }, "Queue registry deferred");
+        });
 
       await runPostListenBootstrap(server);
     })

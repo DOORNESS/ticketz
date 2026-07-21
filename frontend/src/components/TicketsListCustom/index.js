@@ -18,6 +18,7 @@ import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import toastError from "../../errors/toastError";
+import { isApiWarmupError } from "../../helpers/apiWarmup";
 import { shouldShowTicketInList } from "../../helpers/ticketListVisibility";
 
 const useStyles = makeStyles(theme => ({
@@ -481,7 +482,9 @@ const TicketsListCustom = props => {
                 });
             })
             .catch(err => {
-              toastError(err);
+              if (!isApiWarmupError(err)) {
+                toastError(err);
+              }
             });
         } else {
           dispatch({ type: "RESET" });

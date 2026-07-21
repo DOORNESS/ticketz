@@ -1,7 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import toastError from "../../errors/toastError";
+import { isApiWarmupError } from "../../helpers/apiWarmup";
 
 import api from "../../services/api";
+
+const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const useTickets = ({
   isSearch,
@@ -31,36 +34,51 @@ const useTickets = ({
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       const fetchTickets = async () => {
-        try {
-          const { data } = await api.get("/tickets", {
-            params: {
-              isSearch,
-              searchParam,
-              nextUpdatedAt,
-              nextTicketId,
-              contactId,
-              tags,
-              users,
-              status,
-              groups,
-              date,
-              updatedAt,
-              showAll,
-              queueIds,
-              withUnreadMessages,
-              notClosed,
-              all,
-              aiFilter,
-              supervision
+        let attempt = 0;
+        while (attempt < 15) {
+          try {
+            const { data } = await api.get("/tickets", {
+              params: {
+                isSearch,
+                searchParam,
+                nextUpdatedAt,
+                nextTicketId,
+                contactId,
+                tags,
+                users,
+                status,
+                groups,
+                date,
+                updatedAt,
+                showAll,
+                queueIds,
+                withUnreadMessages,
+                notClosed,
+                all,
+                aiFilter,
+                supervision
+              }
+            });
+            setTickets(data.tickets);
+            setLoading(false);
+            return;
+          } catch (err) {
+            const status = err?.response?.status;
+            if (
+              (status === 503 || status === 502 || isApiWarmupError(err)) &&
+              attempt < 14
+            ) {
+              attempt += 1;
+              await sleep(2500);
+              continue;
             }
-          });
-          setTickets(data.tickets);
-          setLoading(false);
-        } catch (err) {
-          setTickets([]);
-          setLoading(false);
-          if (err?.response?.status && err.response.status < 500) {
-            toastError(err);
+
+            setTickets([]);
+            setLoading(false);
+            if (err?.response?.status && err.response.status < 500) {
+              toastError(err);
+            }
+            return;
           }
         }
       };

@@ -6,7 +6,11 @@ import cookieParser from "cookie-parser";
 
 import { corsOrigin } from "./helpers/corsOrigin";
 import { getBuildInfo } from "./helpers/buildInfo";
-import { getHeavyRoutesState } from "./helpers/routeReadiness";
+import {
+  getHeavyRoutesState,
+  markHeavyRoutesFailed,
+  markHeavyRoutesReady
+} from "./helpers/routeReadiness";
 import { servePublicMedia } from "./helpers/servePublicMedia";
 import AppError from "./errors/AppError";
 import { logger } from "./utils/logger";
@@ -316,6 +320,35 @@ export async function ensureCoreRoutes(): Promise<void> {
   await coreRoutesPromise;
 }
 
+let heavyRoutesAttachPromise: Promise<void> | null = null;
+
+export async function ensureHeavyRoutes(): Promise<void> {
+  const heavy = getHeavyRoutesState();
+  if (heavy.heavyRoutesReady) {
+    return;
+  }
+
+  if (heavy.heavyRoutesError) {
+    throw new Error(heavy.heavyRoutesError);
+  }
+
+  if (!heavyRoutesAttachPromise) {
+    heavyRoutesAttachPromise = import("./routes/heavyRoutes")
+      .then(({ default: heavyRoutes }) => {
+        app.use(heavyRoutes);
+        markHeavyRoutesReady();
+        logger.info("Heavy routes attached");
+      })
+      .catch(error => {
+        markHeavyRoutesFailed(error);
+        logger.error({ error }, "Heavy routes failed to attach");
+        throw error;
+      });
+  }
+
+  await heavyRoutesAttachPromise;
+}
+
 const isFastShellPath = (req: express.Request): boolean =>
   req.path === "/health" ||
   req.path === "/version" ||
@@ -348,12 +381,16 @@ app.use(async (req, res, next) => {
     return next();
   }
 
-  const heavy = getHeavyRoutesState();
-  if (!heavy.heavyRoutesReady) {
+  try {
+    await ensureHeavyRoutes();
+  } catch (error) {
+    const heavy = getHeavyRoutesState();
     return res.status(503).json({
       ok: false,
       error: "ERR_HEAVY_ROUTES_LOADING",
-      message: heavy.heavyRoutesError || "Heavy routes still loading"
+      message:
+        heavy.heavyRoutesError ||
+        (error instanceof Error ? error.message : String(error))
     });
   }
 

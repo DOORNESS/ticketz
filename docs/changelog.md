@@ -54,6 +54,22 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+---
+
+## [1.5.9] — 2026-07-20
+
+### Corrigido
+
+- **ERR_HEAVY_ROUTES_LOADING:** heavy routes carregam de forma síncrona via `ensureHeavyRoutes()` (sem janela 503 entre login e tickets)
+- **Lista vazia/skeleton:** `useTickets` retenta automaticamente em 503 durante warmup
+- **Toast assustador:** erros de warmup não aparecem mais como código cru na tela
+
+### Manual
+
+- Versão manual **1.5.9**
+
+---
+
 ## [1.5.8] — 2026-07-20
 
 ### Corrigido

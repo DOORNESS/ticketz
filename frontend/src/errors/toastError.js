@@ -1,6 +1,7 @@
 import { toast } from "react-toastify";
 import { i18n } from "../translate/i18n";
 import { isString } from "lodash";
+import { API_WARMUP_ERRORS } from "../helpers/apiWarmup";
 
 const MIGRATION_PENDING_PATTERN = /migrations pending/i;
 const AI_PLATFORM_NOT_READY_PATTERN = /AI platform is not ready/i;
@@ -44,11 +45,26 @@ export const resolveErrorMessage = err => {
     return i18n.t("frontendErrors.ERR_BACKEND_NOT_READY");
   }
 
+  if (API_WARMUP_ERRORS.has(errorMsg)) {
+    return i18n.t("frontendErrors.ERR_BACKEND_NOT_READY");
+  }
+
   return errorMsg;
 };
 
 const toastError = err => {
   const errorMsg = resolveErrorMessage(err);
+
+  if (API_WARMUP_ERRORS.has(errorMsg)) {
+    return;
+  }
+
+  if (
+    typeof err !== "string" &&
+    API_WARMUP_ERRORS.has(err?.response?.data?.error)
+  ) {
+    return;
+  }
 
   if (errorMsg === "ERR_OTHER_OPEN_TICKET") {
     return "Já existe um atendimento aberto para este contato. Use a aba Aguardando ou Atendendo.";

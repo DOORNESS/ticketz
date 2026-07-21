@@ -14,14 +14,7 @@ import { decodeToken } from "react-jwt";
 
 let apiInterceptorsRegistered = false;
 const TOKEN_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
-const warmingUpErrors = new Set([
-  "ERR_API_WARMING_UP",
-  "ERR_HEAVY_ROUTES_LOADING",
-  "ERR_API_ROUTES_LOADING"
-]);
-
-const isWarmingUpError = error =>
-  warmingUpErrors.has(error?.response?.data?.error);
+import { API_WARMUP_ERRORS, isApiWarmupError } from "../helpers/apiWarmup";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const parseStoredToken = () => {
@@ -101,7 +94,7 @@ const useAuth = () => {
         return data;
       } catch (error) {
         const status = error?.response?.status;
-        const warmingUp = isWarmingUpError(error);
+        const warmingUp = isApiWarmupError(error);
 
         if ((status === 503 || status === 502 || warmingUp) && retryCount < 8) {
           await sleep(2500);
@@ -216,7 +209,9 @@ const useAuth = () => {
           api.defaults.headers.Authorization = undefined;
           setIsAuth(false);
           setUser({});
-          toastError(err);
+          if (!isApiWarmupError(err)) {
+            toastError(err);
+          }
         }
       } finally {
         setLoading(false);
