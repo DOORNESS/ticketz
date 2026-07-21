@@ -52,8 +52,12 @@ import authConfig from "../config/auth";
 import { CounterManager } from "./counter";
 import UserSocketSession from "../models/UserSocketSession";
 import { GetCompanySetting } from "../helpers/CheckSettings";
+import canViewTicket from "../helpers/canViewTicket";
 import { DecoupledDriverServices } from "../services/DecoupledDriverServices/DecoupledDriverServices";
 import { corsOrigin } from "../helpers/corsOrigin";
+
+const hasCompanyWideSocketAccess = (user: User): boolean =>
+  user.profile === "admin" || user.super === true;
 
 const decoupledDriverServices = DecoupledDriverServices.getInstance();
 
@@ -167,7 +171,7 @@ export const initIO = (httpServer: Server): SocketIO => {
       socket.join("super");
     }
 
-    if (user.profile === "admin") {
+    if (hasCompanyWideSocketAccess(user)) {
       socket.join(`company-${user.companyId}-admin`);
     }
 
@@ -222,16 +226,24 @@ export const initIO = (httpServer: Server): SocketIO => {
       if (!ticketId || ticketId === "undefined") {
         return;
       }
+      const userWithQueues =
+        user.queues?.length > 0
+          ? user
+          : await User.findByPk(user.id, {
+              include: [{ model: Queue, as: "queues" }]
+            });
+
       Ticket.findByPk(ticketId).then(
         async ticket => {
           if (
             ticket &&
             ticket.companyId === user.companyId &&
-            (ticket.userId === user.id || user.profile === "admin")
+            userWithQueues &&
+            canViewTicket(ticket, userWithQueues)
           ) {
             joinTicketChannel(socket, ticketId, user, counters);
           } else if (
-            ticket.isGroup &&
+            ticket?.isGroup &&
             (await GetCompanySetting(
               user.companyId,
               "groupsTab",
@@ -282,7 +294,7 @@ export const initIO = (httpServer: Server): SocketIO => {
     socket.on("joinNotification", async () => {
       const c = counters.incrementCounter("notification");
       if (c === 1) {
-        if (user.profile === "admin") {
+        if (hasCompanyWideSocketAccess(user)) {
           socket.join(`company-${user.companyId}-notification`);
           socket.join(`company-${user.companyId}-handoff`);
         } else {
@@ -307,7 +319,7 @@ export const initIO = (httpServer: Server): SocketIO => {
     socket.on("leaveNotification", async () => {
       const c = counters.decrementCounter("notification");
       if (c === 0) {
-        if (user.profile === "admin") {
+        if (hasCompanyWideSocketAccess(user)) {
           socket.leave(`company-${user.companyId}-notification`);
         } else {
           user.queues.forEach(queue => {
@@ -323,7 +335,7 @@ export const initIO = (httpServer: Server): SocketIO => {
 
     socket.on("joinTickets", (status: string) => {
       if (counters.incrementCounter(`status-${status}`) === 1) {
-        if (user.profile === "admin") {
+        if (hasCompanyWideSocketAccess(user)) {
           logger.debug(
             `Admin ${user.id} of company ${user.companyId} joined ${status} tickets channel.`
           );
@@ -343,7 +355,7 @@ export const initIO = (httpServer: Server): SocketIO => {
 
     socket.on("leaveTickets", (status: string) => {
       if (counters.decrementCounter(`status-${status}`) === 0) {
-        if (user.profile === "admin") {
+        if (hasCompanyWideSocketAccess(user)) {
           logger.debug(
             `Admin ${user.id} of company ${user.companyId} leaved ${status} tickets channel.`
           );

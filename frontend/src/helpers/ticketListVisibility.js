@@ -46,6 +46,10 @@ export const shouldShowTicketInList = ({
       return false;
     }
 
+    if (superUser || supervision || profile === "admin") {
+      return true;
+    }
+
     return ticketMatchesSelectedQueues(ticket, selectedQueueIds, {
       supervision: true,
       listMode: "ai"

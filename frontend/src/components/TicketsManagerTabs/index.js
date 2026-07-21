@@ -390,7 +390,7 @@ const TicketsManagerTabs = () => {
           <TicketsList
             status="open"
             showAll={showAllTickets || user?.super}
-            supervision={user?.super}
+            supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
             updateCount={val => setOpenCount(val)}
             style={applyPanelStyle("open")}
@@ -399,7 +399,7 @@ const TicketsManagerTabs = () => {
           />
           <TicketsList
             status="pending"
-            supervision={user?.super}
+            supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
             updateCount={val => setPendingCount(val)}
             style={applyPanelStyle("pending")}
@@ -409,7 +409,7 @@ const TicketsManagerTabs = () => {
           <TicketsList
             listMode="ai"
             aiFilter="ai_handling"
-            supervision={user?.super}
+            supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
             updateCount={val => setAiCount(val)}
             style={applyPanelStyle("ai")}

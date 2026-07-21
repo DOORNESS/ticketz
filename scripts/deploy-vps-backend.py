@@ -105,6 +105,7 @@ PATCH_PATHS = [
     "models/AiTicketTimelineEvent.js",
     "services/StorageService/StorageService.js",
     "libs/wbot.js",
+    "libs/socket.js",
     "helpers/bufferToReadStreamTmp.js",
     "services/WbotServices/StartWhatsAppSession.js",
     "services/WbotServices/StartAllWhatsAppsSessions.js",

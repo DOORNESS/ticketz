@@ -11,10 +11,10 @@ import { SocketContext } from "../../context/Socket/SocketContext";
 import { clearAllCachedSettings } from "../../helpers/settingsCache";
 import moment from "moment";
 import { decodeToken } from "react-jwt";
+import { API_WARMUP_ERRORS, isApiWarmupError } from "../../helpers/apiWarmup";
 
 let apiInterceptorsRegistered = false;
 const TOKEN_REFRESH_INTERVAL_MS = 20 * 60 * 1000;
-import { API_WARMUP_ERRORS, isApiWarmupError } from "../helpers/apiWarmup";
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const parseStoredToken = () => {

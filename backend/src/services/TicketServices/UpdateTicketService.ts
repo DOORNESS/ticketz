@@ -188,6 +188,7 @@ const UpdateTicketService = async ({
         !isAiTakeover &&
         !isReopeningClosed &&
         user.profile !== "admin" &&
+        !user.super &&
         !isAssignedAgent
       ) {
         throw new AppError("ERR_FORBIDDEN", 403);
@@ -219,7 +220,7 @@ const UpdateTicketService = async ({
     if (!oldQueueId && userId && oldStatus === "pending" && status === "open") {
       const acceptUser = await User.findByPk(userId);
       const isAiHandoffAccept = Boolean(ticket.aiHandoff);
-      if (acceptUser.profile !== "admin" && !isAiHandoffAccept) {
+      if (acceptUser.profile !== "admin" && !acceptUser.super && !isAiHandoffAccept) {
         throw new AppError("ERR_NO_PERMISSION", 403);
       }
     }

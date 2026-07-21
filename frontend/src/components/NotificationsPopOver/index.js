@@ -51,7 +51,8 @@ const NotificationsPopOver = props => {
   const [notifications, setNotifications] = useState([]);
   const [soundGroupNotifications, setSoundGroupNotifications] = useState(false);
   const [showTabGroups, setShowTabGroups] = useState(false);
-  const { profile, queues } = user || {};
+  const { profile, queues, super: isSuperUser } = user || {};
+  const isCompanyWideUser = profile === "admin" || isSuperUser === true;
   const safeQueues = queues ?? [];
   const [queueIds, setQueueIds] = useState(safeQueues.map(q => q.id));
 
@@ -59,7 +60,8 @@ const NotificationsPopOver = props => {
 
   const { tickets, refetch: refetchTickets } = useTickets({
     notClosed: "true",
-    withUnreadMessages: "true"
+    withUnreadMessages: "true",
+    supervision: isCompanyWideUser || undefined
   });
   const [play] = useSound(alertSound, { volume: props.volume });
   const soundAlertRef = useRef();
@@ -204,7 +206,7 @@ const NotificationsPopOver = props => {
         (data.ticket.userId === user?.id ||
           (!data.ticket.userId &&
             (queueIds.includes(data.ticket.queueId) ||
-              (!data.ticket.queueId && profile === "admin"))))
+              (!data.ticket.queueId && isCompanyWideUser))))
       ) {
         if (
           isViewingTicket(data.ticket) &&
@@ -241,7 +243,7 @@ const NotificationsPopOver = props => {
 
       const ticket = data.ticket;
       const belongsToQueue =
-        profile === "admin" ||
+        isCompanyWideUser ||
         queueIds.includes(ticket.queueId) ||
         !ticket.queueId;
 

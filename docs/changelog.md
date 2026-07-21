@@ -56,6 +56,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.11] — 2026-07-20
+
+### Corrigido
+
+- **Aba IA vazia para admin master:** supervisão (`user.super` / admin) não bypassava filtro de filas no frontend (`ticketListVisibility`) nem no backend (`ListTicketsService`)
+- **403 em operações de ticket:** super admin tratado como admin em `UpdateTicketService`, `MessageController` e socket `joinChatBox` via `canViewTicket`
+- **Notificações vs aba IA:** super admin entra nos rooms company-wide do socket e nas notificações como admin da empresa
+- **Build frontend:** import corrigido de `apiWarmup` em `useAuth`
+
+### Manual
+
+- Versão manual **1.5.11**
+
+---
+
 ## [1.5.10] — 2026-07-20
 
 ### Corrigido

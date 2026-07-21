@@ -48,11 +48,12 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId, profile } = req.user;
   const queues: number[] = [];
 
-  if (profile !== "admin") {
-    const user = await User.findByPk(req.user.id, {
-      include: [{ model: Queue, as: "queues" }]
-    });
-    user.queues.forEach(queue => {
+  const requestUser = await User.findByPk(req.user.id, {
+    include: [{ model: Queue, as: "queues" }]
+  });
+
+  if (profile !== "admin" && !requestUser?.super) {
+    requestUser?.queues.forEach(queue => {
       queues.push(queue.id);
     });
   }
@@ -284,6 +285,7 @@ export const forward = async (
 
   if (
     user.profile !== "admin" &&
+    !user.super &&
     queueId &&
     !user.queues.find(q => q.id === queueId)
   ) {
