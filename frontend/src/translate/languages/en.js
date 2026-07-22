@@ -1241,6 +1241,9 @@ const messages = {
         ERR_INVALID_CREDENTIALS: "Authentication error. Please try again.",
         ERR_SENDING_WAPP_MSG:
           "Error sending WhatsApp message. Check the connections page.",
+        ERR_COPILOT_SUGGESTION_FAILED:
+          "Could not generate AI suggestion. Please try again shortly.",
+        ERR_AI_AGENT_NOT_FOUND: "No active AI agent found for this ticket.",
         ERR_DELETE_WAPP_MSG: "Could not delete WhatsApp message.",
         ERR_EDITING_WAPP_MSG: "Could not edit WhatsApp message.",
         ERR_OTHER_OPEN_TICKET:

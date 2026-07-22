@@ -2,6 +2,7 @@ import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
 import AiCopilotSuggestion from "../../models/AiCopilotSuggestion";
+import AppError from "../../errors/AppError";
 import { chatCompletion } from "./ModelGateway";
 import { getActiveAgent, getKnowledgeBaseIdsForAgent } from "./AiHelpers";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
@@ -92,7 +93,12 @@ export const shouldRunCopilot = (ticket: Ticket): boolean =>
   isAiFeaturesEnabled() &&
   Boolean(ticket.userId) &&
   ticket.status === "open" &&
-  Boolean(ticket.aiStartedAt || ticket.aiHandoff || ticket.aiAgentId);
+  Boolean(
+    ticket.aiStartedAt ||
+    ticket.aiHandoff ||
+    ticket.aiAgentId ||
+    ticket.aiHumanAssumedAt
+  );
 
 export const generateCopilotSuggestion = async ({
   ticket,
@@ -115,12 +121,16 @@ export const generateCopilotSuggestion = async ({
     return null;
   }
 
+  if (!isAiFeaturesEnabled()) {
+    throw new AppError("ERR_AI_PLATFORM_NOT_READY", 503);
+  }
+
   const activeAgent =
     agent ||
     (ticket.aiAgentId ? await AiAgent.findByPk(ticket.aiAgentId) : null) ||
     (await getActiveAgent(ticket.companyId, ticket.queueId));
   if (!activeAgent) {
-    return null;
+    throw new AppError("ERR_AI_AGENT_NOT_FOUND", 422);
   }
 
   try {
@@ -265,11 +275,14 @@ export const generateCopilotSuggestion = async ({
 
     return suggestion;
   } catch (error) {
+    if (error instanceof AppError) {
+      throw error;
+    }
     logger.warn(
       { error, ticketId: ticket.id },
       "generateCopilotSuggestion failed"
     );
-    return null;
+    throw new AppError("ERR_COPILOT_SUGGESTION_FAILED", 422);
   }
 };
 

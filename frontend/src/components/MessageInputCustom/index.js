@@ -1038,17 +1038,17 @@ const MessageInputCustom = forwardRef((props, ref) => {
   };
 
   const handleSendMessage = async () => {
-    if (inputMessage.trim() === "") return;
-    //if (disableOption) return
+    if (inputMessage.trim() === "" || disableOption) return;
     setLoading(true);
 
+    const messageBody = signMessage
+      ? `*${user?.name}:*\n${inputMessage.trim()}`
+      : inputMessage.trim();
     const message = {
       read: 1,
       fromMe: true,
       mediaUrl: "",
-      body: signMessage
-        ? `*${user?.name}:*\n${inputMessage.trim()}`
-        : inputMessage.trim(),
+      body: messageBody,
       quotedMsg: replyingMessage
     };
 
@@ -1058,16 +1058,19 @@ const MessageInputCustom = forwardRef((props, ref) => {
       editingMessage !== null
         ? `/messages/edit/${editingMessage.id}`
         : `/messages/${ticketId}`;
-    api.post(url, message).catch(err => {
-      toastError(err);
-    });
 
-    setInputMessage("");
-    setShowEmoji(false);
-    setLoading(false);
-    setReplyingMessage(null);
-    setEditingMessage(null);
-    inputRef.current.focus();
+    try {
+      await api.post(url, message);
+      setInputMessage("");
+      setShowEmoji(false);
+      setReplyingMessage(null);
+      setEditingMessage(null);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setLoading(false);
+      inputRef.current?.focus();
+    }
   };
 
   const handleStartRecording = async () => {

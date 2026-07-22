@@ -52,6 +52,7 @@ PATCH_PATHS = [
     "helpers/canViewTicket.js",
     "helpers/mediaConversion.js",
     "middleware/isAdmin.js",
+    "middleware/isAuth.js",
     "controllers/SessionController.js",
     "routes/contactRoutes.js",
     "models/Message.js",

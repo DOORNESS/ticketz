@@ -83,7 +83,7 @@ const Ticket = () => {
   const history = useHistory();
   const classes = useStyles();
 
-  const { user } = useContext(AuthContext);
+  const { user, loading: authLoading } = useContext(AuthContext);
   const {
     observationMode,
     setObservationMode,
@@ -134,6 +134,10 @@ const Ticket = () => {
   };
 
   useEffect(() => {
+    if (authLoading || !user?.id) {
+      return undefined;
+    }
+
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       const fetchTicket = async () => {
@@ -157,7 +161,7 @@ const Ticket = () => {
       fetchTicket();
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [ticketId, user, history, setObservationMode]);
+  }, [ticketId, user, authLoading, history, setObservationMode]);
 
   useEffect(() => {
     const companyId = localStorage.getItem("companyId");

@@ -6,6 +6,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.13] — 2026-07-22
+
+### Corrigido
+
+- **Envio WhatsApp:** validação de sessão `CONNECTED` antes de enviar; frontend aguarda API e mantém texto se falhar (§5, §15, §36)
+- **Copiloto pós-assunção:** erros explícitos (`ERR_AI_AGENT_NOT_FOUND`, `ERR_COPILOT_SUGGESTION_FAILED`); `shouldRunCopilot` inclui `aiHumanAssumedAt` (§11, §27)
+- **403 pós-F5:** JWT expirado retorna 401; interceptor renova sessão também em 403 legado (§15, §36)
+- **Lista de tickets:** botões de ação no topo direito do card, clicáveis com badges IA (§5, §36)
+- Deploy VPS patch: `middleware/isAuth.js` incluído em `PATCH_PATHS`
+
+---
+
 ## [1.5.0] — 2026-07-19
 
 ### Adicionado (Repositório multimodal + painel unificado)

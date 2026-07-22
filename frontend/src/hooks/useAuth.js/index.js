@@ -130,13 +130,16 @@ const useAuth = () => {
         const originalRequest = error.config;
         const status = error?.response?.status;
 
-        if (
-          status === 401 &&
+        const sessionExpired =
+          error?.response?.data?.error === "ERR_SESSION_EXPIRED";
+        const shouldRefreshSession =
+          (status === 401 || (status === 403 && sessionExpired)) &&
           originalRequest &&
           !originalRequest._retry &&
           !String(originalRequest.url || "").includes("/auth/refresh_token") &&
-          !String(originalRequest.url || "").includes("/auth/login")
-        ) {
+          !String(originalRequest.url || "").includes("/auth/login");
+
+        if (shouldRefreshSession) {
           originalRequest._retry = true;
 
           try {

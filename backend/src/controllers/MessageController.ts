@@ -152,6 +152,13 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   }
 
   if (channel === "whatsapp") {
+    const connection = await Whatsapp.findByPk(ticket.whatsappId);
+    if (!connection || connection.status !== "CONNECTED") {
+      throw new AppError("ERR_WAPP_NOT_INITIALIZED", 400);
+    }
+  }
+
+  if (channel === "whatsapp") {
     await SetTicketMessagesAsRead(ticket);
     if (!ticket.isGroup) {
       const contact = await ShowContactService(ticket.contactId, companyId);

@@ -1394,6 +1394,10 @@ const messages = {
           "Erro de autenticação. Por favor, tente novamente.",
         ERR_SENDING_WAPP_MSG:
           "Erro ao enviar mensagem do WhatsApp. Verifique a página de conexões.",
+        ERR_COPILOT_SUGGESTION_FAILED:
+          "Não foi possível gerar sugestão da IA. Tente novamente em instantes.",
+        ERR_AI_AGENT_NOT_FOUND:
+          "Nenhum agente de IA ativo encontrado para este atendimento.",
         ERR_DELETE_WAPP_MSG: "Não foi possível excluir a mensagem do WhatsApp.",
         ERR_EDITING_WAPP_MSG: "Não foi possível editar a mensagem do WhatsApp.",
         ERR_OTHER_OPEN_TICKET: "Já existe um tíquete aberto para este contato.",
@@ -1411,16 +1415,14 @@ const messages = {
           "Este ticket não está mais sendo atendido pela IA.",
         ERR_TICKET_ALREADY_ASSIGNED:
           "Este ticket já foi assumido por outro atendente.",
-        ERR_TICKET_INVALID_STATUS:
-          "Status do ticket não permite esta ação.",
+        ERR_TICKET_INVALID_STATUS: "Status do ticket não permite esta ação.",
         ERR_REPOSITORY_MEDIA_MISSING:
           "Arquivo do repositório não encontrado no storage. Reprocesse o item.",
         ERR_REPOSITORY_NOT_DELIVERABLE:
           "Este tipo de conteúdo não pode ser enviado ao cliente.",
         ERR_REPOSITORY_EMPTY_PAYLOAD:
           "Conteúdo vazio — adicione legenda, descrição ou URL antes de enviar.",
-        ERR_FORBIDDEN:
-          "Você não tem permissão para esta ação neste ticket.",
+        ERR_FORBIDDEN: "Você não tem permissão para esta ação neste ticket.",
         ERR_TICKET_NOT_OPEN:
           "Este ticket não está aberto. Reabra ou aceite antes de enviar mensagens.",
         ERR_TICKET_NOT_ASSIGNED:
