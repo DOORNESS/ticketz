@@ -9,7 +9,6 @@ import { green, grey, red, blue } from "@material-ui/core/colors";
 import ListItem from "@material-ui/core/ListItem";
 import ListItemText from "@material-ui/core/ListItemText";
 import ListItemAvatar from "@material-ui/core/ListItemAvatar";
-import ListItemSecondaryAction from "@material-ui/core/ListItemSecondaryAction";
 import Typography from "@material-ui/core/Typography";
 import Avatar from "@material-ui/core/Avatar";
 import Divider from "@material-ui/core/Divider";
@@ -140,21 +139,28 @@ const useStyles = makeStyles(theme => ({
     paddingRight: 72
   },
 
-  ticketActionsWrapper: {
-    top: 10,
+  ticketContainer: {
+    position: "relative"
+  },
+
+  ticketActionsOverlay: {
+    position: "absolute",
+    top: 8,
     right: 8,
     display: "flex",
     flexDirection: "column",
     alignItems: "flex-end",
     gap: 6,
-    zIndex: 3
+    zIndex: 10,
+    pointerEvents: "none"
   },
 
   ticketActionsTopRow: {
     display: "flex",
     flexDirection: "row",
     alignItems: "center",
-    gap: 6
+    gap: 6,
+    pointerEvents: "auto"
   },
 
   ticketActions: {
@@ -172,7 +178,9 @@ const useStyles = makeStyles(theme => ({
     width: 23,
     fontSize: 12,
     borderRadius: "50%",
-    flexShrink: 0
+    flexShrink: 0,
+    position: "relative",
+    zIndex: 11
   },
 
   closeActionIcon: {
@@ -206,10 +214,6 @@ const useStyles = makeStyles(theme => ({
   presence: {
     color: theme.mode === "light" ? "green" : "lightgreen",
     fontWeight: "bold"
-  },
-
-  ticketContainer: {
-    position: "relative"
   },
 
   handoffHighlight: {
@@ -331,6 +335,10 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
     history.push(`/tickets/${routeId}`);
   };
 
+  const stopCardClick = e => {
+    e.stopPropagation();
+  };
+
   const renderTicketMetaBadges = () => {
     if (ticketUser && ticket.status !== "pending") {
       return (
@@ -445,9 +453,24 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
 
     return (
       <>
+        {profile === "admin" && showGroupActions && (
+          <Tooltip title={i18n.t("ticketsList.tooltips.spyConversation")}>
+            <VisibilityIcon
+              onMouseDown={stopCardClick}
+              onClick={e => {
+                e.stopPropagation();
+                setOpenTicketMessageDialog(true);
+              }}
+              fontSize="small"
+              className={clsx(classes.actionIcon, classes.spyActionIcon)}
+            />
+          </Tooltip>
+        )}
+
         {ticket.status === "open" && canCloseTicket && showGroupActions && (
           <Tooltip title={i18n.t("ticketsList.tooltips.closeConversation")}>
             <ClearOutlinedIcon
+              onMouseDown={stopCardClick}
               onClick={e => handleCloseTicket(ticket.id, e)}
               fontSize="small"
               className={clsx(classes.actionIcon, classes.closeActionIcon)}
@@ -458,6 +481,7 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
         {ticket.status === "pending" && canCloseTicket && showGroupActions && (
           <Tooltip title={i18n.t("ticketsList.tooltips.closeConversation")}>
             <ClearOutlinedIcon
+              onMouseDown={stopCardClick}
               onClick={e => handleCloseTicket(ticket.id, e)}
               fontSize="small"
               className={clsx(classes.actionIcon, classes.closeActionIcon)}
@@ -471,6 +495,7 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
           showGroupActions && (
             <Tooltip title={i18n.t("ticketsList.tooltips.acceptConversation")}>
               <DoneIcon
+                onMouseDown={stopCardClick}
                 onClick={e => handleAcceptTicket(ticket.id, e)}
                 fontSize="small"
                 className={clsx(classes.actionIcon, classes.acceptActionIcon)}
@@ -481,22 +506,10 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
         {ticket.status === "closed" && showGroupActions && (
           <Tooltip title={i18n.t("messagesList.header.buttons.reopen")}>
             <ReplayIcon
+              onMouseDown={stopCardClick}
               onClick={e => handleReopenTicket(ticket.id, e)}
               fontSize="small"
               className={clsx(classes.actionIcon, classes.reopenActionIcon)}
-            />
-          </Tooltip>
-        )}
-
-        {profile === "admin" && showGroupActions && (
-          <Tooltip title={i18n.t("ticketsList.tooltips.spyConversation")}>
-            <VisibilityIcon
-              onClick={e => {
-                e.stopPropagation();
-                setOpenTicketMessageDialog(true);
-              }}
-              fontSize="small"
-              className={clsx(classes.actionIcon, classes.spyActionIcon)}
             />
           </Tooltip>
         )}
@@ -590,6 +603,54 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
         handleClose={() => setOpenTicketMessageDialog(false)}
         ticketId={ticket.id}
       ></TicketMessagesDialog>
+      <Box
+        className={classes.ticketActionsOverlay}
+        onMouseDown={stopCardClick}
+        onClick={stopCardClick}
+      >
+        <Box className={classes.ticketActionsTopRow}>
+          {ticket.lastMessage && (
+            <Typography
+              className={classes.lastMessageTime}
+              component="span"
+              variant="body2"
+              color="textSecondary"
+            >
+              {pastRelativeDate(parseISO(ticket.updatedAt))}
+            </Typography>
+          )}
+          <Box className={classes.ticketActions}>
+            {renderTicketActionButtons()}
+          </Box>
+        </Box>
+
+        {ticket.status === "closed" && (
+          <Badge
+            className={classes.Radiusdot}
+            badgeContent={i18n.t("common.closed")}
+            style={{
+              backgroundColor: ticket.queue?.color || "#ff0000",
+              height: 18,
+              padding: 5,
+              paddingHorizontal: 12,
+              borderRadius: 7,
+              color: "white",
+              pointerEvents: "auto"
+            }}
+          />
+        )}
+
+        {ticket.lastMessage && (
+          <Badge
+            className={classes.newMessagesCount}
+            badgeContent={ticket.unreadMessages ? ticket.unreadMessages : null}
+            classes={{
+              badge: classes.badgeStyle
+            }}
+            style={{ pointerEvents: "auto" }}
+          />
+        )}
+      </Box>
       <ListItem
         dense
         button
@@ -684,50 +745,6 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
             </span>
           }
         />
-        <ListItemSecondaryAction className={classes.ticketActionsWrapper}>
-          <Box className={classes.ticketActionsTopRow}>
-            {ticket.lastMessage && (
-              <Typography
-                className={classes.lastMessageTime}
-                component="span"
-                variant="body2"
-                color="textSecondary"
-              >
-                {pastRelativeDate(parseISO(ticket.updatedAt))}
-              </Typography>
-            )}
-            <Box className={classes.ticketActions}>
-              {renderTicketActionButtons()}
-            </Box>
-          </Box>
-
-          {ticket.status === "closed" && (
-            <Badge
-              className={classes.Radiusdot}
-              badgeContent={i18n.t("common.closed")}
-              style={{
-                backgroundColor: ticket.queue?.color || "#ff0000",
-                height: 18,
-                padding: 5,
-                paddingHorizontal: 12,
-                borderRadius: 7,
-                color: "white"
-              }}
-            />
-          )}
-
-          {ticket.lastMessage && (
-            <Badge
-              className={classes.newMessagesCount}
-              badgeContent={
-                ticket.unreadMessages ? ticket.unreadMessages : null
-              }
-              classes={{
-                badge: classes.badgeStyle
-              }}
-            />
-          )}
-        </ListItemSecondaryAction>
       </ListItem>
       <Divider variant="inset" component="li" />
     </div>
