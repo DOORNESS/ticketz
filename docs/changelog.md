@@ -6,6 +6,23 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.19] — 2026-07-23
+
+### Adicionado
+
+- **Zerar base de clientes:** botão no topo da lista de tickets (somente `user.super`), endpoint `POST /ai/wipe-customer-base` — apaga contatos + tickets da empresa para testes limpos
+
+### Corrigido
+
+- **Tools do agente não salvavam:** `PUT /ai/agents/:id/tools` agora persiste bindings mesmo com `AI_TOOLS_ENABLED` off (flag só bloqueia runtime); UI mostra alerta e aviso ao salvar
+- **Bootstrap IA sobrescrevia ACK:** `EnsureAiFirstResponderService` não força mais `ackEnabled: false` em todos os agentes a cada save
+
+### Documentação
+
+- Manual §8 (wipe customer base), §11 (persistência de tools)
+
+---
+
 ## [1.5.18] — 2026-07-23
 
 ### Corrigido
@@ -19,7 +36,23 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ### Documentação
 
-- Changelog §1.5.18; manual §30 pendente sincronização completa na entrega B2
+- Manual §30 (orquestrador, handoff implícito, assume) — pendente sincronização completa na próxima entrega B2
+
+---
+
+## [1.5.17] — 2026-07-23
+
+### Adicionado
+
+- **Backblaze B2 privado:** URLs assinadas temporárias, endpoints `/media/access/:token` e `/media/:mediaId/signed-url`
+- **Lifecycle de mídia:** campos em `MessageMediaFiles`, tabela `MediaDeletionAudits`, retenção 60 dias, cron Bull (`MediaCleanupQueue`)
+- **Exclusão permanente de conversa:** fila background, auditoria, bloqueio de novas mensagens
+- **Limpeza de órfãos:** job semanal conservador
+- Exemplos `.env.example` / `.env-backend.example` (sem credenciais)
+
+### Documentação
+
+- Manual §18 (armazenamento privado B2), §38 (env vars lifecycle)
 
 ---
 

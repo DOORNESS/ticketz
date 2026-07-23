@@ -8,6 +8,7 @@ import {
   normalizeStorageReference,
   extractCompanyIdFromStorageKey
 } from "./mediaStorage";
+import StorageService from "../services/StorageService/StorageService";
 
 const setContentType = (res: Response, filePath: string): void => {
   const ext = path.extname(filePath).toLowerCase();
@@ -34,6 +35,15 @@ export const servePublicMedia = async (
     }
     res.send(buffer);
   };
+
+  if (
+    StorageService.shouldUsePrivateAccess() &&
+    StorageService.isCloudProvider() &&
+    !fs.existsSync(localPath)
+  ) {
+    res.status(403).json({ error: "ERR_MEDIA_PRIVATE_ACCESS_REQUIRED" });
+    return;
+  }
 
   if (fs.existsSync(localPath)) {
     if (req.query.inline === "1") {

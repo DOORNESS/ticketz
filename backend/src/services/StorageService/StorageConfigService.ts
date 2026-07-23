@@ -1,5 +1,6 @@
 import { GetCompanySetting } from "../../helpers/CheckSettings";
 import { StorageProvider } from "./types";
+import { getStorageKeyLayout, getStorageRegion } from "./storageEnv";
 
 export type ResolvedStorageConfig = {
   provider: StorageProvider;
@@ -9,6 +10,7 @@ export type ResolvedStorageConfig = {
   endpoint: string;
   publicUrl: string;
   rootPrefix: string;
+  region: string;
 };
 
 const KEY_ALIASES = {
@@ -95,10 +97,10 @@ export const loadStorageConfig = async (
   }
 
   const resolvedProvider = normalizeProvider(provider || "backblaze");
-  const rootPrefix = (process.env.STORAGE_ROOT_PREFIX || "suporte").replace(
-    /^\/+|\/+$/g,
-    ""
-  );
+  const rootPrefix =
+    getStorageKeyLayout() === "legacy"
+      ? (process.env.STORAGE_ROOT_PREFIX || "suporte").replace(/^\/+|\/+$/g, "")
+      : "companies";
 
   return {
     provider: resolvedProvider,
@@ -107,6 +109,7 @@ export const loadStorageConfig = async (
     bucket,
     endpoint,
     publicUrl: publicUrl.replace(/\/$/, ""),
-    rootPrefix
+    rootPrefix,
+    region: readEnv(["B2_REGION", "STORAGE_REGION"]) || getStorageRegion()
   };
 };

@@ -17,6 +17,8 @@ type SaveMediaOptions = {
   destination: Ticket | number;
   persistant?: boolean;
   baseFolder?: string;
+  messageId?: string;
+  contactId?: number;
 };
 
 export default async function saveMediaToFile(
@@ -25,7 +27,13 @@ export default async function saveMediaToFile(
     mimetype: string;
     filename: string;
   },
-  { destination, persistant, baseFolder }: SaveMediaOptions
+  {
+    destination,
+    persistant,
+    baseFolder,
+    messageId,
+    contactId
+  }: SaveMediaOptions
 ): Promise<string> {
   if (!media || !media.data || !media.mimetype || !destination) {
     logger.error("saveMediaToFile: Invalid media or destination provided");
@@ -42,30 +50,47 @@ export default async function saveMediaToFile(
     typeof destination === "number" ? destination : destination.companyId;
   const ticketId = typeof destination === "number" ? undefined : destination.id;
 
+  if (
+    typeof destination !== "number" &&
+    destination.permanentDeleteRequestedAt &&
+    !destination.permanentDeletedAt
+  ) {
+    throw new Error("Ticket is pending permanent deletion");
+  }
+
   await StorageService.ensureReady(companyId);
 
   const buffer = await streamToBuffer(media.data);
   const folder = inferMediaFolder(media.mimetype, baseFolder, persistant);
+  const retentionExempt = Boolean(
+    persistant || baseFolder === "media-persistant"
+  );
 
   const upload = await StorageService.uploadBuffer(buffer, {
     companyId,
     ticketId,
+    messageId,
+    contactId,
     filename: media.filename,
     contentType: media.mimetype.split(";")[0] || "application/octet-stream",
-    folder
+    folder,
+    retentionExempt
   });
 
   if (ticketId) {
     await persistUnifiedMediaFile({
       companyId,
       ticketId,
+      messageId,
+      contactId,
       mediaType: resolveMediaTypeFromMime(media.mimetype),
       mimeType: media.mimetype.split(";")[0] || "application/octet-stream",
       filename: media.filename,
       storageKey: upload.key,
       publicUrl: upload.publicUrl,
       sizeBytes: buffer.length,
-      direction: "inbound"
+      direction: "inbound",
+      retentionExempt
     });
   }
 

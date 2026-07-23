@@ -55,6 +55,7 @@ import KnowledgePermission from "../models/KnowledgePermission";
 import KnowledgeIngestionJob from "../models/KnowledgeIngestionJob";
 import AiConversationLog from "../models/AiConversationLog";
 import MessageMediaFile from "../models/MessageMediaFile";
+import MediaDeletionAudit from "../models/MediaDeletionAudit";
 import AiCopilotSuggestion from "../models/AiCopilotSuggestion";
 import AiKnowledgeSuggestion from "../models/AiKnowledgeSuggestion";
 import AiReplayLog from "../models/AiReplayLog";
@@ -136,6 +137,7 @@ const models = [
   KnowledgeIngestionJob,
   AiConversationLog,
   MessageMediaFile,
+  MediaDeletionAudit,
   AiCopilotSuggestion,
   AiKnowledgeSuggestion,
   AiReplayLog,

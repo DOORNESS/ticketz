@@ -68,17 +68,8 @@ export const updateAgentTools = async (
     throw new AppError("Invalid agentId", 400);
   }
 
-  const enabled = await isToolsEnabledForCompany(companyId);
-  if (!enabled) {
-    return res.json({
-      agentId,
-      tools: [],
-      skipped: true,
-      reason: "ERR_AI_TOOLS_DISABLED"
-    });
-  }
-
   const tools = Array.isArray(req.body.tools) ? req.body.tools : [];
+  const toolsRuntimeEnabled = await isToolsEnabledForCompany(companyId);
 
   try {
     await syncAgentTools({
@@ -91,7 +82,7 @@ export const updateAgentTools = async (
           config?: Record<string, unknown> | null;
         }) => ({
           toolId: String(tool.toolId),
-          enabled: tool.enabled !== false,
+          enabled: tool.enabled === true,
           config: tool.config || null
         })
       )
@@ -104,7 +95,12 @@ export const updateAgentTools = async (
   }
 
   const bindings = await listAgentToolBindings(companyId, agentId);
-  return res.json({ agentId, tools: bindings });
+  return res.json({
+    agentId,
+    tools: bindings,
+    runtimeEnabled: toolsRuntimeEnabled,
+    warning: toolsRuntimeEnabled ? null : "ERR_AI_TOOLS_DISABLED_RUNTIME"
+  });
 };
 
 export const toolExecutions = async (

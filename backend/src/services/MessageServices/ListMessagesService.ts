@@ -2,13 +2,16 @@ import { FindOptions, Op } from "sequelize";
 import AppError from "../../errors/AppError";
 import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
+import User from "../../models/User";
 import ShowTicketService from "../TicketServices/ShowTicketService";
 import Queue from "../../models/Queue";
 import { GetCompanySetting } from "../../helpers/CheckSettings";
+import { resolveMessageMediaUrls } from "../MediaServices/MediaAccessService";
 
 interface Request {
   ticketId: string;
   companyId: number;
+  user?: User;
   nextId?: string;
   queues?: number[];
   minUpdatedAt?: string;
@@ -26,6 +29,7 @@ const ListMessagesService = async ({
   nextId,
   ticketId,
   companyId,
+  user,
   queues = [],
   minUpdatedAt
 }: Request): Promise<Response> => {
@@ -126,9 +130,18 @@ const ListMessagesService = async ({
   const hasMore = messages.length > limit;
   const visibleMessages = hasMore ? messages.slice(0, limit) : messages;
   const oldestMessage = visibleMessages[visibleMessages.length - 1];
+  const orderedMessages = visibleMessages.reverse();
+
+  if (user) {
+    await resolveMessageMediaUrls({
+      messages: orderedMessages,
+      user,
+      companyId
+    });
+  }
 
   return {
-    messages: visibleMessages.reverse(),
+    messages: orderedMessages,
     ticket,
     count: null,
     hasMore,

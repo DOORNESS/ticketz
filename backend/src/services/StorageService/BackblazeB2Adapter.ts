@@ -24,7 +24,23 @@ export class BackblazeB2Adapter implements IStorageAdapter {
     return this.adapter.delete(key);
   }
 
+  deleteMany(keys: string[]) {
+    return this.adapter.deleteMany(keys);
+  }
+
+  exists(key: string) {
+    return this.adapter.exists(key);
+  }
+
+  headObject(key: string) {
+    return this.adapter.headObject(key);
+  }
+
   getPublicUrl(key: string) {
     return this.adapter.getPublicUrl(key);
+  }
+
+  getSignedUrl(key: string, expiresInSeconds?: number) {
+    return this.adapter.getSignedUrl(key, expiresInSeconds);
   }
 }

@@ -639,6 +639,11 @@ export async function startQueueProcess() {
   startAiContactMemoryQueue();
   startAiMetricsQueue();
 
+  const { startMediaCleanupQueue, scheduleDailyRetentionCleanup } =
+    await import("./services/MediaServices/MediaCleanupQueueService");
+  startMediaCleanupQueue();
+  scheduleDailyRetentionCleanup();
+
   whatsappWatchdog.process("Watchdog", async () => {
     await runWhatsAppSessionWatchdog();
   });

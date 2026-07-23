@@ -4,7 +4,7 @@ import { getIO } from "../libs/socket";
 import Ticket from "../models/Ticket";
 
 import CreateTicketService from "../services/TicketServices/CreateTicketService";
-import DeleteTicketService from "../services/TicketServices/DeleteTicketService";
+import { requestPermanentTicketDeletion } from "../services/MediaServices/PermanentDeleteTicketService";
 import ListTicketsService from "../services/TicketServices/ListTicketsService";
 import ShowTicketUUIDService from "../services/TicketServices/ShowTicketFromUUIDService";
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
@@ -267,20 +267,30 @@ export const remove = async (
 
   await ShowTicketService(ticketId, companyId);
 
-  const ticket = await DeleteTicketService(ticketId);
+  const user = await User.findByPk(req.user.id);
+  if (!user) {
+    throw new AppError("ERR_NO_USER", 404);
+  }
+
+  const audit = await requestPermanentTicketDeletion({
+    ticketId: Number(ticketId),
+    companyId,
+    user
+  });
 
   const io = getIO();
   io.to(ticketId)
-    .to(`company-${companyId}-${ticket.status}`)
     .to(`company-${companyId}-notification`)
-    .to(`queue-${ticket.queueId}-${ticket.status}`)
-    .to(`queue-${ticket.queueId}-notification`)
     .emit(`company-${companyId}-ticket`, {
       action: "delete",
       ticketId: +ticketId
     });
 
-  return res.status(200).json({ message: "ticket deleted" });
+  return res.status(202).json({
+    message: "ticket deletion queued",
+    auditId: audit.id,
+    status: audit.status
+  });
 };
 
 export const reopen = async (

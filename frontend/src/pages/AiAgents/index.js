@@ -112,7 +112,7 @@ const renderToolToggle = (tool, agentTools, setAgentTools) => (
     key={tool.id}
     control={
       <Switch
-        checked={agentTools[tool.id] !== false}
+        checked={agentTools[tool.id] === true}
         onChange={e =>
           setAgentTools(prev => ({
             ...prev,
@@ -158,6 +158,7 @@ const AiAgents = () => {
   const [orchestratorStatus, setOrchestratorStatus] = useState(null);
   const [registeredTools, setRegisteredTools] = useState([]);
   const [agentTools, setAgentTools] = useState({});
+  const [toolsRuntimeActive, setToolsRuntimeActive] = useState(true);
   const [queuesLoading, setQueuesLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(defaultAgent);
@@ -223,29 +224,42 @@ const AiAgents = () => {
 
   const loadRegisteredTools = useCallback(async () => {
     try {
-      const { data } = await api.get("/ai/tools");
-      setRegisteredTools(Array.isArray(data) ? data : []);
+      const { data: tools } = await api.get("/ai/tools");
+      setRegisteredTools(Array.isArray(tools) ? tools : []);
     } catch (err) {
       setRegisteredTools([]);
     }
+
+    try {
+      const { data: status } = await api.get("/ai/tools/status");
+      setToolsRuntimeActive(status?.active === true);
+    } catch (err) {
+      setToolsRuntimeActive(false);
+    }
   }, []);
 
-  const loadAgentTools = useCallback(async agentId => {
-    if (!agentId) {
-      setAgentTools({});
-      return;
-    }
-    try {
-      const { data } = await api.get(`/ai/agents/${agentId}/tools`);
-      const map = {};
-      (data?.tools || []).forEach(item => {
-        map[item.toolId] = item.enabled !== false;
-      });
-      setAgentTools(map);
-    } catch (err) {
-      setAgentTools({});
-    }
-  }, []);
+  const loadAgentTools = useCallback(
+    async (agentId, toolsCatalog = registeredTools) => {
+      if (!agentId) {
+        setAgentTools({});
+        return;
+      }
+      try {
+        const { data } = await api.get(`/ai/agents/${agentId}/tools`);
+        const map = {};
+        (toolsCatalog || []).forEach(tool => {
+          map[tool.id] = false;
+        });
+        (data?.tools || []).forEach(item => {
+          map[item.toolId] = item.enabled === true;
+        });
+        setAgentTools(map);
+      } catch (err) {
+        setAgentTools({});
+      }
+    },
+    [registeredTools]
+  );
 
   useEffect(() => {
     loadAgents();
@@ -312,18 +326,20 @@ const AiAgents = () => {
       }
 
       if (savedAgentId && form.role !== "orchestrator") {
-        try {
-          await api.put(`/ai/agents/${savedAgentId}/tools`, {
+        const { data: toolsResult } = await api.put(
+          `/ai/agents/${savedAgentId}/tools`,
+          {
             tools: registeredTools.map(tool => ({
               toolId: tool.id,
-              enabled: agentTools[tool.id] !== false
+              enabled: agentTools[tool.id] === true
             }))
-          });
-        } catch (toolsErr) {
-          const toolsErrorCode = toolsErr?.response?.data?.error;
-          if (toolsErrorCode !== "ERR_AI_TOOLS_DISABLED") {
-            throw toolsErr;
           }
+        );
+
+        if (toolsResult?.warning === "ERR_AI_TOOLS_DISABLED_RUNTIME") {
+          toast.warn(
+            "Tools salvas, mas AI_TOOLS está desligado no servidor — não executam no WhatsApp até ativar."
+          );
         }
       }
 
@@ -368,7 +384,7 @@ const AiAgents = () => {
       ackEnabled: !!agent.ackEnabled,
       ackMessage: agent.ackMessage || ""
     });
-    loadAgentTools(agent.id);
+    loadAgentTools(agent.id, registeredTools);
     setOpen(true);
   };
 
@@ -387,7 +403,7 @@ const AiAgents = () => {
     setForm(defaultAgent);
     setAgentTools(
       registeredTools.reduce((acc, tool) => {
-        acc[tool.id] = true;
+        acc[tool.id] = !isWriteRisk(tool.riskLevel);
         return acc;
       }, {})
     );
@@ -700,8 +716,17 @@ const AiAgents = () => {
           {form.role !== "orchestrator" && registeredTools.length > 0 && (
             <SectionBlock
               title="Ferramentas (Fase 3/4)"
-              subtitle="Tools executáveis pelo especialista quando AI_TOOLS_ENABLED estiver ativo."
+              subtitle="Preferências salvas no agente. Em runtime, só executam com AI_TOOLS_ENABLED + setting da empresa."
             >
+              {!toolsRuntimeActive && (
+                <Box mb={1}>
+                  <Alert severity="warning">
+                    Runtime de tools desligado (`AI_TOOLS_ENABLED` / setting
+                    `aiToolsEnabled`). Você pode salvar os toggles; eles só
+                    executam no WhatsApp depois de ativar as flags.
+                  </Alert>
+                </Box>
+              )}
               {(() => {
                 const { readTools, writeTools } =
                   groupToolsByRisk(registeredTools);

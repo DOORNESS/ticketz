@@ -235,6 +235,15 @@ class Ticket extends Model<Ticket> {
   @Column
   uuid: string;
 
+  @Column
+  permanentDeleteRequestedAt: Date;
+
+  @Column
+  permanentDeleteRequestedBy: number;
+
+  @Column
+  permanentDeletedAt: Date;
+
   @BeforeCreate
   static setUUID(ticket: Ticket) {
     ticket.uuid = uuidv4();

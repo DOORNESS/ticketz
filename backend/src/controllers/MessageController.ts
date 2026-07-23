@@ -68,6 +68,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     nextId,
     ticketId,
     companyId,
+    user: requestUser,
     queues,
     minUpdatedAt
   });

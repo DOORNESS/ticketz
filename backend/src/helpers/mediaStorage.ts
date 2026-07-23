@@ -70,6 +70,13 @@ export const extractCompanyIdFromStorageKey = (
   const normalized = normalizeStorageReference(mediaKey);
   const parts = normalized.split("/").filter(Boolean);
 
+  if (parts[0] === "companies" && parts[1]) {
+    const companyId = Number.parseInt(parts[1], 10);
+    if (Number.isFinite(companyId) && companyId > 0) {
+      return companyId;
+    }
+  }
+
   if (parts[0] === "suporte" && parts[1]) {
     const companyId = Number.parseInt(parts[1], 10);
     if (Number.isFinite(companyId) && companyId > 0) {
@@ -93,6 +100,11 @@ export const extractStorageKeyFromUrl = (mediaUrl: string): string | null => {
   try {
     const url = new URL(mediaUrl);
     const pathParts = url.pathname.split("/").filter(Boolean);
+
+    const companiesIndex = pathParts.findIndex(part => part === "companies");
+    if (companiesIndex >= 0) {
+      return pathParts.slice(companiesIndex).join("/");
+    }
 
     const suporteIndex = pathParts.findIndex(part => part === "suporte");
     if (suporteIndex >= 0) {

@@ -10,6 +10,7 @@ import Tab from "@material-ui/core/Tab";
 import Badge from "@material-ui/core/Badge";
 import MoveToInboxIcon from "@material-ui/icons/MoveToInbox";
 import CheckBoxIcon from "@material-ui/icons/CheckBox";
+import DeleteSweepIcon from "@material-ui/icons/DeleteSweep";
 
 import FormControlLabel from "@material-ui/core/FormControlLabel";
 import Switch from "@material-ui/core/Switch";
@@ -31,6 +32,9 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faPeopleGroup } from "@fortawesome/free-solid-svg-icons";
 import useSettings from "../../hooks/useSettings";
 import { ContactSelect } from "../ContactSelect";
+import api from "../../services/api";
+import toastError from "../../errors/toastError";
+import { toast } from "react-toastify";
 
 const useStyles = makeStyles(theme => ({
   ticketsWrapper: {
@@ -123,6 +127,20 @@ const useStyles = makeStyles(theme => ({
     gap: 6,
     padding: theme.spacing(1),
     borderBottom: `1px solid ${theme.palette.divider}`
+  },
+
+  wipeBaseBar: {
+    display: "flex",
+    justifyContent: "stretch",
+    padding: theme.spacing(1, 1.5),
+    backgroundColor: theme.palette.background.paper,
+    borderBottom: `1px solid ${theme.palette.divider}`
+  },
+
+  wipeBaseButton: {
+    width: "100%",
+    textTransform: "none",
+    fontWeight: 600
   }
 }));
 
@@ -139,13 +157,15 @@ const TicketsManagerTabs = () => {
   const { listSubTab, setListSubTab } = useContext(TicketsContext);
   const { profile } = user || {};
   const permissionRole = resolvePermissionRole(user);
-  const isMasterAdmin = user?.super === true || profile === "admin";
+  const isSuperAdmin = user?.super === true;
+  const isMasterAdmin = isSuperAdmin || profile === "admin";
   const userQueues = user?.queues ?? [];
   const tabOpen = listSubTab;
 
   const [openCount, setOpenCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   const [aiCount, setAiCount] = useState(0);
+  const [wipingBase, setWipingBase] = useState(false);
 
   const userQueueIds = userQueues.map(q => q.id);
   const [selectedQueueIds, setSelectedQueueIds] = useState(userQueueIds || []);
@@ -222,6 +242,33 @@ const TicketsManagerTabs = () => {
     setSelectedUsers(users);
   };
 
+  const handleWipeCustomerBase = async () => {
+    const confirmed = window.confirm(
+      i18n.t("ticketsManager.wipeCustomerBase.confirm")
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setWipingBase(true);
+    try {
+      const { data } = await api.post("/ai/wipe-customer-base");
+      const summary = data?.summary || {};
+      toast.success(
+        i18n.t("ticketsManager.wipeCustomerBase.success", {
+          contacts: summary.contactsDeleted ?? 0,
+          tickets: summary.ticketsDeleted ?? 0
+        })
+      );
+      history.push("/tickets");
+      window.location.reload();
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setWipingBase(false);
+    }
+  };
+
   return (
     <Paper elevation={0} variant="outlined" className={classes.ticketsWrapper}>
       <NewTicketModal
@@ -230,6 +277,22 @@ const TicketsManagerTabs = () => {
           handleCloseOrOpenTicket(ticket);
         }}
       />
+      {isSuperAdmin && (
+        <Paper elevation={0} square className={classes.wipeBaseBar}>
+          <Button
+            className={classes.wipeBaseButton}
+            variant="outlined"
+            color="secondary"
+            startIcon={<DeleteSweepIcon />}
+            disabled={wipingBase}
+            onClick={handleWipeCustomerBase}
+          >
+            {wipingBase
+              ? i18n.t("ticketsManager.wipeCustomerBase.loading")
+              : i18n.t("ticketsManager.wipeCustomerBase.button")}
+          </Button>
+        </Paper>
+      )}
       <Paper elevation={0} square className={classes.tabsHeader}>
         <Tabs
           value={tab}

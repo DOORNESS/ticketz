@@ -437,6 +437,14 @@ const messages = {
       ticketsManager: {
         buttons: {
           newTicket: "Novo"
+        },
+        wipeCustomerBase: {
+          button: "Zerar base de clientes",
+          loading: "Zerando base...",
+          confirm:
+            "Isso apaga TODOS os contatos e tickets desta empresa. A próxima mensagem WhatsApp entrará como cliente novo. Continuar?",
+          success:
+            "Base zerada: {{contacts}} contatos e {{tickets}} tickets removidos."
         }
       },
       ticketsQueueSelect: {
@@ -1286,7 +1294,7 @@ const messages = {
       },
       ticketOptionsMenu: {
         schedule: "Agendamento",
-        delete: "Deletar",
+        delete: "Excluir conversa",
         transfer: "Transferir",
         appointmentsModal: {
           title: "Observações do Atendimento",
@@ -1294,9 +1302,9 @@ const messages = {
           placeholder: "Insira aqui a informação que deseja registrar"
         },
         confirmationModal: {
-          title: "Deletar o ticket do contato",
+          title: "Excluir conversa",
           message:
-            "Atenção! Todas as mensagens relacionadas ao ticket serão perdidas."
+            "Esta ação excluirá permanentemente a conversa, suas mensagens, imagens, áudios, vídeos, documentos e demais anexos. Esta operação não poderá ser desfeita."
         },
         buttons: {
           delete: "Excluir",

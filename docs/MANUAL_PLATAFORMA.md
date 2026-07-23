@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.16 — auditada contra o código  
+**Versão:** 1.5.19 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -331,6 +331,13 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 ### Tela
 `TicketResponsiveContainer`, `TicketsListCustom`, `MessagesList`, `MessageInputCustom`
 
+### Zerar base de clientes (somente super admin)
+- Botão no topo da lista de tickets (`TicketsManagerTabs`), **antes** das abas Abertas/Resolvidos
+- Visível apenas quando `user.super === true`
+- Endpoint: `POST /ai/wipe-customer-base` (`AiResetController.wipeCustomerBase`)
+- Apaga tickets, mensagens, logs IA e **todos os contatos** da empresa — próximo WhatsApp entra como cliente novo
+- Confirmação obrigatória no frontend
+
 ### Auditoria §8
 
 | Tabelas | `Tickets`, `Messages`, `TicketNotes`, `TicketTags`, `TicketTrakings` |
@@ -431,7 +438,9 @@ Requer **ambos**:
 | Memória contato | `AI_CONTACT_MEMORY_ENABLED` | `aiContactMemoryEnabled` |
 | Tools | `AI_TOOLS_ENABLED` | `aiToolsEnabled` |
 
-**Endpoints novos:** `/ai/memory/status`, `/ai/tools/status`, `/ai/tools`, `/ai/agents/:agentId/tools`, `/ai/contacts/:contactId/memory` (+ export/CRUD), `/ai/tool-executions`.
+**Endpoints novos:** `/ai/memory/status`, `/ai/tools/status`, `/ai/tools`, `/ai/agents/:agentId/tools`, `/ai/contacts/:contactId/memory` (+ export/CRUD), `/ai/tool-executions`, `/ai/wipe-customer-base` (super).
+
+**Persistência de tools:** `PUT /ai/agents/:agentId/tools` **sempre grava** os bindings (`AiAgentTools`), mesmo com flags OFF. As flags controlam só a **execução** no WhatsApp. Resposta inclui `runtimeEnabled` + `warning: ERR_AI_TOOLS_DISABLED_RUNTIME` quando o runtime está desligado.
 
 **Fila Bull:** `AiContactMemoryQueue` — job `persist-contact-memory` (sem `setImmediate`).
 
@@ -611,28 +620,57 @@ Auth: `query.token` (JWT). Cliente: `frontend/src/context/Socket/SocketContext.j
 
 ## 18. Armazenamento de mídia
 
-### Serviços
-`StorageService.ts`, `StorageConfigService.ts`, `S3CompatibleStorageAdapter.ts`, `BackblazeB2Adapter.ts`
+### Serviços centrais
+`StorageService.ts`, `StorageConfigService.ts`, `S3CompatibleStorageAdapter.ts`, `BackblazeB2Adapter.ts`, `MediaAccessService.ts`, `MediaDeleteObjectService.ts`, `MediaCleanupQueueService.ts`, `PermanentDeleteTicketService.ts`
 
 ### Providers (`storageProvider` Setting ou env)
-`backblaze`, `s3`, `r2`, `minio` — fallback local `public/`
+`backblaze`, `s3`, `r2`, `minio` — fallback local `public/` quando B2/S3 não configurado.
 
-### Prefixo
-`STORAGE_ROOT_PREFIX` — padrão **`suporte`**
+### Bucket privado (Backblaze B2)
+Com `B2_USE_PRIVATE_ACCESS=true` (padrão quando cloud configurado):
+- Objetos **não** são servidos por URL pública direta (`B2_PUBLIC_URL` é opcional e **não** usada para leitura privada).
+- Frontend recebe URLs do backend: `GET /media/access/:token` (token HMAC com TTL) ou `GET /media/:mediaId/signed-url` (autenticado).
+- O backend gera URL assinada S3 (`B2_SIGNED_URL_TTL_SECONDS`, padrão 900s) para redirect/stream.
+- `GET /public/*` retorna **403** para chaves cloud quando acesso privado está ativo (compatível com arquivos locais legados).
 
-### Layout
+### Layout de chaves
+Padrão (`STORAGE_KEY_LAYOUT=companies`):
 ```
-{prefix}/{companyId}/media/{images|audio|video|documents|attachments}/...
-{prefix}/{companyId}/knowledge/{text|documents}/...
+companies/{companyId}/tickets/{ticketId}/messages/{messageId}/{uuid}.{ext}
+companies/{companyId}/contacts/{contactId}/{uuid}.{ext}
+companies/{companyId}/knowledge/{assetId}/{versionId}/{uuid}.{ext}
 ```
+Legado: `{prefix}/{companyId}/media/...` (`STORAGE_ROOT_PREFIX`, padrão `suporte`).
 
-### Servir via HTTP (`GET /public/*`)
-Handler `servePublicMedia.ts` + helper `extractCompanyIdFromStorageKey()` em `mediaStorage.ts`. Chaves no formato `{prefix}/{companyId}/...` (ex.: `suporte/1/media/images/...`) extraem o `companyId` correto para download no object storage — evita 404 quando o primeiro segmento era interpretado como ID da empresa.
+### Metadados e lifecycle (`MessageMediaFiles`)
+| Campo | Uso |
+|-------|-----|
+| `storageKey`, `bucket`, `storageProvider` | Referência ao objeto (sem URL assinada persistida) |
+| `status` | `pending`, `available`, `delete_pending`, `deleted`, `delete_failed`, `expired` |
+| `expiresAt` | Retenção automática de mídias de atendimento (+60 dias, `MEDIA_RETENTION_DAYS`) |
+| `retentionExempt` | `true` para assets permanentes (base de conhecimento / `media-persistant`) |
+| `deletedAt`, `deleteRequestedAt`, `deleteAttempts` | Exclusão e retry |
+
+### Exclusão permanente de conversa
+- UI: **Excluir conversa** (admin/super) → `DELETE /tickets/:id`
+- Backend enfileira `PermanentDeleteTicket` (Bull `MediaCleanupQueue`), audita em `MediaDeletionAudits`, remove mensagens e objetos B2 em background.
+- Tickets com `permanentDeleteRequestedAt` bloqueiam novas mensagens.
+
+### Retenção e cron
+| Job | Agendamento | Função |
+|-----|-------------|--------|
+| `RetentionCleanup` | `30 3 * * *` (jobId fixo) | Expira mídias de conversa (`expiresAt <= now`, lotes de `MEDIA_CLEANUP_BATCH_SIZE`) |
+| `OrphanCleanup` | `0 4 * * 0` | Pending antigos, objetos ausentes no B2 |
+| `PermanentDeleteTicket` | sob demanda | Exclusão completa de ticket + mídias |
+
+Variáveis: `MEDIA_RETENTION_DAYS`, `MEDIA_CLEANUP_ENABLED`, `MEDIA_ORPHAN_MIN_AGE_DAYS`, `B2_*`, `MEDIA_ACCESS_TOKEN_SECRET`.
 
 ### Auditoria §18
 
-| Tabela auxiliar | `MessageMediaFiles` (metadados IA/mídia) |
-|-----------------|-----|
+| Tabela | Uso |
+|--------|-----|
+| `MessageMediaFiles` | Metadados mídia (transcrição, visão, lifecycle) |
+| `MediaDeletionAudits` | Auditoria de exclusão/retenção (sem conteúdo sensível) |
 
 ---
 
@@ -1208,7 +1246,15 @@ frontend/src/
 | `AI_PROACTIVE_FOLLOWUP_ENABLED` | true (unless `"false"`) | `AiProactiveFollowUpService.ts` |
 | `AI_PROACTIVE_FOLLOWUP_MINUTES` | `5` | idem |
 | `STORAGE_ROOT_PREFIX` | `suporte` | `StorageService.ts` |
-| `STORAGE_REGION` | `us-east-1` | `S3CompatibleStorageAdapter.ts` |
+| `STORAGE_KEY_LAYOUT` | `companies` | `objectKeyBuilder.ts` |
+| `STORAGE_REGION` / `B2_REGION` | `us-east-005` | `storageEnv.ts` |
+| `B2_USE_PRIVATE_ACCESS` | `true` | `storageEnv.ts` |
+| `B2_SIGNED_URL_TTL_SECONDS` | `900` | idem |
+| `MEDIA_RETENTION_DAYS` | `60` | idem |
+| `MEDIA_CLEANUP_BATCH_SIZE` | `500` | idem |
+| `MEDIA_CLEANUP_ENABLED` | `true` | idem |
+| `MEDIA_ORPHAN_MIN_AGE_DAYS` | `7` | idem |
+| `MEDIA_ACCESS_TOKEN_SECRET` | fallback `JWT_SECRET` | `MediaAuthorizationService.ts` |
 | `B2_*` / `b2*` | via Settings aliases | `StorageConfigService.ts` |
 | `REDIS_URI` | — | `queues.ts`, `AiInboundQueueService.ts` |
 | `BACKEND_URL` | `http://localhost:8080` | `MediaInboundResolver.ts` |

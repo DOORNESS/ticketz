@@ -74,6 +74,7 @@ import { verifyContact } from "./verifyContact";
 import { decryptMessageEdit } from "./decryptMessageEdit";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import saveMediaToFile from "../../helpers/saveMediaFile";
+import { linkStoredMediaToMessage } from "../AiServices/media/UnifiedMediaPersistenceService";
 import {
   tryEngageAiOnInboundMessage,
   shouldAiBypassLegacyBotMessages
@@ -694,6 +695,14 @@ export const verifyMediaMessage = async (
     skipWebsocket
   }: VerifyMediaMessageOptions = {}
 ): Promise<Message> => {
+  if (ticket.permanentDeleteRequestedAt && !ticket.permanentDeletedAt) {
+    logger.warn(
+      { ticketId: ticket.id, companyId: ticket.companyId },
+      "Ignoring media message for ticket pending permanent deletion"
+    );
+    return null;
+  }
+
   const io = getIO();
   const quotedMsg = await verifyQuotedMessage(msg, ticket, wbot);
 
@@ -841,6 +850,14 @@ export const verifyMediaMessage = async (
     skipWebsocket
   });
 
+  await linkStoredMediaToMessage({
+    companyId: ticket.companyId,
+    ticketId: ticket.id,
+    messageId: newMessage.id,
+    mediaUrl,
+    thumbnailUrl
+  });
+
   return newMessage;
 };
 
@@ -850,6 +867,14 @@ export const verifyMessage = async (
   contact: Contact,
   { userId, skipWebsocket }: VerifyMessageOptions = {}
 ) => {
+  if (ticket.permanentDeleteRequestedAt && !ticket.permanentDeletedAt) {
+    logger.warn(
+      { ticketId: ticket.id, companyId: ticket.companyId },
+      "Ignoring message for ticket pending permanent deletion"
+    );
+    return null;
+  }
+
   const quotedMsg = await verifyQuotedMessage(msg, ticket);
   const body = await getBodyMessage(msg?.message);
 

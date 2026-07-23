@@ -1,7 +1,9 @@
 import crypto from "crypto";
+import { addDays } from "date-fns";
 import MessageMediaFile from "../../../models/MessageMediaFile";
 import Ticket from "../../../models/Ticket";
 import StorageService from "../../StorageService/StorageService";
+import { getMediaRetentionDays } from "../../StorageService/storageEnv";
 import { logger } from "../../../utils/logger";
 
 export type PersistMediaInput = {
@@ -17,6 +19,16 @@ export type PersistMediaInput = {
   direction?: "inbound" | "outbound";
   transcriptionText?: string;
   visionSummary?: string;
+  retentionExempt?: boolean;
+  contactId?: number;
+};
+
+const computeExpiresAt = (retentionExempt?: boolean): Date | null => {
+  if (retentionExempt) {
+    return null;
+  }
+
+  return addDays(new Date(), getMediaRetentionDays());
 };
 
 export const persistUnifiedMediaFile = async (
@@ -25,6 +37,8 @@ export const persistUnifiedMediaFile = async (
   if (!input.ticketId || !input.storageKey) {
     return null;
   }
+
+  await StorageService.ensureReady(input.companyId);
 
   const hash = crypto
     .createHash("sha256")
@@ -35,18 +49,22 @@ export const persistUnifiedMediaFile = async (
     companyId: input.companyId,
     ticketId: input.ticketId,
     messageId: input.messageId || null,
+    contactId: input.contactId || null,
     mediaType: input.mediaType,
     mimeType: input.mimeType,
     originalFilename: input.filename,
     sizeBytes: input.sizeBytes,
     storageProvider: StorageService.getProvider(),
     storageKey: input.storageKey,
-    bucket: StorageService.getProvider() === "backblaze" ? "b2" : "local",
+    bucket: StorageService.getBucketName(),
     publicUrl: input.publicUrl,
     hash,
     direction: input.direction || "inbound",
     transcriptionText: input.transcriptionText || null,
-    visionSummary: input.visionSummary || null
+    visionSummary: input.visionSummary || null,
+    status: "available" as const,
+    expiresAt: computeExpiresAt(input.retentionExempt),
+    retentionExempt: Boolean(input.retentionExempt)
   };
 
   try {
@@ -61,6 +79,15 @@ export const persistUnifiedMediaFile = async (
       }
     }
 
+    const existingByKey = await MessageMediaFile.findOne({
+      where: { companyId: input.companyId, storageKey: input.storageKey }
+    });
+
+    if (existingByKey) {
+      await existingByKey.update(payload);
+      return existingByKey.reload();
+    }
+
     return MessageMediaFile.create(payload);
   } catch (error) {
     logger.warn(
@@ -69,6 +96,41 @@ export const persistUnifiedMediaFile = async (
     );
     return null;
   }
+};
+
+export const linkStoredMediaToMessage = async ({
+  companyId,
+  ticketId,
+  messageId,
+  mediaUrl,
+  thumbnailUrl
+}: {
+  companyId: number;
+  ticketId: number;
+  messageId: string;
+  mediaUrl?: string | null;
+  thumbnailUrl?: string | null;
+}): Promise<void> => {
+  const keys = [mediaUrl, thumbnailUrl]
+    .filter(Boolean)
+    .map(url => url?.replace(/^\/public\//, "").trim())
+    .filter(Boolean) as string[];
+
+  if (!keys.length) {
+    return;
+  }
+
+  await Promise.all(
+    keys.map(async storageKey => {
+      const media = await MessageMediaFile.findOne({
+        where: { companyId, storageKey, ticketId }
+      });
+
+      if (media && !media.messageId) {
+        await media.update({ messageId });
+      }
+    })
+  );
 };
 
 export const resolveMediaTypeFromMime = (mimetype: string): string => {

@@ -2,16 +2,22 @@ import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
-  DeleteObjectCommand
+  DeleteObjectCommand,
+  HeadObjectCommand,
+  DeleteObjectsCommand
 } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Readable } from "stream";
 import {
   IStorageAdapter,
   StorageProvider,
+  StorageObjectHead,
   UploadInput,
   UploadResult
 } from "./types";
 import { ResolvedStorageConfig } from "./StorageConfigService";
+import { getSignedUrlTtlSeconds, getStorageRegion } from "./storageEnv";
+import { withStorageRetry } from "./storageRetry";
 
 const streamToBuffer = async (stream: Readable): Promise<Buffer> => {
   const chunks: Buffer[] = [];
@@ -38,7 +44,7 @@ export class S3CompatibleStorageAdapter implements IStorageAdapter {
 
     this.client = new S3Client({
       endpoint: config.endpoint,
-      region: process.env.STORAGE_REGION || "us-east-1",
+      region: config.region || getStorageRegion(),
       credentials: {
         accessKeyId: config.keyId,
         secretAccessKey: config.secretKey
@@ -55,20 +61,38 @@ export class S3CompatibleStorageAdapter implements IStorageAdapter {
     return key;
   }
 
+  async getSignedUrl(
+    key: string,
+    expiresInSeconds = getSignedUrlTtlSeconds()
+  ): Promise<string> {
+    return withStorageRetry("getSignedUrl", () =>
+      getSignedUrl(
+        this.client,
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key
+        }),
+        { expiresIn: expiresInSeconds }
+      )
+    );
+  }
+
   async upload(input: UploadInput): Promise<UploadResult> {
     const body =
       typeof input.body === "string"
         ? Buffer.from(input.body, "utf-8")
         : input.body;
 
-    await this.client.send(
-      new PutObjectCommand({
-        Bucket: this.bucket,
-        Key: input.key,
-        Body: body,
-        ContentType: input.contentType || "application/octet-stream",
-        Metadata: input.metadata
-      })
+    await withStorageRetry("upload", () =>
+      this.client.send(
+        new PutObjectCommand({
+          Bucket: this.bucket,
+          Key: input.key,
+          Body: body,
+          ContentType: input.contentType || "application/octet-stream",
+          Metadata: input.metadata
+        })
+      )
     );
 
     return {
@@ -81,22 +105,87 @@ export class S3CompatibleStorageAdapter implements IStorageAdapter {
   }
 
   async download(key: string): Promise<Buffer> {
-    const response = await this.client.send(
-      new GetObjectCommand({
-        Bucket: this.bucket,
-        Key: key
-      })
+    const response = await withStorageRetry("download", () =>
+      this.client.send(
+        new GetObjectCommand({
+          Bucket: this.bucket,
+          Key: key
+        })
+      )
     );
 
     return streamToBuffer(response.Body as Readable);
   }
 
   async delete(key: string): Promise<void> {
-    await this.client.send(
-      new DeleteObjectCommand({
-        Bucket: this.bucket,
-        Key: key
-      })
+    await withStorageRetry("delete", () =>
+      this.client.send(
+        new DeleteObjectCommand({
+          Bucket: this.bucket,
+          Key: key
+        })
+      )
     );
+  }
+
+  async deleteMany(
+    keys: string[]
+  ): Promise<{ deleted: string[]; failed: string[] }> {
+    const deleted: string[] = [];
+    const failed: string[] = [];
+
+    for (let i = 0; i < keys.length; i += 1000) {
+      const chunk = keys.slice(i, i + 1000);
+      try {
+        await withStorageRetry("deleteMany", () =>
+          this.client.send(
+            new DeleteObjectsCommand({
+              Bucket: this.bucket,
+              Delete: {
+                Objects: chunk.map(Key => ({ Key })),
+                Quiet: true
+              }
+            })
+          )
+        );
+        deleted.push(...chunk);
+      } catch {
+        failed.push(...chunk);
+      }
+    }
+
+    return { deleted, failed };
+  }
+
+  async exists(key: string): Promise<boolean> {
+    const head = await this.headObject(key);
+    return head.exists;
+  }
+
+  async headObject(key: string): Promise<StorageObjectHead> {
+    try {
+      const response = await withStorageRetry("headObject", () =>
+        this.client.send(
+          new HeadObjectCommand({
+            Bucket: this.bucket,
+            Key: key
+          })
+        )
+      );
+
+      return {
+        exists: true,
+        sizeBytes: response.ContentLength,
+        contentType: response.ContentType,
+        lastModified: response.LastModified
+      };
+    } catch (error) {
+      const status = (error as { $metadata?: { httpStatusCode?: number } })
+        ?.$metadata?.httpStatusCode;
+      if (status === 404 || status === 403) {
+        return { exists: false };
+      }
+      throw error;
+    }
   }
 }

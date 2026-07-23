@@ -5,12 +5,17 @@ import mime from "mime-types";
 import { FileContents, FileStorage } from "@flystorage/file-storage";
 import { LocalStorageAdapter } from "@flystorage/local-fs";
 import { getPublicPath } from "../../helpers/GetPublicPath";
-import { makeRandomId } from "../../helpers/MakeRandomId";
 import { BackblazeB2Adapter } from "./BackblazeB2Adapter";
 import { S3CompatibleStorageAdapter } from "./S3CompatibleStorageAdapter";
 import { loadStorageConfig } from "./StorageConfigService";
+import { buildManagedObjectKey } from "./objectKeyBuilder";
+import {
+  getSignedUrlTtlSeconds,
+  usePrivateObjectAccess
+} from "./storageEnv";
 import {
   IStorageAdapter,
+  StorageObjectHead,
   StorageProvider,
   UploadInput,
   UploadResult
@@ -20,10 +25,15 @@ export type StoreFileOptions = {
   companyId: number;
   ticketId?: number;
   messageId?: string;
+  contactId?: number;
+  assetId?: number;
+  versionId?: number;
+  repositoryItemId?: number;
   filename: string;
   contentType?: string;
   folder?: string;
   uploadedByUserId?: number;
+  retentionExempt?: boolean;
 };
 
 class StorageService {
@@ -31,11 +41,13 @@ class StorageService {
 
   private provider: StorageProvider = "local";
 
-  private rootPrefix = "suporte";
+  private rootPrefix = "companies";
 
   private initializedForCompanyId: number | null = null;
 
   private initPromise: Promise<void> | null = null;
+
+  private bucketName = "local";
 
   private createLocalAdapter(): IStorageAdapter {
     return {
@@ -84,11 +96,13 @@ class StorageService {
         /^\/+|\/+$/g,
         ""
       );
+      this.bucketName = "local";
       this.initializedForCompanyId = companyId;
       return;
     }
 
     this.rootPrefix = config.rootPrefix;
+    this.bucketName = config.bucket;
 
     if (config.provider === "backblaze") {
       this.provider = "backblaze";
@@ -118,6 +132,7 @@ class StorageService {
     this.provider = "local";
     this.initializedForCompanyId = null;
     this.initPromise = null;
+    this.bucketName = "local";
   }
 
   private async getAdapter(companyId: number): Promise<IStorageAdapter> {
@@ -133,14 +148,31 @@ class StorageService {
     return this.rootPrefix;
   }
 
+  getBucketName(): string {
+    return this.bucketName;
+  }
+
+  isCloudProvider(): boolean {
+    return this.provider !== "local";
+  }
+
+  shouldUsePrivateAccess(): boolean {
+    return this.isCloudProvider() && usePrivateObjectAccess();
+  }
+
   buildObjectKey(options: StoreFileOptions): string {
-    const ext = options.filename.includes(".")
-      ? options.filename.split(".").pop()
-      : mime.extension(options.contentType || "") || "bin";
-    const folder = options.folder || "media";
-    const randomId = makeRandomId(12);
-    const ticketPart = options.ticketId ? `${options.ticketId}/` : "";
-    return `${this.rootPrefix}/${options.companyId}/${folder}/${ticketPart}${randomId}.${ext}`;
+    return buildManagedObjectKey({
+      companyId: options.companyId,
+      filename: options.filename,
+      contentType: options.contentType,
+      folder: options.folder,
+      ticketId: options.ticketId,
+      messageId: options.messageId,
+      contactId: options.contactId,
+      assetId: options.assetId,
+      versionId: options.versionId,
+      repositoryItemId: options.repositoryItemId
+    });
   }
 
   hashBuffer(buffer: Buffer): string {
@@ -181,6 +213,71 @@ class StorageService {
   async delete(key: string, companyId = 1): Promise<void> {
     const adapter = await this.getAdapter(companyId);
     return adapter.delete(key);
+  }
+
+  async deleteMany(
+    keys: string[],
+    companyId = 1
+  ): Promise<{ deleted: string[]; failed: string[] }> {
+    const adapter = await this.getAdapter(companyId);
+    if (adapter.deleteMany) {
+      return adapter.deleteMany(keys);
+    }
+
+    const deleted: string[] = [];
+    const failed: string[] = [];
+    await Promise.all(
+      keys.map(async key => {
+        try {
+          await adapter.delete(key);
+          deleted.push(key);
+        } catch {
+          failed.push(key);
+        }
+      })
+    );
+    return { deleted, failed };
+  }
+
+  async exists(key: string, companyId = 1): Promise<boolean> {
+    const adapter = await this.getAdapter(companyId);
+    if (adapter.exists) {
+      return adapter.exists(key);
+    }
+
+    try {
+      await adapter.download(key);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async headObject(key: string, companyId = 1): Promise<StorageObjectHead> {
+    const adapter = await this.getAdapter(companyId);
+    if (adapter.headObject) {
+      return adapter.headObject(key);
+    }
+
+    try {
+      const buffer = await adapter.download(key);
+      return { exists: true, sizeBytes: buffer.length };
+    } catch {
+      return { exists: false };
+    }
+  }
+
+  async getSignedUrl(
+    key: string,
+    companyId = 1,
+    expiresInSeconds = getSignedUrlTtlSeconds()
+  ): Promise<string> {
+    const adapter = await this.getAdapter(companyId);
+    if (adapter.getSignedUrl) {
+      return adapter.getSignedUrl(key, expiresInSeconds);
+    }
+
+    return this.getPublicUrl(key);
   }
 
   getPublicUrl(key: string): string {

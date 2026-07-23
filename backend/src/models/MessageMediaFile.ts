@@ -14,6 +14,14 @@ import Company from "./Company";
 import Ticket from "./Ticket";
 import User from "./User";
 
+export type StoredMediaStatus =
+  | "pending"
+  | "available"
+  | "delete_pending"
+  | "deleted"
+  | "delete_failed"
+  | "expired";
+
 @Table({ updatedAt: false })
 class MessageMediaFile extends Model<MessageMediaFile> {
   @PrimaryKey
@@ -31,6 +39,9 @@ class MessageMediaFile extends Model<MessageMediaFile> {
 
   @Column
   messageId: string;
+
+  @Column
+  contactId: number;
 
   @Column
   mediaType: string;
@@ -73,6 +84,33 @@ class MessageMediaFile extends Model<MessageMediaFile> {
   @ForeignKey(() => User)
   @Column
   uploadedByUserId: number;
+
+  @Default("available")
+  @Column
+  status: StoredMediaStatus;
+
+  @Column
+  expiresAt: Date;
+
+  @Column
+  deletedAt: Date;
+
+  @Column
+  deleteRequestedAt: Date;
+
+  @Default(0)
+  @Column
+  deleteAttempts: number;
+
+  @Column(DataType.TEXT)
+  lastDeleteError: string;
+
+  @Default(false)
+  @Column
+  retentionExempt: boolean;
+
+  @Column(DataType.JSONB)
+  metadata: Record<string, unknown>;
 
   @BelongsTo(() => User)
   uploadedByUser: User;

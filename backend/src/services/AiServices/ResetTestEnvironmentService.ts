@@ -7,16 +7,32 @@ import TicketTag from "../../models/TicketTag";
 import TicketNote from "../../models/TicketNote";
 import UserRating from "../../models/UserRating";
 import AiConversationLog from "../../models/AiConversationLog";
+import AiReplayLog from "../../models/AiReplayLog";
 import MessageMediaFile from "../../models/MessageMediaFile";
+import Contact from "../../models/Contact";
+import ContactCustomField from "../../models/ContactCustomField";
+import ContactTag from "../../models/ContactTag";
+import Schedule from "../../models/Schedule";
+import WhatsappLidMap from "../../models/WhatsappLidMap";
+import ContactAiMemory from "../../models/ContactAiMemory";
+import ContactAiMemoryJob from "../../models/ContactAiMemoryJob";
+import ContactAiMemoryLog from "../../models/ContactAiMemoryLog";
+import AiToolExecutionLog from "../../models/AiToolExecutionLog";
+import AiToolIdempotencyRecord from "../../models/AiToolIdempotencyRecord";
 import { getAiInboundQueue } from "./AiInboundQueueService";
 import { logger } from "../../utils/logger";
 
-type ResetSummary = {
+export type ResetSummary = {
   companyId: number;
   ticketsDeleted: number;
   messagesDeleted: number;
   aiLogsDeleted: number;
+  contactsDeleted: number;
   redisKeysCleared: number;
+};
+
+export type ResetOptions = {
+  wipeContacts?: boolean;
 };
 
 const clearPattern = async (pattern: string): Promise<number> => {
@@ -51,9 +67,59 @@ const clearAiRedisState = async (): Promise<number> => {
   }
 };
 
+const wipeCompanyContacts = async (companyId: number): Promise<number> => {
+  const contacts = await Contact.findAll({
+    where: { companyId },
+    attributes: ["id"]
+  });
+  const contactIds = contacts.map(contact => contact.id);
+
+  if (!contactIds.length) {
+    return 0;
+  }
+
+  await ContactCustomField.destroy({
+    where: { contactId: { [Op.in]: contactIds } }
+  });
+  await ContactTag.destroy({
+    where: { contactId: { [Op.in]: contactIds } }
+  });
+  await Schedule.destroy({
+    where: { contactId: { [Op.in]: contactIds } }
+  });
+  await WhatsappLidMap.destroy({
+    where: { contactId: { [Op.in]: contactIds } }
+  });
+  await ContactAiMemoryLog.destroy({
+    where: { contactId: { [Op.in]: contactIds } }
+  });
+  await ContactAiMemoryJob.destroy({
+    where: { contactId: { [Op.in]: contactIds } }
+  });
+  await ContactAiMemory.destroy({
+    where: { contactId: { [Op.in]: contactIds } }
+  });
+  await AiToolExecutionLog.destroy({
+    where: { companyId, contactId: { [Op.in]: contactIds } }
+  });
+  await AiToolIdempotencyRecord.destroy({
+    where: { companyId, contactId: { [Op.in]: contactIds } }
+  });
+  await TicketNote.destroy({
+    where: { contactId: { [Op.in]: contactIds } }
+  });
+
+  return Contact.destroy({
+    where: { companyId }
+  });
+};
+
 export const resetTestEnvironmentForCompany = async (
-  companyId: number
+  companyId: number,
+  options: ResetOptions = {}
 ): Promise<ResetSummary> => {
+  const wipeContacts = options.wipeContacts === true;
+
   const tickets = await Ticket.findAll({
     where: { companyId },
     attributes: ["id"]
@@ -82,24 +148,25 @@ export const resetTestEnvironmentForCompany = async (
     await UserRating.destroy({
       where: { ticketId: { [Op.in]: ticketIds } }
     });
-    aiLogsDeleted = await AiConversationLog.destroy({
-      where: { companyId }
-    });
-    await MessageMediaFile.destroy({
-      where: { companyId }
-    });
-  } else {
-    aiLogsDeleted = await AiConversationLog.destroy({
-      where: { companyId }
-    });
-    await MessageMediaFile.destroy({
-      where: { companyId }
-    });
   }
+
+  aiLogsDeleted = await AiConversationLog.destroy({
+    where: { companyId }
+  });
+  await AiReplayLog.destroy({
+    where: { companyId }
+  });
+  await MessageMediaFile.destroy({
+    where: { companyId }
+  });
 
   const ticketsDeleted = await Ticket.destroy({
     where: { companyId }
   });
+
+  const contactsDeleted = wipeContacts
+    ? await wipeCompanyContacts(companyId)
+    : 0;
 
   const redisKeysCleared = await clearAiRedisState();
 
@@ -108,9 +175,10 @@ export const resetTestEnvironmentForCompany = async (
     ticketsDeleted,
     messagesDeleted,
     aiLogsDeleted,
+    contactsDeleted,
     redisKeysCleared
   };
 
-  logger.info({ summary }, "Test environment reset completed");
+  logger.info({ summary, wipeContacts }, "Test environment reset completed");
   return summary;
 };

@@ -74,9 +74,9 @@ const ensureAgent = async (companyId: number): Promise<AiAgent> => {
     return agent;
   }
 
+  // Bootstrap only fills empty fields — never clobber admin UI saves.
   await agent.update({
     active: true,
-    ackEnabled: false,
     ackMessage: agent.ackMessage?.trim() || DEFAULT_ACK_MESSAGE,
     basePrompt: agent.basePrompt?.trim() || DEFAULT_BASE_PROMPT,
     handoffMessage:
@@ -84,18 +84,6 @@ const ensureAgent = async (companyId: number): Promise<AiAgent> => {
       "Vou transferir você para o Suporte humano. Por favor, aguarde um momento.",
     fallbackQueueId: agent.fallbackQueueId || handoffQueue?.id || null
   });
-
-  await AiAgent.update(
-    {
-      ackEnabled: false
-    },
-    {
-      where: {
-        companyId,
-        active: true
-      }
-    }
-  );
 
   return agent.reload();
 };

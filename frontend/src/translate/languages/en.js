@@ -438,6 +438,14 @@ const messages = {
       ticketsManager: {
         buttons: {
           newTicket: "New"
+        },
+        wipeCustomerBase: {
+          button: "Reset customer base",
+          loading: "Resetting base...",
+          confirm:
+            "This deletes ALL contacts and tickets for this company. The next WhatsApp message will arrive as a new customer. Continue?",
+          success:
+            "Base reset: {{contacts}} contacts and {{tickets}} tickets removed."
         }
       },
       ticketsQueueSelect: {
@@ -1136,7 +1144,7 @@ const messages = {
       },
       ticketOptionsMenu: {
         schedule: "Schedule",
-        delete: "Delete",
+        delete: "Delete conversation",
         transfer: "Transfer",
         appointmentsModal: {
           title: "Ticket Notes",
@@ -1144,8 +1152,9 @@ const messages = {
           placeholder: "Insert the information you want to record here"
         },
         confirmationModal: {
-          title: "Delete contact ticket",
-          message: "Attention! All messages related to the ticket will be lost."
+          title: "Delete conversation",
+          message:
+            "This action will permanently delete the conversation, its messages, images, audio, videos, documents and other attachments. This operation cannot be undone."
         },
         buttons: {
           delete: "Delete",
