@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.25] — 2026-07-23
+
+### Corrigido
+
+- **500 em Zerar base de clientes:** `ResetTestEnvironmentService` agora apaga todas as dependências (timeline IA, sugestões, mídia B2, memória de contato, logs de tools etc.) em transação antes de remover tickets e contatos — evita violação de FK e erro 500.
+
+---
+
 ## [1.5.24] — 2026-07-23
 
 ### Corrigido

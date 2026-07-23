@@ -1,4 +1,5 @@
-import { Op } from "sequelize";
+import { Op, Transaction } from "sequelize";
+import sequelize from "../../database";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 import OldMessage from "../../models/OldMessage";
@@ -9,6 +10,7 @@ import UserRating from "../../models/UserRating";
 import AiConversationLog from "../../models/AiConversationLog";
 import AiReplayLog from "../../models/AiReplayLog";
 import MessageMediaFile from "../../models/MessageMediaFile";
+import MediaDeletionAudit from "../../models/MediaDeletionAudit";
 import Contact from "../../models/Contact";
 import ContactCustomField from "../../models/ContactCustomField";
 import ContactTag from "../../models/ContactTag";
@@ -19,6 +21,11 @@ import ContactAiMemoryJob from "../../models/ContactAiMemoryJob";
 import ContactAiMemoryLog from "../../models/ContactAiMemoryLog";
 import AiToolExecutionLog from "../../models/AiToolExecutionLog";
 import AiToolIdempotencyRecord from "../../models/AiToolIdempotencyRecord";
+import AiTicketTimelineEvent from "../../models/AiTicketTimelineEvent";
+import AiKnowledgeSuggestion from "../../models/AiKnowledgeSuggestion";
+import AiCopilotSuggestion from "../../models/AiCopilotSuggestion";
+import AiRoutingLog from "../../models/AiRoutingLog";
+import ContentRepositoryUsageLog from "../../models/ContentRepositoryUsageLog";
 import { getAiInboundQueue } from "./AiInboundQueueService";
 import { logger } from "../../utils/logger";
 
@@ -33,6 +40,51 @@ export type ResetSummary = {
 
 export type ResetOptions = {
   wipeContacts?: boolean;
+};
+
+const isMissingTableError = (error: unknown): boolean => {
+  const code = (error as { parent?: { code?: string } })?.parent?.code;
+  return code === "42P01";
+};
+
+const safeDestroy = async (
+  step: string,
+  destroyFn: () => Promise<number>
+): Promise<number> => {
+  try {
+    return await destroyFn();
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      logger.warn({ step }, "Reset skipped optional table");
+      return 0;
+    }
+    throw error;
+  }
+};
+
+const destroyByCompany = async (
+  model: { destroy: (options: object) => Promise<number> },
+  companyId: number,
+  transaction: Transaction
+): Promise<number> =>
+  model.destroy({
+    where: { companyId },
+    transaction
+  });
+
+const destroyByTicketIds = async (
+  model: { destroy: (options: object) => Promise<number> },
+  ticketIds: number[],
+  transaction: Transaction
+): Promise<number> => {
+  if (!ticketIds.length) {
+    return 0;
+  }
+
+  return model.destroy({
+    where: { ticketId: { [Op.in]: ticketIds } },
+    transaction
+  });
 };
 
 const clearPattern = async (pattern: string): Promise<number> => {
@@ -67,10 +119,74 @@ const clearAiRedisState = async (): Promise<number> => {
   }
 };
 
-const wipeCompanyContacts = async (companyId: number): Promise<number> => {
+const wipeTicketRelatedData = async (
+  companyId: number,
+  ticketIds: number[],
+  transaction: Transaction
+): Promise<{ messagesDeleted: number; aiLogsDeleted: number }> => {
+  await safeDestroy("MessageMediaFile", () =>
+    destroyByCompany(MessageMediaFile, companyId, transaction)
+  );
+  await safeDestroy("MediaDeletionAudit", () =>
+    destroyByCompany(MediaDeletionAudit, companyId, transaction)
+  );
+  await safeDestroy("AiTicketTimelineEvent", () =>
+    destroyByCompany(AiTicketTimelineEvent, companyId, transaction)
+  );
+  await safeDestroy("AiKnowledgeSuggestion", () =>
+    destroyByCompany(AiKnowledgeSuggestion, companyId, transaction)
+  );
+  await safeDestroy("AiCopilotSuggestion", () =>
+    destroyByCompany(AiCopilotSuggestion, companyId, transaction)
+  );
+  await safeDestroy("AiRoutingLog", () =>
+    destroyByCompany(AiRoutingLog, companyId, transaction)
+  );
+  await safeDestroy("ContentRepositoryUsageLog", () =>
+    destroyByCompany(ContentRepositoryUsageLog, companyId, transaction)
+  );
+  await safeDestroy("AiToolExecutionLog", () =>
+    destroyByCompany(AiToolExecutionLog, companyId, transaction)
+  );
+  await safeDestroy("AiToolIdempotencyRecord", () =>
+    destroyByCompany(AiToolIdempotencyRecord, companyId, transaction)
+  );
+  await safeDestroy("ContactAiMemoryJob", () =>
+    destroyByCompany(ContactAiMemoryJob, companyId, transaction)
+  );
+
+  const aiLogsDeleted = await AiConversationLog.destroy({
+    where: { companyId },
+    transaction
+  });
+  await AiReplayLog.destroy({
+    where: { companyId },
+    transaction
+  });
+
+  const messagesDeleted = await Message.destroy({
+    where: { companyId },
+    transaction
+  });
+
+  await destroyByTicketIds(OldMessage, ticketIds, transaction);
+  await destroyByTicketIds(TicketTraking, ticketIds, transaction);
+  await destroyByTicketIds(TicketTag, ticketIds, transaction);
+  await destroyByTicketIds(TicketNote, ticketIds, transaction);
+  await destroyByTicketIds(UserRating, ticketIds, transaction);
+  await destroyByTicketIds(Schedule, ticketIds, transaction);
+
+  return { messagesDeleted, aiLogsDeleted };
+};
+
+const wipeCompanyContacts = async (
+  companyId: number,
+  transaction: Transaction
+): Promise<number> => {
   const contacts = await Contact.findAll({
     where: { companyId },
-    attributes: ["id"]
+    attributes: ["id"],
+    transaction
   });
   const contactIds = contacts.map(contact => contact.id);
 
@@ -78,39 +194,37 @@ const wipeCompanyContacts = async (companyId: number): Promise<number> => {
     return 0;
   }
 
+  const contactScope = { contactId: { [Op.in]: contactIds } };
+
   await ContactCustomField.destroy({
-    where: { contactId: { [Op.in]: contactIds } }
+    where: contactScope,
+    transaction
   });
   await ContactTag.destroy({
-    where: { contactId: { [Op.in]: contactIds } }
+    where: contactScope,
+    transaction
   });
   await Schedule.destroy({
-    where: { contactId: { [Op.in]: contactIds } }
+    where: contactScope,
+    transaction
   });
   await WhatsappLidMap.destroy({
-    where: { contactId: { [Op.in]: contactIds } }
+    where: { companyId },
+    transaction
   });
-  await ContactAiMemoryLog.destroy({
-    where: { contactId: { [Op.in]: contactIds } }
-  });
-  await ContactAiMemoryJob.destroy({
-    where: { contactId: { [Op.in]: contactIds } }
-  });
-  await ContactAiMemory.destroy({
-    where: { contactId: { [Op.in]: contactIds } }
-  });
-  await AiToolExecutionLog.destroy({
-    where: { companyId, contactId: { [Op.in]: contactIds } }
-  });
-  await AiToolIdempotencyRecord.destroy({
-    where: { companyId, contactId: { [Op.in]: contactIds } }
-  });
-  await TicketNote.destroy({
-    where: { contactId: { [Op.in]: contactIds } }
-  });
+  await safeDestroy("ContactAiMemoryLog", () =>
+    destroyByCompany(ContactAiMemoryLog, companyId, transaction)
+  );
+  await safeDestroy("ContactAiMemoryJob", () =>
+    destroyByCompany(ContactAiMemoryJob, companyId, transaction)
+  );
+  await safeDestroy("ContactAiMemory", () =>
+    destroyByCompany(ContactAiMemory, companyId, transaction)
+  );
 
   return Contact.destroy({
-    where: { companyId }
+    where: { companyId },
+    transaction
   });
 };
 
@@ -120,64 +234,40 @@ export const resetTestEnvironmentForCompany = async (
 ): Promise<ResetSummary> => {
   const wipeContacts = options.wipeContacts === true;
 
-  const tickets = await Ticket.findAll({
-    where: { companyId },
-    attributes: ["id"]
-  });
-  const ticketIds = tickets.map(ticket => ticket.id);
+  const summary = await sequelize.transaction(async transaction => {
+    const tickets = await Ticket.findAll({
+      where: { companyId },
+      attributes: ["id"],
+      transaction
+    });
+    const ticketIds = tickets.map(ticket => ticket.id);
 
-  let messagesDeleted = 0;
-  let aiLogsDeleted = 0;
+    const { messagesDeleted, aiLogsDeleted } = await wipeTicketRelatedData(
+      companyId,
+      ticketIds,
+      transaction
+    );
 
-  if (ticketIds.length) {
-    messagesDeleted = await Message.destroy({
-      where: { ticketId: { [Op.in]: ticketIds } }
+    const ticketsDeleted = await Ticket.destroy({
+      where: { companyId },
+      transaction
     });
-    await OldMessage.destroy({
-      where: { ticketId: { [Op.in]: ticketIds } }
-    });
-    await TicketTraking.destroy({
-      where: { ticketId: { [Op.in]: ticketIds } }
-    });
-    await TicketTag.destroy({
-      where: { ticketId: { [Op.in]: ticketIds } }
-    });
-    await TicketNote.destroy({
-      where: { ticketId: { [Op.in]: ticketIds } }
-    });
-    await UserRating.destroy({
-      where: { ticketId: { [Op.in]: ticketIds } }
-    });
-  }
 
-  aiLogsDeleted = await AiConversationLog.destroy({
-    where: { companyId }
-  });
-  await AiReplayLog.destroy({
-    where: { companyId }
-  });
-  await MessageMediaFile.destroy({
-    where: { companyId }
+    const contactsDeleted = wipeContacts
+      ? await wipeCompanyContacts(companyId, transaction)
+      : 0;
+
+    return {
+      companyId,
+      ticketsDeleted,
+      messagesDeleted,
+      aiLogsDeleted,
+      contactsDeleted,
+      redisKeysCleared: 0
+    };
   });
 
-  const ticketsDeleted = await Ticket.destroy({
-    where: { companyId }
-  });
-
-  const contactsDeleted = wipeContacts
-    ? await wipeCompanyContacts(companyId)
-    : 0;
-
-  const redisKeysCleared = await clearAiRedisState();
-
-  const summary: ResetSummary = {
-    companyId,
-    ticketsDeleted,
-    messagesDeleted,
-    aiLogsDeleted,
-    contactsDeleted,
-    redisKeysCleared
-  };
+  summary.redisKeysCleared = await clearAiRedisState();
 
   logger.info({ summary, wipeContacts }, "Test environment reset completed");
   return summary;
