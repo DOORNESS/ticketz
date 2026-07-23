@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.21] — 2026-07-23
+
+### Corrigido
+
+- **Deploy Contabo:** instala `@aws-sdk/s3-request-presigner` na VPS e faz lazy-import — evita crash `MODULE_NOT_FOUND` no boot
+- Envia `package.json` / `package-lock.json` no zip de patch
+
+---
+
 ## [1.5.20] — 2026-07-23
 
 ### Corrigido

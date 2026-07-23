@@ -6,7 +6,6 @@ import {
   HeadObjectCommand,
   DeleteObjectsCommand
 } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { Readable } from "stream";
 import {
   IStorageAdapter,
@@ -18,6 +17,12 @@ import {
 import { ResolvedStorageConfig } from "./StorageConfigService";
 import { getSignedUrlTtlSeconds, getStorageRegion } from "./storageEnv";
 import { withStorageRetry } from "./storageRetry";
+
+// Lazy require so the API can boot even if VPS node_modules is one package behind.
+const loadGetSignedUrl = async () => {
+  const mod = await import("@aws-sdk/s3-request-presigner");
+  return mod.getSignedUrl;
+};
 
 const streamToBuffer = async (stream: Readable): Promise<Buffer> => {
   const chunks: Buffer[] = [];
@@ -65,6 +70,7 @@ export class S3CompatibleStorageAdapter implements IStorageAdapter {
     key: string,
     expiresInSeconds = getSignedUrlTtlSeconds()
   ): Promise<string> {
+    const getSignedUrl = await loadGetSignedUrl();
     return withStorageRetry("getSignedUrl", () =>
       getSignedUrl(
         this.client,

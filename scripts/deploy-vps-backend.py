@@ -291,7 +291,7 @@ Remove-Item '{tmp_path}' -Force
 
 
 def build_zip_bundle(files: List[Path], extra_scripts: List[Path]) -> Path:
-    """Cria ZIP com dist/ + scripts/ para um único upload WinRM."""
+    """Cria ZIP com dist/ + scripts/ (+ package manifests) para um único upload WinRM."""
     cache_dir = ROOT / "deploy-cache"
     cache_dir.mkdir(exist_ok=True)
     zip_path = cache_dir / f"ticketz-dist-{int(time.time())}.zip"
@@ -302,6 +302,11 @@ def build_zip_bundle(files: List[Path], extra_scripts: List[Path]) -> Path:
         for script in extra_scripts:
             arc = f"scripts/{script.name}"
             zf.write(script, arc)
+        # Mantém VPS alinhada com deps novas (ex.: @aws-sdk/s3-request-presigner)
+        for manifest_name in ("package.json", "package-lock.json"):
+            manifest = BACKEND / manifest_name
+            if manifest.is_file():
+                zf.write(manifest, manifest_name)
     return zip_path
 
 
@@ -469,6 +474,12 @@ if (Test-Path "$Root\\backend\\scripts\\apply-db-schema.js") {
   }
   Pop-Location
 }
+# Instala deps novas sem rebuild completo (necessário para signed URLs B2)
+Push-Location "$Root\\backend"
+Write-Output "npm install storage deps..."
+npm install @aws-sdk/s3-request-presigner@3.1093.0 @aws-sdk/client-s3@3.1080.0 --omit=dev --no-audit --no-fund 2>&1
+if ($LASTEXITCODE -ne 0) { Write-Output "WARN: npm install storage deps failed exit=$LASTEXITCODE" }
+Pop-Location
 $backend = @("$Root\\start-backend-watch.cmd","$Root\\start-backend.cmd","$Root\\run-backend.cmd") | Where-Object { Test-Path $_ } | Select-Object -First 1
 if ($backend) { Start-Process $backend -WindowStyle Hidden } else {
   Start-Process node -ArgumentList 'dist\\server.js' -WorkingDirectory 'C:\\ticketz\\backend' -WindowStyle Hidden

@@ -140,7 +140,8 @@ const useStyles = makeStyles(theme => ({
   wipeBaseButton: {
     width: "100%",
     textTransform: "none",
-    fontWeight: 600
+    fontWeight: 600,
+    letterSpacing: 0.2
   }
 }));
 
