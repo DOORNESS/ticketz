@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.23] — 2026-07-23
+
+### Corrigido
+
+- **Deploy Contabo WinRM:** restart movido para `restart-after-deploy.ps1` — evita `The command line is too long` no Windows
+
+---
+
 ## [1.5.22] — 2026-07-23
 
 ### Corrigido
