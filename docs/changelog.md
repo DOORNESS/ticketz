@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.20] — 2026-07-23
+
+### Corrigido
+
+- **Deploy Contabo patch:** inclui `storageEnv`, adapters B2, `MediaServices/*` e migration de lifecycle — evita `Cannot find module './storageEnv'` após restart
+
+---
+
 ## [1.5.19] — 2026-07-23
 
 ### Adicionado
