@@ -113,6 +113,13 @@ class StorageService {
     await this.initPromise;
   }
 
+  resetCache(): void {
+    this.adapter = null;
+    this.provider = "local";
+    this.initializedForCompanyId = null;
+    this.initPromise = null;
+  }
+
   private async getAdapter(companyId: number): Promise<IStorageAdapter> {
     await this.ensureReady(companyId);
     return this.adapter as IStorageAdapter;

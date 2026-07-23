@@ -89,6 +89,11 @@ async function runPostListenBootstrap(_server: http.Server) {
     await import("./services/AuthServices/SeedTurnstileSettingsService");
   const { seedAiSettingsFromEnv } =
     await import("./services/AuthServices/SeedAiSettingsFromEnv");
+  const { seedStorageSettingsFromEnv } =
+    await import("./services/AuthServices/SeedStorageSettingsFromEnv");
+  const StorageService = (
+    await import("./services/StorageService/StorageService")
+  ).default;
 
   const bootstrapServices = async () => {
     await seedTurnstileSettingsFromEnv().catch(error => {
@@ -97,6 +102,15 @@ async function runPostListenBootstrap(_server: http.Server) {
     await seedAiSettingsFromEnv().catch(error => {
       logger.warn({ error }, "OpenAI settings sync skipped");
     });
+    await seedStorageSettingsFromEnv()
+      .then(synced => {
+        if (synced) {
+          StorageService.resetCache();
+        }
+      })
+      .catch(error => {
+        logger.warn({ error }, "B2 storage settings sync skipped");
+      });
     await bootstrapAiPlatform();
     const { repairAiTicketStates } =
       await import("./services/AiServices/RepairAiTicketStatesService");

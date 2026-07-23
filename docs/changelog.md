@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.15] — 2026-07-23
+
+### Corrigido
+
+- **Repositório multimodal:** uploads exigem Backblaze B2 configurado; sync automático `B2_*` → Settings no boot; script `scripts/apply-b2-vps-env.py` para VPS
+- Erro traduzido `ERR_STORAGE_NOT_CONFIGURED` quando B2 ausente
+
+---
+
 ## [1.5.14] — 2026-07-23
 
 ### Corrigido

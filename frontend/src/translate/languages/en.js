@@ -1249,6 +1249,8 @@ const messages = {
           "Only one active orchestrator agent is allowed per company.",
         ERR_AI_TOOLS_DISABLED:
           "AI tools are disabled — the agent was saved without updating tools.",
+        ERR_STORAGE_NOT_CONFIGURED:
+          "Cloud storage (Backblaze B2) is not configured. Set B2_* on the server or in Settings → Storage.",
         ERR_DELETE_WAPP_MSG: "Could not delete WhatsApp message.",
         ERR_EDITING_WAPP_MSG: "Could not edit WhatsApp message.",
         ERR_OTHER_OPEN_TICKET:

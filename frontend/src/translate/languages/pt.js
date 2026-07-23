@@ -1403,6 +1403,8 @@ const messages = {
           "Só pode existir um agente orquestrador ativo por empresa.",
         ERR_AI_TOOLS_DISABLED:
           "Ferramentas de IA desativadas — o agente foi salvo sem alterar ferramentas.",
+        ERR_STORAGE_NOT_CONFIGURED:
+          "Armazenamento em nuvem (Backblaze B2) não configurado. Preencha B2_* no servidor ou em Configurações → Armazenamento.",
         ERR_DELETE_WAPP_MSG: "Não foi possível excluir a mensagem do WhatsApp.",
         ERR_EDITING_WAPP_MSG: "Não foi possível editar a mensagem do WhatsApp.",
         ERR_OTHER_OPEN_TICKET: "Já existe um tíquete aberto para este contato.",

@@ -14,6 +14,7 @@ import KnowledgeAsset, {
   KnowledgeAssetType
 } from "../../models/KnowledgeAsset";
 import StorageService from "../StorageService/StorageService";
+import { ensureCloudStorageReady } from "../StorageService/ensureCloudStorageReady";
 import { createKnowledgeAsset } from "../AiServices/KnowledgeCms/KnowledgeAssetCmsService";
 import { ingestKnowledgeAssetVersion } from "../AiServices/KnowledgeCms/ingestKnowledgeAssetVersion";
 import KnowledgeAssetVersion from "../../models/KnowledgeAssetVersion";
@@ -341,6 +342,8 @@ export const createRepositoryItem = async (input: {
       input.file.mimetype,
       input.file.size
     );
+    await ensureCloudStorageReady(input.companyId);
+    await StorageService.ensureReady(input.companyId);
     const uploaded = await StorageService.uploadBuffer(input.file.buffer, {
       companyId: input.companyId,
       filename: input.file.originalname,
@@ -494,6 +497,8 @@ export const updateRepositoryItem = async (input: {
       input.file.mimetype,
       input.file.size
     );
+    await ensureCloudStorageReady(input.companyId);
+    await StorageService.ensureReady(input.companyId);
     const uploaded = await StorageService.uploadBuffer(input.file.buffer, {
       companyId: input.companyId,
       filename: input.file.originalname,
