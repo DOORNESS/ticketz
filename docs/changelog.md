@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.32] — 2026-07-24
+
+### Corrigido / performance
+
+- **Assumir do robô:** API responde sem esperar envio WhatsApp (notificação em background); UI atualiza na hora (optimistic) com spinner só no botão clicado.
+
+---
+
 ## [1.5.31] — 2026-07-24
 
 ### Corrigido

@@ -98,33 +98,31 @@ export const assumeTicketFromBot = async ({
     } as any
   });
 
+  const refreshed = await ShowTicketService(updated.id, user.companyId);
+
   if (notifyCustomer) {
-    try {
-      await SendWhatsAppMessage({
-        body: formatBody(
-          "Um atendente assumiu seu atendimento e dará continuidade.",
-          updated
-        ),
-        ticket: updated,
-        userId: user.id
-      });
-    } catch {
-      // optional customer notification
-    }
+    void SendWhatsAppMessage({
+      body: formatBody(
+        "Um atendente assumiu seu atendimento e dará continuidade.",
+        refreshed
+      ),
+      ticket: refreshed,
+      userId: user.id
+    }).catch(() => undefined);
   }
 
-  await logAiOperationalEvent({
+  void logAiOperationalEvent({
     companyId: user.companyId,
     ticketId: ticket.id,
     event: "human_assumed",
     userId: user.id,
     details: {
       action: "assume_from_bot",
-      queueId: updated.queueId
+      queueId: refreshed.queueId
     }
-  });
+  }).catch(() => undefined);
 
-  return ShowTicketService(updated.id, user.companyId);
+  return refreshed;
 };
 
 type PauseAiParams = {

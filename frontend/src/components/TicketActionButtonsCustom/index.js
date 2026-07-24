@@ -57,7 +57,7 @@ const TicketActionButtonsCustom = ({
   const classes = useStyles();
   const history = useHistory();
   const [anchorEl, setAnchorEl] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingAction, setLoadingAction] = useState(null);
   const [learningModalOpen, setLearningModalOpen] = useState(false);
   const ticketOptionsMenuOpen = Boolean(anchorEl);
   const { user } = useContext(AuthContext);
@@ -84,7 +84,10 @@ const TicketActionButtonsCustom = ({
   };
 
   const handleUpdateTicketStatus = async (e, status, userId) => {
-    setLoading(true);
+    if (loadingAction) {
+      return;
+    }
+    setLoadingAction("status");
     try {
       let updatedTicket;
       if (status === "open" && ticket.status === "closed") {
@@ -100,7 +103,6 @@ const TicketActionButtonsCustom = ({
         updatedTicket = data;
       }
 
-      setLoading(false);
       if (status === "open") {
         applyTicketUpdate(updatedTicket);
         toast.success(i18n.t("closedTicketBar.reopened"));
@@ -110,8 +112,9 @@ const TicketActionButtonsCustom = ({
         history.push("/tickets");
       }
     } catch (err) {
-      setLoading(false);
       toastError(err);
+    } finally {
+      setLoadingAction(null);
     }
   };
 
@@ -140,6 +143,8 @@ const TicketActionButtonsCustom = ({
       setListSubTab(column);
     }
 
+    refreshTicketLists?.();
+
     if (onTicketUpdated) {
       onTicketUpdated(updatedTicket);
       return;
@@ -151,11 +156,35 @@ const TicketActionButtonsCustom = ({
       ...updatedTicket,
       code: updatedTicket.status === "open" ? "#open" : "#pending"
     });
-    refreshTicketLists?.();
   };
 
+  const buildOptimisticAssumedTicket = () => ({
+    ...ticket,
+    status: "open",
+    userId: user?.id,
+    user: ticket.user || user,
+    aiPaused: true,
+    aiHandoff: true,
+    aiHumanAssumedAt: new Date().toISOString(),
+    operationalState: {
+      ...(ticket.operationalState || {}),
+      listColumn: "open",
+      label: "Em atendimento",
+      allowedActions: {
+        assume: false,
+        accept: false,
+        releaseToAi: true,
+        pause: false
+      }
+    }
+  });
+
   const handleAssumeFromBot = async () => {
-    setLoading(true);
+    if (loadingAction) {
+      return;
+    }
+    setLoadingAction("assume");
+    applyTicketUpdate(buildOptimisticAssumedTicket());
     try {
       const { data } = await api.post(`/tickets/${ticket.id}/ai/assume`, {
         notifyCustomer: true
@@ -163,14 +192,18 @@ const TicketActionButtonsCustom = ({
       applyTicketUpdate(data);
       toast.success("Atendimento assumido com sucesso.");
     } catch (err) {
+      applyTicketUpdate(ticket);
       toastError(err);
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
   const handlePauseAi = async () => {
-    setLoading(true);
+    if (loadingAction) {
+      return;
+    }
+    setLoadingAction("pause");
     try {
       const { data } = await api.post(`/tickets/${ticket.id}/ai/pause`);
       setCurrentTicket({ ...data, code: "#paused" });
@@ -178,12 +211,15 @@ const TicketActionButtonsCustom = ({
     } catch (err) {
       toastError(err);
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
   const handleResumeAi = async () => {
-    setLoading(true);
+    if (loadingAction) {
+      return;
+    }
+    setLoadingAction("resume");
     try {
       const { data } = await api.post(`/tickets/${ticket.id}/ai/resume`);
       setCurrentTicket({ ...data, code: "#resumed" });
@@ -191,12 +227,15 @@ const TicketActionButtonsCustom = ({
     } catch (err) {
       toastError(err);
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
   const handleReleaseToAi = async () => {
-    setLoading(true);
+    if (loadingAction) {
+      return;
+    }
+    setLoadingAction("release");
     try {
       const { data } = await api.post(`/tickets/${ticket.id}/ai/release`);
       applyTicketUpdate(data);
@@ -204,7 +243,7 @@ const TicketActionButtonsCustom = ({
     } catch (err) {
       toastError(err);
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -214,7 +253,10 @@ const TicketActionButtonsCustom = ({
       return;
     }
 
-    setLoading(true);
+    if (loadingAction) {
+      return;
+    }
+    setLoadingAction("close");
     try {
       await api.put(`/tickets/${ticket.id}`, {
         status: "closed",
@@ -228,7 +270,7 @@ const TicketActionButtonsCustom = ({
     } catch (err) {
       toastError(err);
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -261,10 +303,17 @@ const TicketActionButtonsCustom = ({
     if (e) {
       e.preventDefault();
     }
-    setLoading(true);
+    if (loadingAction) {
+      return;
+    }
+    setLoadingAction("accept");
+    const fromAi = isHandoffPendingTicket(ticket) || isAiHandlingTicket(ticket);
+    if (fromAi) {
+      applyTicketUpdate(buildOptimisticAssumedTicket());
+    }
     try {
       let data;
-      if (isHandoffPendingTicket(ticket) || isAiHandlingTicket(ticket)) {
+      if (fromAi) {
         ({ data } = await api.post(`/tickets/${ticket.id}/ai/assume`));
       } else {
         ({ data } = await api.put(`/tickets/${ticket.id}`, {
@@ -273,12 +322,14 @@ const TicketActionButtonsCustom = ({
         }));
       }
       applyTicketUpdate(data);
-      refreshTicketLists?.();
       toast.success(i18n.t("ticketsList.acceptSuccess"));
     } catch (err) {
+      if (fromAi) {
+        applyTicketUpdate(ticket);
+      }
       toastError(err);
     } finally {
-      setLoading(false);
+      setLoadingAction(null);
     }
   };
 
@@ -373,7 +424,7 @@ const TicketActionButtonsCustom = ({
         <>
           {showAssumeFromBot && (
             <ButtonWithSpinner
-              loading={loading}
+              loading={loadingAction === "assume"}
               size="small"
               variant="contained"
               color="secondary"
@@ -384,7 +435,7 @@ const TicketActionButtonsCustom = ({
           )}
           {showPauseAi && (
             <ButtonWithSpinner
-              loading={loading}
+              loading={loadingAction === "pause"}
               size="small"
               variant="outlined"
               color="default"
@@ -395,7 +446,7 @@ const TicketActionButtonsCustom = ({
           )}
           {showResumeAi && (
             <ButtonWithSpinner
-              loading={loading}
+              loading={loadingAction === "resume"}
               size="small"
               variant="outlined"
               color="primary"
@@ -406,7 +457,7 @@ const TicketActionButtonsCustom = ({
           )}
           {showAcceptTicket && (!showTabGroups || !ticket.isGroup) && (
             <ButtonWithSpinner
-              loading={loading}
+              loading={loadingAction === "accept"}
               size="small"
               variant="contained"
               color="primary"
@@ -419,7 +470,7 @@ const TicketActionButtonsCustom = ({
       )}
       {!observationMode && showAssumeFromBot && (
         <ButtonWithSpinner
-          loading={loading}
+          loading={loadingAction === "assume"}
           size="small"
           variant="contained"
           color="secondary"
@@ -430,7 +481,7 @@ const TicketActionButtonsCustom = ({
       )}
       {!observationMode && showPauseAi && (
         <ButtonWithSpinner
-          loading={loading}
+          loading={loadingAction === "pause"}
           size="small"
           variant="outlined"
           color="default"
@@ -441,7 +492,7 @@ const TicketActionButtonsCustom = ({
       )}
       {!observationMode && showResumeAi && (
         <ButtonWithSpinner
-          loading={loading}
+          loading={loadingAction === "resume"}
           size="small"
           variant="outlined"
           color="primary"
@@ -452,7 +503,7 @@ const TicketActionButtonsCustom = ({
       )}
       {!observationMode && showReleaseToAi && (
         <ButtonWithSpinner
-          loading={loading}
+          loading={loadingAction === "release"}
           size="small"
           variant="contained"
           color="primary"
@@ -465,7 +516,7 @@ const TicketActionButtonsCustom = ({
         showAcceptTicket &&
         (!showTabGroups || !ticket.isGroup) && (
           <ButtonWithSpinner
-            loading={loading}
+            loading={loadingAction === "accept"}
             size="small"
             variant="contained"
             color="primary"
