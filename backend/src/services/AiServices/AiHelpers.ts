@@ -460,9 +460,26 @@ export const detectHandoffConfirmationDecline = (message: string): boolean => {
 };
 
 export const buildAgentIdentityReply = (
-  _agentName?: string,
-  _companyName?: string
-): string => AI_ASSISTANT_IDENTITY_REPLY;
+  agent?: Pick<AiAgent, "name" | "basePrompt"> | null
+): string => {
+  const prompt = agent?.basePrompt?.trim() || "";
+  const quoted = prompt.match(/"([^"]+)"/);
+  if (quoted?.[1]?.trim()) {
+    const reply = quoted[1].trim();
+    return reply.endsWith(".") ? reply : `${reply}.`;
+  }
+
+  const personaMatch = prompt.match(/(?:Você é o|Você é a)\s+([^,\n.]+)/i);
+  if (personaMatch?.[1]?.trim()) {
+    return `Me chamo ${personaMatch[1].trim()}.`;
+  }
+
+  if (agent?.name?.trim()) {
+    return `Me chamo ${agent.name.trim()}.`;
+  }
+
+  return AI_ASSISTANT_IDENTITY_REPLY;
+};
 
 export const buildHandoffConfirmationQuestion = (): string =>
   "Não encontrei uma resposta segura na nossa base de conhecimento. Você prefere me explicar melhor sua necessidade ou prefere que eu passe para um atendente humano? Responda *explicar* ou *atendente*.";

@@ -16,10 +16,17 @@ describe("AiHelpers identity", () => {
     ).toBe(true);
   });
 
-  it("returns the fixed Webin identity reply", () => {
+  it("returns the fixed Webin identity reply when no agent is provided", () => {
     expect(buildAgentIdentityReply()).toBe(AI_ASSISTANT_IDENTITY_REPLY);
-    expect(buildAgentIdentityReply()).toBe(
-      "Me chamo Webin, Assistente Virtual da Fortmax."
-    );
+  });
+
+  it("returns identity from agent basePrompt", () => {
+    expect(
+      buildAgentIdentityReply({
+        name: "Nivelton",
+        basePrompt:
+          'Você é o Nivelton. Quando perguntarem seu nome, responda: "Me chamo Nivelton, assistente da Nível Cashback."'
+      })
+    ).toBe("Me chamo Nivelton, assistente da Nível Cashback.");
   });
 });

@@ -116,7 +116,7 @@ const ensureQueueLinks = async (
         where: { companyId, queueId: queue.id }
       });
 
-      if (dedicated && dedicated.aiAgentId !== agent.id) {
+      if (dedicated) {
         return;
       }
 

@@ -333,12 +333,20 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 
 ### Zerar base de clientes (somente super admin)
 - Botão no topo da lista de tickets (`TicketsManagerTabs`), **antes** das abas Abertas/Resolvidos
-- Visível apenas quando `user.super === true`
+- Visível para **master admin** (`isMasterAdminUser`: `super`, `profile=admin` ou email em `MASTER_ADMIN_EMAILS`)
 - Endpoint: `POST /ai/wipe-customer-base` (`AiResetController.wipeCustomerBase`)
-- Serviço: `ResetTestEnvironmentService.resetTestEnvironmentForCompany(companyId, { wipeContacts: true })` — transação Sequelize + SQL defensivo; remove dependências (mensagens, mídia B2, timeline IA, sugestões, memória de contato etc.) antes de apagar `Tickets` e `Contacts`
-- **Admin master:** email `fernandofortmax@gmail.com` (env `MASTER_ADMIN_EMAILS`) + `profile=admin` ou `super=true`; helper `isMasterAdmin` usado no wipe e em updates críticos de ticket
+- Serviço: `ResetTestEnvironmentService.resetTestEnvironmentForCompany(companyId, { wipeContacts: true })` — transação Sequelize + SQL defensivo (inclui `quotedMsgId`, `TicketNotes`); remove dependências antes de apagar `Tickets` e `Contacts`
+- **Admin master:** email `fernandofortmax@gmail.com` (env `MASTER_ADMIN_EMAILS`) + `profile=admin` ou `super=true`
 - Apaga tickets, mensagens, logs IA e **todos os contatos** da empresa — próximo WhatsApp entra como cliente novo
-- Confirmação obrigatória no frontend
+- **Um clique:** sem confirmação modal; limpa a UI via socket `wipe` + redirect `/tickets`
+
+### IA multi-marca (Fortmax vs Nível Cashback)
+- Cadeia: **WhatsApp** → **fila** (`WhatsappQueues`) → **agente** (`AiAgentQueues`) → **bases** (`AiAgentKnowledgeBases` + domínio CMS)
+- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔Fortmax e WhatsApp Nível↔Suporte Nível↔Nivelton↔bases do domínio Nível Cashback
+- Executado no **startup** (`bootstrapAiPlatform`, env `WIRE_SUPPORT_LINES=0` desliga) e no **deploy VPS** (`scripts/wire-support-lines.js` via `restart-after-deploy.ps1`)
+- Manual ops: `COMPANY_ID=1 npm run wire:support-lines`
+- `EnsureAiFirstResponderService` **não** sobrescreve filas que já têm agente dedicado
+- Identidade do bot (`buildAgentIdentityReply`) e regras operacionais do prompt vêm do `basePrompt` do agente (Nivelton ≠ Webin)
 
 ### Auditoria §8
 

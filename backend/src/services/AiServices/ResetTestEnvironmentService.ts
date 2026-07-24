@@ -176,6 +176,24 @@ const wipeTicketRelatedData = async (
 ): Promise<{ messagesDeleted: number; aiLogsDeleted: number }> => {
   await runCompanyScopedSqlDeletes(companyId, transaction);
 
+  await safeSql(
+    "MessagesClearQuotes",
+    `UPDATE "Messages" SET "quotedMsgId" = NULL WHERE "companyId" = :companyId`,
+    { companyId },
+    transaction
+  );
+
+  await safeSql(
+    "TicketNotesByCompany",
+    `
+      DELETE FROM "TicketNotes"
+      WHERE "ticketId" IN (SELECT "id" FROM "Tickets" WHERE "companyId" = :companyId)
+         OR "contactId" IN (SELECT "id" FROM "Contacts" WHERE "companyId" = :companyId)
+    `,
+    { companyId },
+    transaction
+  );
+
   await safeDestroy("MessageMediaFile", () =>
     destroyByCompany(MessageMediaFile, companyId, transaction)
   );

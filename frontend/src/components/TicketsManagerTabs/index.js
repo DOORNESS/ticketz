@@ -251,13 +251,6 @@ const TicketsManagerTabs = () => {
   };
 
   const handleWipeCustomerBase = async () => {
-    const confirmed = window.confirm(
-      i18n.t("ticketsManager.wipeCustomerBase.confirm")
-    );
-    if (!confirmed) {
-      return;
-    }
-
     setWipingBase(true);
     try {
       const { data } = await api.post("/ai/wipe-customer-base");

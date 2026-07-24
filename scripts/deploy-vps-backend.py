@@ -461,6 +461,7 @@ def main() -> int:
         validate_script = BACKEND / "scripts" / "validate-triage-v2-schema.js"
         enable_script = BACKEND / "scripts" / "enable-triage-v2-company.js"
         ensure_wa_script = BACKEND / "scripts" / "ensure-whatsapp-sessions.js"
+        wire_lines_script = BACKEND / "scripts" / "wire-support-lines.js"
         report_wa_script = BACKEND / "scripts" / "report-whatsapp-status.js"
         verify_script = BACKEND / "scripts" / "verify-runtime-ready.js"
         restart_script = BACKEND / "scripts" / "restart-after-deploy.ps1"
@@ -471,6 +472,7 @@ def main() -> int:
             validate_script,
             enable_script,
             ensure_wa_script,
+            wire_lines_script,
             report_wa_script,
             verify_script,
             restart_script,

@@ -51,6 +51,10 @@ try {
   if (Test-Path "scripts\ensure-whatsapp-sessions.js") {
     node scripts\ensure-whatsapp-sessions.js 2>&1
   }
+  if (Test-Path "scripts\wire-support-lines.js") {
+    Write-Output "wire-support-lines..."
+    node scripts\wire-support-lines.js 2>&1
+  }
 
   Write-Output "npm install storage deps..."
   npm install @aws-sdk/s3-request-presigner@3.1093.0 @aws-sdk/client-s3@3.1080.0 --omit=dev --no-audit --no-fund 2>&1

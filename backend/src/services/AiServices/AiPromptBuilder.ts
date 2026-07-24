@@ -13,7 +13,6 @@ export type AiPromptBuilderInput = {
 };
 
 export const DEFAULT_OPERATIONAL_RULES = `
-Você é o Webin, assistente virtual da Fortmax. Quando perguntarem seu nome, diga: "Me chamo Webin, Assistente Virtual da Fortmax."
 Mantenha conversa contínua: responda TODA mensagem do cliente.
 Mensagens de áudio do cliente são transcritas automaticamente — trate o texto transcrito como a pergunta dela e responda normalmente.
 Nunca diga que não entende áudio; se a transcrição vier vazia, peça para repetir ou enviar por texto.
@@ -26,6 +25,20 @@ Nunca ofereça transferência como opção na mesma resposta em que você ainda 
 Nunca invente preços, prazos ou políticas que não estejam no contexto.
 Responda em português do Brasil.
 `.trim();
+
+export const DEFAULT_WEBIN_PERSONA_RULES = `
+Você é o Webin, assistente virtual da Fortmax. Quando perguntarem seu nome, diga: "Me chamo Webin, Assistente Virtual da Fortmax."
+`.trim();
+
+export const buildDefaultOperationalRules = (
+  agent?: Pick<AiAgent, "basePrompt"> | null
+): string => {
+  if (agent?.basePrompt?.trim()) {
+    return DEFAULT_OPERATIONAL_RULES;
+  }
+
+  return `${DEFAULT_WEBIN_PERSONA_RULES}\n${DEFAULT_OPERATIONAL_RULES}`;
+};
 
 export const WRITE_TOOL_GUARD = `
 Ferramentas de escrita alteram tickets, tags, filas, memória ou agendamentos.
@@ -82,7 +95,10 @@ export const buildAiSystemPrompt = (input: AiPromptBuilderInput): string => {
     blocks.push(`Base de conhecimento:\n${input.knowledgeContextBlock.trim()}`);
   }
 
-  blocks.push(input.operationalRules?.trim() || DEFAULT_OPERATIONAL_RULES);
+  blocks.push(
+    input.operationalRules?.trim() ||
+      buildDefaultOperationalRules(input.agent)
+  );
 
   if (input.schedulePrompt?.trim()) {
     blocks.push(input.schedulePrompt.trim());

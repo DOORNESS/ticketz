@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.37] — 2026-07-24
+
+### Corrigido
+
+- **IA multi-marca:** `WireSupportLinesService` roda no startup e no deploy VPS; WhatsApp **Nível** (nome genérico) é detectado; bootstrap não sobrescreve filas com agente dedicado; prompt operacional e identidade respeitam Nivelton vs Webin.
+- **Zerar base de clientes:** wipe sem confirmação; SQL extra (`quotedMsgId`, `TicketNotes`); um clique limpa contatos + tickets + UI.
+
+---
+
 ## [1.5.36] — 2026-07-24
 
 ### Corrigido

@@ -415,7 +415,7 @@ const ProcessInboundMessageService = async ({
     const conversationText = await buildConversationText(ticket.id, userText);
 
     if (detectAgentIdentityQuestion(userText)) {
-      const identityReply = buildAgentIdentityReply();
+      const identityReply = buildAgentIdentityReply(agent);
       await SendWhatsAppMessage({
         body: formatBody(identityReply, ticket),
         ticket
