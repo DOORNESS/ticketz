@@ -36,6 +36,32 @@ app.use(express.json({ limit: "10mb" }));
 let coreRoutesReady = false;
 let coreRoutesError: Error | null = null;
 let coreRoutesPromise: Promise<void> | null = null;
+let globalErrorHandlerAttached = false;
+
+const attachGlobalErrorHandler = (): void => {
+  if (globalErrorHandlerAttached) {
+    return;
+  }
+
+  globalErrorHandlerAttached = true;
+
+  app.use(
+    (
+      err: unknown,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction
+    ) => {
+      if (err instanceof AppError) {
+        logger[err.level](err);
+        return res.status(err.statusCode).json({ error: err.message });
+      }
+
+      logger.error(err);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  );
+};
 
 const LOGIN_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
 const LOGIN_RATE_LIMIT_BLOCK_MS = 10 * 60 * 1000;
@@ -336,6 +362,7 @@ export async function ensureHeavyRoutes(): Promise<void> {
     heavyRoutesAttachPromise = import("./routes/heavyRoutes")
       .then(({ default: heavyRoutes }) => {
         app.use(heavyRoutes);
+        attachGlobalErrorHandler();
         markHeavyRoutesReady();
         logger.info("Heavy routes attached");
       })

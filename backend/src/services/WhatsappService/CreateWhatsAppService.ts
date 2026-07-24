@@ -68,34 +68,33 @@ const CreateWhatsAppService = async ({
     });
 
     if (whatsappCount >= company.plan.connections) {
-      throw new AppError(
-        `Número máximo de conexões já alcançado: ${whatsappCount}`
-      );
+      throw new AppError("ERR_WAPP_CONNECTION_LIMIT", 400);
     }
   }
+
+  const normalizedToken = (token || "").trim();
 
   const schema = Yup.object().shape({
     name: Yup.string()
       .required()
       .min(2)
-      .test(
-        "Check-name",
-        "Esse nome já está sendo utilizado por outra conexão",
-        async value => {
-          if (!value) return false;
-          const nameExists = await Whatsapp.findOne({
-            where: { name: value, companyId }
-          });
-          return !nameExists;
-        }
-      ),
+      .test("Check-name", "ERR_WAPP_NAME_IN_USE", async value => {
+        if (!value) return false;
+        const nameExists = await Whatsapp.findOne({
+          where: { name: value, companyId }
+        });
+        return !nameExists;
+      }),
     isDefault: Yup.boolean().required()
   });
 
   try {
     await schema.validate({ name, status, isDefault });
   } catch (err: unknown) {
-    throw new AppError((err as Error).message);
+    const message = (err as Error).message;
+    throw new AppError(
+      message.startsWith("ERR_") ? message : "ERR_WAPP_INVALID_DATA"
+    );
   }
 
   const whatsappFound = await Whatsapp.findOne({ where: { companyId } });
@@ -117,28 +116,27 @@ const CreateWhatsAppService = async ({
     throw new AppError("ERR_WAPP_GREETING_REQUIRED");
   }
 
-  if (token !== null && token !== "") {
+  if (normalizedToken) {
     const tokenSchema = Yup.object().shape({
       token: Yup.string()
         .required()
         .min(2)
-        .test(
-          "Check-token",
-          "This whatsapp token is already used.",
-          async value => {
-            if (!value) return false;
-            const tokenExists = await Whatsapp.findOne({
-              where: { token: value, channel }
-            });
-            return !tokenExists;
-          }
-        )
+        .test("Check-token", "ERR_WAPP_TOKEN_IN_USE", async value => {
+          if (!value) return false;
+          const tokenExists = await Whatsapp.findOne({
+            where: { token: value, companyId, channel }
+          });
+          return !tokenExists;
+        })
     });
 
     try {
-      await tokenSchema.validate({ token });
+      await tokenSchema.validate({ token: normalizedToken });
     } catch (err: unknown) {
-      throw new AppError((err as Error).message);
+      const message = (err as Error).message;
+      throw new AppError(
+        message.startsWith("ERR_") ? message : "ERR_WAPP_INVALID_DATA"
+      );
     }
   }
 
@@ -153,7 +151,7 @@ const CreateWhatsAppService = async ({
       transferMessage,
       isDefault,
       companyId,
-      token,
+      token: normalizedToken,
       provider,
       channel,
       facebookUserId,

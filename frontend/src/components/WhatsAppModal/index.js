@@ -106,6 +106,12 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
     delete whatsappData["queues"];
     delete whatsappData["session"];
 
+    if (!whatsappData.token?.trim()) {
+      whatsappData.token = "";
+    } else {
+      whatsappData.token = whatsappData.token.trim();
+    }
+
     try {
       if (whatsAppId) {
         await api.put(`/whatsapp/${whatsAppId}`, whatsappData);
@@ -298,6 +304,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                     name="token"
                     variant="outlined"
                     margin="dense"
+                    helperText="Opcional. Deixe vazio para conectar via QR Code. Use só se integrar por API."
                   />
                 </div>
                 <QueueSelect

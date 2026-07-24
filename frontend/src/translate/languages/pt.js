@@ -503,7 +503,8 @@ const messages = {
           description:
             "Esta conversa será encerrada. Se quiser, deixe uma nota interna sobre este atendimento.",
           noteLabel: "Nota do atendimento (opcional)",
-          notePlaceholder: "Ex.: cliente pediu retorno amanhã, dúvida sobre financeiro...",
+          notePlaceholder:
+            "Ex.: cliente pediu retorno amanhã, dúvida sobre financeiro...",
           cancel: "Cancelar",
           confirm: "Encerrar conversa",
           closing: "Encerrando...",
@@ -1468,6 +1469,14 @@ const messages = {
           "Esta cor já está em uso, escolha outra.",
         ERR_WAPP_GREETING_REQUIRED:
           "A mensagem de saudação é obrigatório quando há mais de uma fila.",
+        ERR_WAPP_NAME_IN_USE:
+          "Já existe uma conexão com este nome. Escolha outro (ex.: Nível Velo 2) ou edite a conexão existente.",
+        ERR_WAPP_TOKEN_IN_USE:
+          "Este token já está em uso nesta empresa. Deixe o campo Token vazio — não é necessário para QR Code.",
+        ERR_WAPP_CONNECTION_LIMIT:
+          "Limite de conexões WhatsApp do plano atingido. Remova uma conexão antiga ou aumente o limite do plano.",
+        ERR_WAPP_INVALID_DATA:
+          "Dados inválidos ao salvar a conexão. Verifique o nome (mín. 2 letras) e tente novamente.",
         ERR_SUBSCRIPTION_CHECK_FAILED: "Assinatura inválida ou não encontrada",
         ERR_WAPP_NOT_FOUND: "Conexão indisponível",
         ERR_SUBSCRIPTION_EXPIRED: "Assinatura expirada",

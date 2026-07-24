@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.35] — 2026-07-24
+
+### Corrigido
+
+- **Erro 400 ao cadastrar WhatsApp:** handler global de erros no `appFast` (mensagens legíveis no toast); códigos `ERR_WAPP_NAME_IN_USE`, `ERR_WAPP_TOKEN_IN_USE`, `ERR_WAPP_CONNECTION_LIMIT`; token opcional e validado por empresa; campo Token com texto de ajuda no modal.
+
+---
+
 ## [1.5.34] — 2026-07-24
 
 ### Corrigido (hotfix)

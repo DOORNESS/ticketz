@@ -15,20 +15,6 @@ import AppError from "../errors/AppError";
 import Ticket from "../models/Ticket";
 import { sendWhatsappUpdate } from "../services/WhatsappService/SocketSendWhatsappUpdate";
 
-interface WhatsappData {
-  name: string;
-  queueIds: number[];
-  companyId: number;
-  greetingMessage?: string;
-  complationMessage?: string;
-  outOfHoursMessage?: string;
-  ratingMessage?: string;
-  transferMessage?: string;
-  status?: string;
-  isDefault?: boolean;
-  token?: string;
-}
-
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
 
@@ -52,8 +38,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     ratingMessage,
     transferMessage,
     queueIds,
-    token
-  }: WhatsappData = req.body;
+    token,
+    provider,
+    language
+  } = req.body;
   const { companyId } = req.user;
 
   const { whatsapp, oldDefaultWhatsapp } = await CreateWhatsAppService({
@@ -67,7 +55,9 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     transferMessage,
     queueIds,
     companyId,
-    token
+    token,
+    provider,
+    language
   });
 
   sendWhatsappUpdate(whatsapp);

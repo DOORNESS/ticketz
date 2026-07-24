@@ -16,14 +16,25 @@ const toastOptions = {
   theme: "light"
 };
 
+const LEGACY_ERROR_ALIASES = {
+  "Esse nome já está sendo utilizado por outra conexão": "ERR_WAPP_NAME_IN_USE",
+  "This whatsapp token is already used.": "ERR_WAPP_TOKEN_IN_USE"
+};
+
 export const resolveErrorMessage = err => {
-  const errorMsg =
+  const rawError =
     typeof err === "string"
       ? err
       : err.response?.data?.error ||
         err.response?.data?.message ||
         err.message ||
         "ERR_UNKNOWN";
+
+  const errorMsg = LEGACY_ERROR_ALIASES[rawError] || rawError;
+
+  if (/Número máximo de conexões/i.test(errorMsg)) {
+    return i18n.t("backendErrors.ERR_WAPP_CONNECTION_LIMIT");
+  }
 
   if (i18n.exists(`backendErrors.${errorMsg}`)) {
     return i18n.t(`backendErrors.${errorMsg}`);
@@ -84,6 +95,14 @@ const toastError = err => {
     /^Request failed with status code 409$/i.test(errorMsg)
   ) {
     return i18n.t("backendErrors.ERR_TICKET_ALREADY_ASSIGNED");
+  }
+
+  if (
+    typeof err !== "string" &&
+    err?.response?.status === 400 &&
+    /^Request failed with status code 400$/i.test(errorMsg)
+  ) {
+    return "Não foi possível salvar. Verifique se o nome já existe, se o token está em uso ou se o limite de conexões foi atingido.";
   }
 
   if (
