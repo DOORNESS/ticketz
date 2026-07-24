@@ -7,6 +7,21 @@ import {
 export const isAiSupervisionTicket = ticket =>
   !!ticket?.aiAgentId && ticket?.status !== "closed";
 
+export const ticketMatchesSelectedWhatsapps = (
+  ticket,
+  selectedWhatsappIds = []
+) => {
+  if (!selectedWhatsappIds?.length) {
+    return true;
+  }
+
+  if (!ticket?.whatsappId) {
+    return false;
+  }
+
+  return selectedWhatsappIds.includes(ticket.whatsappId);
+};
+
 export const ticketMatchesSelectedQueues = (
   ticket,
   selectedQueueIds = [],
@@ -39,6 +54,7 @@ export const shouldShowTicketInList = ({
   supervision,
   listMode,
   selectedQueueIds,
+  selectedWhatsappIds,
   profile,
   showAll,
   userId,
@@ -46,6 +62,10 @@ export const shouldShowTicketInList = ({
   aiFilter
 }) => {
   if (!ticket) {
+    return false;
+  }
+
+  if (!ticketMatchesSelectedWhatsapps(ticket, selectedWhatsappIds)) {
     return false;
   }
 

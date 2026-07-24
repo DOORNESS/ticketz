@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.38] — 2026-07-24
+
+### Corrigido
+
+- **Zerar base de clientes:** delete de `OldMessages` antes de `Messages` (FK que causava 500); limpeza reforçada.
+- **Lista de tickets:** filtro por linha WhatsApp (chips Fortmax / Web G3 / Nível etc.) na barra lateral; API `GET /tickets?whatsappIds=[...]`.
+
+---
+
 ## [1.5.37] — 2026-07-24
 
 ### Corrigido

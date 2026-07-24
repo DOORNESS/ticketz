@@ -26,6 +26,7 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import { Can } from "../Can";
 import TicketsQueueSelect from "../TicketsQueueSelect";
+import TicketsWhatsappFilter from "../TicketsWhatsappFilter";
 import { Box, Button } from "@material-ui/core";
 import { TagsFilter } from "../TagsFilter";
 import { UsersFilter } from "../UsersFilter";
@@ -177,6 +178,8 @@ const TicketsManagerTabs = () => {
 
   const userQueueIds = userQueues.map(q => q.id);
   const [selectedQueueIds, setSelectedQueueIds] = useState(userQueueIds || []);
+  const [selectedWhatsappIds, setSelectedWhatsappIds] = useState([]);
+  const [whatsapps, setWhatsapps] = useState([]);
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -199,6 +202,19 @@ const TicketsManagerTabs = () => {
       setShowAllTickets(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const loadWhatsapps = async () => {
+      try {
+        const { data } = await api.get("/whatsapp/");
+        setWhatsapps(Array.isArray(data) ? data : []);
+      } catch (err) {
+        setWhatsapps([]);
+      }
+    };
+
+    loadWhatsapps();
   }, []);
 
   useEffect(() => {
@@ -346,6 +362,11 @@ const TicketsManagerTabs = () => {
           />
         </Tabs>
       </Paper>
+      <TicketsWhatsappFilter
+        whatsapps={whatsapps}
+        selectedWhatsappIds={selectedWhatsappIds}
+        onChange={setSelectedWhatsappIds}
+      />
       <Paper square elevation={0} className={classes.ticketOptionsBox}>
         {tab === "search" ? (
           <div className={classes.serachInputWrapper}>
@@ -395,6 +416,7 @@ const TicketsManagerTabs = () => {
         <TicketsQueueSelect
           style={{ marginLeft: 6 }}
           selectedQueueIds={selectedQueueIds}
+          selectedWhatsappIds={selectedWhatsappIds}
           userQueues={user?.queues}
           onChange={values => setSelectedQueueIds(values)}
         />
@@ -457,6 +479,8 @@ const TicketsManagerTabs = () => {
             showAll={showAllTickets || user?.super}
             supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
+            selectedWhatsappIds={selectedWhatsappIds}
+            selectedWhatsappIds={selectedWhatsappIds}
             updateCount={val => setOpenCount(val)}
             style={applyPanelStyle("open")}
             setTabOpen={setListSubTab}
@@ -466,6 +490,8 @@ const TicketsManagerTabs = () => {
             status="pending"
             supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
+            selectedWhatsappIds={selectedWhatsappIds}
+            selectedWhatsappIds={selectedWhatsappIds}
             updateCount={val => setPendingCount(val)}
             style={applyPanelStyle("pending")}
             setTabOpen={setListSubTab}
@@ -476,6 +502,8 @@ const TicketsManagerTabs = () => {
             aiFilter={isMasterAdmin ? "ai_supervision" : "ai_handling"}
             supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
+            selectedWhatsappIds={selectedWhatsappIds}
+            selectedWhatsappIds={selectedWhatsappIds}
             updateCount={val => setAiCount(val)}
             style={applyPanelStyle("ai")}
             setTabOpen={setListSubTab}
@@ -488,6 +516,7 @@ const TicketsManagerTabs = () => {
           status="closed"
           showAll={true}
           selectedQueueIds={selectedQueueIds}
+          selectedWhatsappIds={selectedWhatsappIds}
           showTabGroups={showTabGroups}
         />
       </TabPanel>
@@ -496,6 +525,7 @@ const TicketsManagerTabs = () => {
           groups={true}
           showAll={true}
           selectedQueueIds={selectedQueueIds}
+          selectedWhatsappIds={selectedWhatsappIds}
           showTabGroups={showTabGroups}
         />
       </TabPanel>
@@ -520,6 +550,7 @@ const TicketsManagerTabs = () => {
           tags={selectedTags}
           users={selectedUsers}
           selectedQueueIds={selectedQueueIds}
+          selectedWhatsappIds={selectedWhatsappIds}
           showTabGroups={showTabGroups}
         />
       </TabPanel>

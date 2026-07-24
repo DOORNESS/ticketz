@@ -451,6 +451,10 @@ const messages = {
       ticketsQueueSelect: {
         placeholder: "Queues"
       },
+      ticketsWhatsappFilter: {
+        label: "WhatsApp:",
+        all: "All"
+      },
       tickets: {
         toasts: {
           deleted: "The ticket you were working on has been deleted."

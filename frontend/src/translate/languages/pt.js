@@ -450,6 +450,10 @@ const messages = {
       ticketsQueueSelect: {
         placeholder: "Filas"
       },
+      ticketsWhatsappFilter: {
+        label: "WhatsApp:",
+        all: "Todos"
+      },
       tickets: {
         toasts: {
           deleted: "O atendimento que você estava foi deletado."

@@ -348,6 +348,11 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - `EnsureAiFirstResponderService` **não** sobrescreve filas que já têm agente dedicado
 - Identidade do bot (`buildAgentIdentityReply`) e regras operacionais do prompt vêm do `basePrompt` do agente (Nivelton ≠ Webin)
 
+### Filtro por linha WhatsApp (lista de tickets)
+- Barra de chips abaixo das abas Abertas/Resolvidos: **Todos**, **Web G3**, **Nível**, etc. (nome da conexão em Administração → Conexões)
+- Backend: `whatsappIds` em `GET /tickets` filtra tickets pela conexão que recebeu a mensagem
+- Combinável com filtro de filas existente
+
 ### Auditoria §8
 
 | Tabelas | `Tickets`, `Messages`, `TicketNotes`, `TicketTags`, `TicketTrakings` |

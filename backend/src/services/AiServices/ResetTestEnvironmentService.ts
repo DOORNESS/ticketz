@@ -64,6 +64,11 @@ const isMissingTableError = (error: unknown): boolean => {
   return code === "42P01";
 };
 
+const isForeignKeyError = (error: unknown): boolean => {
+  const code = (error as { parent?: { code?: string } })?.parent?.code;
+  return code === "23503";
+};
+
 const safeDestroy = async (
   step: string,
   destroyFn: () => Promise<number>
@@ -91,6 +96,13 @@ const safeSql = async (
     if (isMissingTableError(error)) {
       logger.warn({ step }, "Reset skipped optional SQL table");
       return;
+    }
+    if (isForeignKeyError(error)) {
+      logger.error(
+        { step, error },
+        "Reset SQL blocked by foreign key — retrying cleanup"
+      );
+      throw error;
     }
     throw error;
   }
@@ -175,6 +187,30 @@ const wipeTicketRelatedData = async (
   transaction: Transaction
 ): Promise<{ messagesDeleted: number; aiLogsDeleted: number }> => {
   await runCompanyScopedSqlDeletes(companyId, transaction);
+
+  await safeSql(
+    "OldMessagesByTicket",
+    `
+      DELETE FROM "OldMessages"
+      WHERE "ticketId" IN (
+        SELECT "id" FROM "Tickets" WHERE "companyId" = :companyId
+      )
+    `,
+    { companyId },
+    transaction
+  );
+
+  await safeSql(
+    "OldMessagesByMessage",
+    `
+      DELETE FROM "OldMessages"
+      WHERE "messageId" IN (
+        SELECT "id" FROM "Messages" WHERE "companyId" = :companyId
+      )
+    `,
+    { companyId },
+    transaction
+  );
 
   await safeSql(
     "MessagesClearQuotes",
@@ -263,6 +299,18 @@ const wipeTicketRelatedData = async (
   );
 
   await destroyByTicketIds(OldMessage, ticketIds, transaction);
+  await safeSql(
+    "OldMessagesResidual",
+    `
+      DELETE FROM "OldMessages"
+      WHERE "ticketId" IN (
+        SELECT "id" FROM "Tickets" WHERE "companyId" = :companyId
+      )
+    `,
+    { companyId },
+    transaction
+  );
+
   await destroyByTicketIds(TicketTraking, ticketIds, transaction);
   await destroyByTicketIds(TicketTag, ticketIds, transaction);
   await destroyByTicketIds(TicketNote, ticketIds, transaction);
