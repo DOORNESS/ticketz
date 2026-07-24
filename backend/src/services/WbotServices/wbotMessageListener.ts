@@ -79,7 +79,11 @@ import {
   tryEngageAiOnInboundMessage,
   shouldAiBypassLegacyBotMessages
 } from "../AiServices/AiReengagementService";
-import { getActiveAgentForTicket, isAiHandlingTicket } from "../AiServices/AiHelpers";
+import {
+  getActiveAgent,
+  getActiveAgentForTicket,
+  isAiHandlingTicket
+} from "../AiServices/AiHelpers";
 import { isAiFeaturesEnabled } from "../AiServices/AiPlatformState";
 import { shouldDeferWhatsAppReadReceipt } from "../AiServices/Triage/AiReadReceiptService";
 import { _t } from "../TranslationServices/i18nService";
