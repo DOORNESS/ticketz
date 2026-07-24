@@ -25,6 +25,7 @@ import Queue from "../../models/Queue";
 import { _t } from "../TranslationServices/i18nService";
 import { logAiOperationalEvent } from "../AiServices/AiOperationalLogService";
 import { isAiHandlingTicket } from "../AiServices/AiHelpers";
+import { isMasterAdminUser } from "../../helpers/isMasterAdmin";
 
 export interface UpdateTicketData {
   status?: string;
@@ -133,6 +134,7 @@ const UpdateTicketService = async ({
     }
 
     const user = reqUserId ? await User.findByPk(reqUserId) : null;
+    const masterAdmin = isMasterAdminUser(user);
 
     if (reqUserId) {
       if (!user) {
@@ -187,6 +189,7 @@ const UpdateTicketService = async ({
       if (
         !isAiTakeover &&
         !isReopeningClosed &&
+        !masterAdmin &&
         user.profile !== "admin" &&
         !user.super &&
         !isAssignedAgent
@@ -224,6 +227,7 @@ const UpdateTicketService = async ({
       if (
         acceptUser.profile !== "admin" &&
         !acceptUser.super &&
+        !isMasterAdminUser(acceptUser) &&
         !isAiHandoffAccept &&
         !isAiHandlingAccept
       ) {
@@ -253,6 +257,11 @@ const UpdateTicketService = async ({
     }
 
     if (status !== undefined && ["closed"].indexOf(status) > -1) {
+      if (justClose && ticket.aiAgentId) {
+        ticketData.aiPaused = true;
+        ticketData.aiProcessingState = "closed_by_human";
+      }
+
       if (!ticketTraking.finishedAt) {
         ticketTraking.finishedAt = moment().toDate();
         ticketTraking.whatsappId = ticket.whatsappId;
@@ -465,14 +474,21 @@ const UpdateTicketService = async ({
     });
 
     if (oldStatus !== status) {
-      if (oldStatus === "closed" && status === "open") {
-        await incrementCounter(companyId, "ticket-reopen");
-      } else if (status === "open") {
-        await incrementCounter(companyId, "ticket-accept");
-      } else if (status === "closed") {
-        await incrementCounter(companyId, "ticket-close");
-      } else if (status === "pending" && oldQueueId !== queueId) {
-        await incrementCounter(companyId, "ticket-transfer");
+      try {
+        if (oldStatus === "closed" && status === "open") {
+          await incrementCounter(companyId, "ticket-reopen");
+        } else if (status === "open") {
+          await incrementCounter(companyId, "ticket-accept");
+        } else if (status === "closed") {
+          await incrementCounter(companyId, "ticket-close");
+        } else if (status === "pending" && oldQueueId !== queueId) {
+          await incrementCounter(companyId, "ticket-transfer");
+        }
+      } catch (counterError) {
+        logger.warn(
+          { counterError, companyId, ticketId, status, oldStatus },
+          "Counter increment failed during ticket update"
+        );
       }
     }
 
@@ -495,12 +511,19 @@ const UpdateTicketService = async ({
       (ticket.aiStartedAt || ticket.aiAgentId);
 
     if (humanClosed) {
-      await logAiOperationalEvent({
-        companyId,
-        ticketId: ticket.id,
-        event: "ticket_closed_by_human",
-        details: { userId: ticket.userId || userId }
-      });
+      try {
+        await logAiOperationalEvent({
+          companyId,
+          ticketId: ticket.id,
+          event: "ticket_closed_by_human",
+          details: { userId: ticket.userId || userId }
+        });
+      } catch (logError) {
+        logger.warn(
+          { logError, ticketId: ticket.id },
+          "Failed to log AI operational event on ticket close"
+        );
+      }
     }
 
     if (ticket.status === "closed" && ticket.aiStartedAt && !ticket.aiEndedAt) {

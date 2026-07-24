@@ -49,6 +49,7 @@ import {
   isUserTicketOwner,
   isTicketObservationMode
 } from "../../helpers/ticketListVisibility";
+import { isMasterAdminUser } from "../../helpers/isMasterAdmin";
 
 const useStyles = makeStyles(theme => ({
   ticket: {
@@ -140,7 +141,8 @@ const useStyles = makeStyles(theme => ({
   },
 
   ticketContainer: {
-    position: "relative"
+    position: "relative",
+    isolation: "isolate"
   },
 
   ticketActionsOverlay: {
@@ -151,16 +153,15 @@ const useStyles = makeStyles(theme => ({
     flexDirection: "column",
     alignItems: "flex-end",
     gap: 6,
-    zIndex: 10,
-    pointerEvents: "none"
+    zIndex: 30,
+    pointerEvents: "auto"
   },
 
   ticketActionsTopRow: {
     display: "flex",
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    pointerEvents: "auto"
+    gap: 6
   },
 
   ticketActions: {
@@ -173,14 +174,20 @@ const useStyles = makeStyles(theme => ({
   actionIcon: {
     color: "#fff",
     cursor: "pointer",
-    padding: 2,
-    height: 23,
-    width: 23,
-    fontSize: 12,
+    padding: 4,
+    height: 28,
+    width: 28,
+    fontSize: 14,
     borderRadius: "50%",
     flexShrink: 0,
     position: "relative",
-    zIndex: 11
+    zIndex: 31,
+    boxSizing: "border-box"
+  },
+
+  ticketRowButton: {
+    position: "relative",
+    zIndex: 1
   },
 
   closeActionIcon: {
@@ -319,6 +326,7 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
   };
 
   const canCloseTicket =
+    isMasterAdminUser(user) ||
     profile === "admin" ||
     user?.super ||
     isUserTicketOwner(ticket, user) ||
@@ -603,54 +611,6 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
         handleClose={() => setOpenTicketMessageDialog(false)}
         ticketId={ticket.id}
       ></TicketMessagesDialog>
-      <Box
-        className={classes.ticketActionsOverlay}
-        onMouseDown={stopCardClick}
-        onClick={stopCardClick}
-      >
-        <Box className={classes.ticketActionsTopRow}>
-          {ticket.lastMessage && (
-            <Typography
-              className={classes.lastMessageTime}
-              component="span"
-              variant="body2"
-              color="textSecondary"
-            >
-              {pastRelativeDate(parseISO(ticket.updatedAt))}
-            </Typography>
-          )}
-          <Box className={classes.ticketActions}>
-            {renderTicketActionButtons()}
-          </Box>
-        </Box>
-
-        {ticket.status === "closed" && (
-          <Badge
-            className={classes.Radiusdot}
-            badgeContent={i18n.t("common.closed")}
-            style={{
-              backgroundColor: ticket.queue?.color || "#ff0000",
-              height: 18,
-              padding: 5,
-              paddingHorizontal: 12,
-              borderRadius: 7,
-              color: "white",
-              pointerEvents: "auto"
-            }}
-          />
-        )}
-
-        {ticket.lastMessage && (
-          <Badge
-            className={classes.newMessagesCount}
-            badgeContent={ticket.unreadMessages ? ticket.unreadMessages : null}
-            classes={{
-              badge: classes.badgeStyle
-            }}
-            style={{ pointerEvents: "auto" }}
-          />
-        )}
-      </Box>
       <ListItem
         dense
         button
@@ -661,7 +621,7 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
           ticketId &&
           (ticket.uuid === ticketId || String(ticket.id) === ticketId)
         }
-        className={clsx(classes.ticket, {
+        className={clsx(classes.ticket, classes.ticketRowButton, {
           [classes.pendingTicket]: ticket.status === "pending"
         })}
       >
@@ -746,6 +706,51 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
           }
         />
       </ListItem>
+      <Box
+        className={classes.ticketActionsOverlay}
+        onMouseDown={stopCardClick}
+        onClick={stopCardClick}
+      >
+        <Box className={classes.ticketActionsTopRow}>
+          {ticket.lastMessage && (
+            <Typography
+              className={classes.lastMessageTime}
+              component="span"
+              variant="body2"
+              color="textSecondary"
+            >
+              {pastRelativeDate(parseISO(ticket.updatedAt))}
+            </Typography>
+          )}
+          <Box className={classes.ticketActions}>
+            {renderTicketActionButtons()}
+          </Box>
+          {ticket.lastMessage && ticket.unreadMessages > 0 && (
+            <Badge
+              className={classes.newMessagesCount}
+              badgeContent={ticket.unreadMessages}
+              classes={{
+                badge: classes.badgeStyle
+              }}
+            />
+          )}
+        </Box>
+
+        {ticket.status === "closed" && (
+          <Badge
+            className={classes.Radiusdot}
+            badgeContent={i18n.t("common.closed")}
+            style={{
+              backgroundColor: ticket.queue?.color || "#ff0000",
+              height: 18,
+              padding: 5,
+              paddingHorizontal: 12,
+              borderRadius: 7,
+              color: "white"
+            }}
+          />
+        )}
+      </Box>
       <Divider variant="inset" component="li" />
     </div>
   );

@@ -335,7 +335,8 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Botão no topo da lista de tickets (`TicketsManagerTabs`), **antes** das abas Abertas/Resolvidos
 - Visível apenas quando `user.super === true`
 - Endpoint: `POST /ai/wipe-customer-base` (`AiResetController.wipeCustomerBase`)
-- Serviço: `ResetTestEnvironmentService.resetTestEnvironmentForCompany(companyId, { wipeContacts: true })` — transação Sequelize; remove dependências (mensagens, mídia B2, timeline IA, sugestões copilot/learning, logs de tools, memória de contato etc.) antes de apagar `Tickets` e `Contacts`
+- Serviço: `ResetTestEnvironmentService.resetTestEnvironmentForCompany(companyId, { wipeContacts: true })` — transação Sequelize + SQL defensivo; remove dependências (mensagens, mídia B2, timeline IA, sugestões, memória de contato etc.) antes de apagar `Tickets` e `Contacts`
+- **Admin master:** email `fernandofortmax@gmail.com` (env `MASTER_ADMIN_EMAILS`) + `profile=admin` ou `super=true`; helper `isMasterAdmin` usado no wipe e em updates críticos de ticket
 - Apaga tickets, mensagens, logs IA e **todos os contatos** da empresa — próximo WhatsApp entra como cliente novo
 - Confirmação obrigatória no frontend
 

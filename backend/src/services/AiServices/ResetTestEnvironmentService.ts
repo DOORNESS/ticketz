@@ -42,6 +42,23 @@ export type ResetOptions = {
   wipeContacts?: boolean;
 };
 
+const COMPANY_SCOPED_SQL_DELETES = [
+  `"MessageMediaFiles"`,
+  `"MediaDeletionAudits"`,
+  `"AiTicketTimelineEvents"`,
+  `"AiKnowledgeSuggestions"`,
+  `"AiCopilotSuggestions"`,
+  `"AiReplayLogs"`,
+  `"AiConversationLogs"`,
+  `"AiRoutingLogs"`,
+  `"ContentRepositoryUsageLogs"`,
+  `"AiToolExecutionLogs"`,
+  `"AiToolIdempotencyRecords"`,
+  `"ContactAiMemoryLogs"`,
+  `"ContactAiMemoryJobs"`,
+  `"ContactAiMemories"`
+];
+
 const isMissingTableError = (error: unknown): boolean => {
   const code = (error as { parent?: { code?: string } })?.parent?.code;
   return code === "42P01";
@@ -57,6 +74,23 @@ const safeDestroy = async (
     if (isMissingTableError(error)) {
       logger.warn({ step }, "Reset skipped optional table");
       return 0;
+    }
+    throw error;
+  }
+};
+
+const safeSql = async (
+  step: string,
+  sql: string,
+  replacements: Record<string, unknown>,
+  transaction: Transaction
+): Promise<void> => {
+  try {
+    await sequelize.query(sql, { replacements, transaction });
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      logger.warn({ step }, "Reset skipped optional SQL table");
+      return;
     }
     throw error;
   }
@@ -119,11 +153,29 @@ const clearAiRedisState = async (): Promise<number> => {
   }
 };
 
+const runCompanyScopedSqlDeletes = async (
+  companyId: number,
+  transaction: Transaction
+): Promise<void> => {
+  await Promise.all(
+    COMPANY_SCOPED_SQL_DELETES.map(tableName =>
+      safeSql(
+        tableName,
+        `DELETE FROM ${tableName} WHERE "companyId" = :companyId`,
+        { companyId },
+        transaction
+      )
+    )
+  );
+};
+
 const wipeTicketRelatedData = async (
   companyId: number,
   ticketIds: number[],
   transaction: Transaction
 ): Promise<{ messagesDeleted: number; aiLogsDeleted: number }> => {
+  await runCompanyScopedSqlDeletes(companyId, transaction);
+
   await safeDestroy("MessageMediaFile", () =>
     destroyByCompany(MessageMediaFile, companyId, transaction)
   );
@@ -155,19 +207,42 @@ const wipeTicketRelatedData = async (
     destroyByCompany(ContactAiMemoryJob, companyId, transaction)
   );
 
-  const aiLogsDeleted = await AiConversationLog.destroy({
-    where: { companyId },
-    transaction
-  });
-  await AiReplayLog.destroy({
-    where: { companyId },
-    transaction
-  });
+  const aiLogsDeleted = await safeDestroy("AiConversationLog", () =>
+    AiConversationLog.destroy({
+      where: { companyId },
+      transaction
+    })
+  );
+  await safeDestroy("AiReplayLog", () =>
+    AiReplayLog.destroy({
+      where: { companyId },
+      transaction
+    })
+  );
 
-  const messagesDeleted = await Message.destroy({
-    where: { companyId },
+  let messagesDeleted = await destroyByTicketIds(
+    Message,
+    ticketIds,
     transaction
-  });
+  );
+  messagesDeleted += await safeDestroy("MessageByCompany", () =>
+    Message.destroy({
+      where: { companyId },
+      transaction
+    })
+  );
+
+  await safeSql(
+    "MessagesByTicketSubquery",
+    `
+      DELETE FROM "Messages"
+      WHERE "ticketId" IN (
+        SELECT "id" FROM "Tickets" WHERE "companyId" = :companyId
+      )
+    `,
+    { companyId },
+    transaction
+  );
 
   await destroyByTicketIds(OldMessage, ticketIds, transaction);
   await destroyByTicketIds(TicketTraking, ticketIds, transaction);
@@ -195,6 +270,18 @@ const wipeCompanyContacts = async (
   }
 
   const contactScope = { contactId: { [Op.in]: contactIds } };
+
+  await safeSql(
+    "MessagesByContact",
+    `
+      DELETE FROM "Messages"
+      WHERE "contactId" IN (
+        SELECT "id" FROM "Contacts" WHERE "companyId" = :companyId
+      )
+    `,
+    { companyId },
+    transaction
+  );
 
   await ContactCustomField.destroy({
     where: contactScope,

@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.26] — 2026-07-23
+
+### Corrigido
+
+- **Botão Fechar na lista de tickets:** overlay de ações reposicionado acima do card (`z-index`, área clicável maior); badge de não lidas não sobrepõe mais os ícones
+- **500 ao zerar base / fechar conversas:** wipe em SQL + Sequelize com transação; contador IA e logs operacionais não derrubam mais o fechamento
+- **Admin master:** `fernandofortmax@gmail.com` (e `MASTER_ADMIN_EMAILS`) reconhecido como master admin — migration garante `super=true`; bypass de permissão em operações críticas
+
+---
+
 ## [1.5.25] — 2026-07-23
 
 ### Corrigido

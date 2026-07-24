@@ -50,6 +50,7 @@ PATCH_PATHS = [
     "helpers/ticketHumanHandling.js",
     "helpers/routeReadiness.js",
     "helpers/canViewTicket.js",
+    "helpers/isMasterAdmin.js",
     "helpers/mediaConversion.js",
     "middleware/isAdmin.js",
     "middleware/isAuth.js",

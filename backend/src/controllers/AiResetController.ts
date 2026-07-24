@@ -1,14 +1,6 @@
 import { Request, Response } from "express";
-import AppError from "../errors/AppError";
-import User from "../models/User";
 import { resetTestEnvironmentForCompany } from "../services/AiServices/ResetTestEnvironmentService";
-
-const assertSuperAdmin = async (userId: string | number): Promise<void> => {
-  const user = await User.findByPk(userId, { attributes: ["super"] });
-  if (!user?.super) {
-    throw new AppError("ERR_NO_PERMISSION", 403);
-  }
-};
+import { assertMasterAdmin } from "../helpers/isMasterAdmin";
 
 export const resetEnvironment = async (
   req: Request,
@@ -18,7 +10,7 @@ export const resetEnvironment = async (
   const wipeContacts = req.body?.wipeContacts === true;
 
   if (wipeContacts) {
-    await assertSuperAdmin(req.user.id);
+    await assertMasterAdmin(req.user.id);
   }
 
   const summary = await resetTestEnvironmentForCompany(companyId, {
@@ -39,7 +31,7 @@ export const wipeCustomerBase = async (
   res: Response
 ): Promise<Response> => {
   const { companyId } = req.user;
-  await assertSuperAdmin(req.user.id);
+  await assertMasterAdmin(req.user.id);
 
   const summary = await resetTestEnvironmentForCompany(companyId, {
     wipeContacts: true

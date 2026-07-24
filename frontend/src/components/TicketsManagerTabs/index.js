@@ -20,6 +20,7 @@ import TicketsList from "../TicketsListCustom";
 import TabPanel from "../TabPanel";
 
 import { resolvePermissionRole } from "../../helpers/ticketListVisibility";
+import { isMasterAdminUser } from "../../helpers/isMasterAdmin";
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
@@ -130,6 +131,8 @@ const useStyles = makeStyles(theme => ({
   },
 
   wipeBaseBar: {
+    position: "relative",
+    zIndex: 20,
     display: "flex",
     justifyContent: "stretch",
     padding: theme.spacing(1, 1.5),
@@ -138,10 +141,13 @@ const useStyles = makeStyles(theme => ({
   },
 
   wipeBaseButton: {
+    position: "relative",
+    zIndex: 21,
     width: "100%",
     textTransform: "none",
     fontWeight: 600,
-    letterSpacing: 0.2
+    letterSpacing: 0.2,
+    pointerEvents: "auto"
   }
 }));
 
@@ -159,7 +165,7 @@ const TicketsManagerTabs = () => {
   const { profile } = user || {};
   const permissionRole = resolvePermissionRole(user);
   const isSuperAdmin = user?.super === true;
-  const isMasterAdmin = isSuperAdmin || profile === "admin";
+  const isMasterAdmin = isMasterAdminUser(user);
   const userQueues = user?.queues ?? [];
   const tabOpen = listSubTab;
 
@@ -278,7 +284,7 @@ const TicketsManagerTabs = () => {
           handleCloseOrOpenTicket(ticket);
         }}
       />
-      {isSuperAdmin && (
+      {isMasterAdmin && (
         <Paper elevation={0} square className={classes.wipeBaseBar}>
           <Button
             className={classes.wipeBaseButton}

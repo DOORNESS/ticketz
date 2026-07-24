@@ -64,7 +64,8 @@ const passthroughModel = {
 jest.mock("../../../database", () => ({
   __esModule: true,
   default: {
-    transaction: jest.fn()
+    transaction: jest.fn(),
+    query: jest.fn().mockResolvedValue([])
   }
 }));
 

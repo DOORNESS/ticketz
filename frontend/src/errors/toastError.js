@@ -78,6 +78,14 @@ const toastError = err => {
     return i18n.t("backendErrors.ERR_NO_PERMISSION");
   }
 
+  if (
+    typeof err !== "string" &&
+    err?.response?.status === 500 &&
+    /^Request failed with status code 500$/i.test(errorMsg)
+  ) {
+    return "Erro interno no servidor. Tente novamente ou contate o suporte.";
+  }
+
   if (errorMsg) {
     const displayMsg =
       errorMsg === "Network Error"
