@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.36] — 2026-07-24
+
+### Corrigido
+
+- **IA multi-marca (Fortmax vs Nível):** roteamento por fila do WhatsApp antes da IA responder; removido fallback que usava o primeiro agente Fortmax em qualquer número; tickets novos recebem fila automaticamente quando a conexão tem 1 fila; script `npm run wire:support-lines` liga Web G3↔Fortmax e Nível↔Nível Cashback.
+
+---
+
 ## [1.5.35] — 2026-07-24
 
 ### Corrigido / adicionado

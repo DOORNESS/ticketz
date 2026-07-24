@@ -9,7 +9,7 @@ import StorageService from "../StorageService/StorageService";
 import { chatCompletion } from "./ModelGateway";
 import { ingestKnowledgeDocument } from "./IngestKnowledgeDocumentService";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
-import { getActiveAgent, getKnowledgeBaseIdsForAgent } from "./AiHelpers";
+import { getActiveAgentForTicket, getKnowledgeBaseIdsForAgent } from "./AiHelpers";
 import { Op } from "sequelize";
 
 export type LearningActionType =
@@ -164,7 +164,7 @@ export const findSimilarDocumentsForLearning = async ({
   ticket: Ticket;
   query?: string;
 }): Promise<SimilarDocument[]> => {
-  const agent = await getActiveAgent(ticket.companyId, ticket.queueId);
+  const agent = await getActiveAgentForTicket(ticket);
   if (!agent) {
     return [];
   }

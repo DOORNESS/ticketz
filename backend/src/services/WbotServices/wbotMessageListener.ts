@@ -79,7 +79,7 @@ import {
   tryEngageAiOnInboundMessage,
   shouldAiBypassLegacyBotMessages
 } from "../AiServices/AiReengagementService";
-import { getActiveAgent, isAiHandlingTicket } from "../AiServices/AiHelpers";
+import { getActiveAgentForTicket, isAiHandlingTicket } from "../AiServices/AiHelpers";
 import { isAiFeaturesEnabled } from "../AiServices/AiPlatformState";
 import { shouldDeferWhatsAppReadReceipt } from "../AiServices/Triage/AiReadReceiptService";
 import { _t } from "../TranslationServices/i18nService";
@@ -735,7 +735,7 @@ export const verifyMediaMessage = async (
   );
   const aiAgentForAudio =
     isAiFeaturesEnabled() &&
-    (await getActiveAgent(ticket.companyId, ticket.queueId));
+    (await getActiveAgentForTicket(ticket));
 
   let inboundAudioBuffer: Buffer | null = null;
 
@@ -1840,15 +1840,9 @@ const handleMessage = async (
       currentSchedule = await VerifyCurrentSchedule(companyId);
     }
 
-    let defaultQueue: Queue;
+    let defaultQueue: Queue | undefined;
 
-    if (
-      (msg.key.fromMe ||
-        contact.disableBot ||
-        currentSchedule?.inActivity === false) &&
-      !contact.isGroup &&
-      whatsapp.queues.length === 1
-    ) {
+    if (!contact.isGroup && whatsapp.queues.length === 1) {
       defaultQueue = await Queue.findByPk(whatsapp.queues[0].id);
     }
 

@@ -1,7 +1,8 @@
 import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
 import AiAgentQueue from "../../models/AiAgentQueue";
-import KnowledgeBase from "../../models/KnowledgeBase";
+import Whatsapp from "../../models/Whatsapp";
+import Queue from "../../models/Queue";
 import { Op } from "sequelize";
 import { isOrchestratorEnabledForCompany } from "./AiOrchestratorFeatureFlag";
 import {
@@ -104,38 +105,73 @@ export const shouldAiHandleTicket = async (
     return specialists > 0;
   }
 
-  const agent = await getActiveAgent(ticket.companyId, ticket.queueId);
+  const agent = await getActiveAgentForTicket(ticket);
   return !!agent;
+};
+
+export const resolveQueueIdForTicket = async (
+  ticket: Pick<Ticket, "queueId" | "whatsappId">
+): Promise<number | undefined> => {
+  if (ticket.queueId) {
+    return ticket.queueId;
+  }
+
+  if (!ticket.whatsappId) {
+    return undefined;
+  }
+
+  const whatsapp = await Whatsapp.findByPk(ticket.whatsappId, {
+    include: [{ model: Queue, as: "queues", attributes: ["id"] }]
+  });
+
+  if (whatsapp?.queues?.length === 1) {
+    return whatsapp.queues[0].id;
+  }
+
+  return undefined;
+};
+
+export const ensureTicketQueueFromWhatsapp = async (
+  ticket: Ticket
+): Promise<number | undefined> => {
+  const queueId = await resolveQueueIdForTicket(ticket);
+
+  if (queueId && ticket.queueId !== queueId) {
+    await ticket.update({ queueId });
+    ticket.queueId = queueId;
+  }
+
+  return queueId ?? ticket.queueId ?? undefined;
 };
 
 export const getActiveAgent = async (
   companyId: number,
-  queueId?: number
+  queueId?: number | null
 ): Promise<AiAgent | null> => {
-  if (queueId) {
-    const agentQueue = await AiAgentQueue.findOne({
-      where: { companyId, queueId },
-      include: [
-        {
-          model: AiAgent,
-          where: { active: true, role: { [Op.in]: ["legacy", "specialist"] } },
-          required: true
-        }
-      ]
-    });
-    if (agentQueue?.aiAgent) {
-      return agentQueue.aiAgent;
-    }
+  if (!queueId) {
+    return null;
   }
 
-  return AiAgent.findOne({
-    where: {
-      companyId,
-      active: true,
-      role: { [Op.in]: ["legacy", "specialist"] }
-    },
+  const agentQueue = await AiAgentQueue.findOne({
+    where: { companyId, queueId },
+    include: [
+      {
+        model: AiAgent,
+        where: { active: true, role: { [Op.in]: ["legacy", "specialist"] } },
+        required: true
+      }
+    ],
     order: [["id", "ASC"]]
   });
+
+  return agentQueue?.aiAgent || null;
+};
+
+export const getActiveAgentForTicket = async (
+  ticket: Ticket
+): Promise<AiAgent | null> => {
+  const queueId = await ensureTicketQueueFromWhatsapp(ticket);
+  return getActiveAgent(ticket.companyId, queueId);
 };
 
 const getLegacyKnowledgeBaseIdsForAgent = async (
@@ -162,12 +198,7 @@ const getLegacyKnowledgeBaseIdsForAgent = async (
     return [...new Set(ids)];
   }
 
-  const bases = await KnowledgeBase.findAll({
-    where: { companyId, active: true },
-    attributes: ["id"]
-  });
-
-  return bases.map(b => b.id);
+  return [];
 };
 
 export const getKnowledgeBaseIdsForAgent = async (
@@ -271,7 +302,7 @@ export const resolveSpecialistAgent = async ({
   const orchestratorMode = await isOrchestratorEnabledForCompany(companyId);
 
   if (!orchestratorMode) {
-    const agent = await getActiveAgent(companyId, ticket.queueId);
+    const agent = await getActiveAgentForTicket(ticket);
     if (!agent) {
       throw new Error("No active agent configured");
     }
@@ -404,10 +435,8 @@ export const detectAgentIdentityQuestion = (message: string): boolean => {
     return false;
   }
 
-  return (
-    /quem (e|esta|está)|vc e|voce e|você é|seu nome|qual (o |)(seu )?nome|quem fala|quem esta|quem está|com quem falo|e voce|é você|e vc|como (voce|você|vc) se chama|precisa ter um nome|sera webin|será webin|me chame de webin|chamar de webin/i.test(
-      text
-    )
+  return /quem (e|esta|está)|vc e|voce e|você é|seu nome|qual (o |)(seu )?nome|quem fala|quem esta|quem está|com quem falo|e voce|é você|e vc|como (voce|você|vc) se chama|precisa ter um nome|sera webin|será webin|me chame de webin|chamar de webin/i.test(
+    text
   );
 };
 

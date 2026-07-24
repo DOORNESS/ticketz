@@ -4,7 +4,7 @@ import AiAgent from "../../models/AiAgent";
 import AiCopilotSuggestion from "../../models/AiCopilotSuggestion";
 import AppError from "../../errors/AppError";
 import { chatCompletion } from "./ModelGateway";
-import { getActiveAgent, getKnowledgeBaseIdsForAgent } from "./AiHelpers";
+import { getActiveAgentForTicket, getKnowledgeBaseIdsForAgent } from "./AiHelpers";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
 import { searchRepositoryForAi } from "../ContentRepository/ContentRepositoryService";
 import { getIO } from "../../libs/socket";
@@ -128,7 +128,7 @@ export const generateCopilotSuggestion = async ({
   const activeAgent =
     agent ||
     (ticket.aiAgentId ? await AiAgent.findByPk(ticket.aiAgentId) : null) ||
-    (await getActiveAgent(ticket.companyId, ticket.queueId));
+    (await getActiveAgentForTicket(ticket));
   if (!activeAgent) {
     throw new AppError("ERR_AI_AGENT_NOT_FOUND", 422);
   }

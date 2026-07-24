@@ -1,5 +1,9 @@
 import Ticket from "../../models/Ticket";
-import { isAiHandlingTicket, canAiEngageTicket, getActiveAgent } from "./AiHelpers";
+import {
+  isAiHandlingTicket,
+  canAiEngageTicket,
+  getActiveAgentForTicket
+} from "./AiHelpers";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
 import { enqueueAiInboundMessage } from "./AiInboundQueueService";
 import { logger } from "../../utils/logger";
@@ -41,7 +45,7 @@ export const tryEngageAiOnInboundMessage = async ({
     return false;
   }
 
-  const activeAgent = await getActiveAgent(companyId, ticket.queueId);
+  const activeAgent = await getActiveAgentForTicket(ticket);
   if (!activeAgent) {
     return false;
   }
@@ -99,7 +103,7 @@ export const tryEngageAiFromStoredMessage = async (
 
 export const shouldAiBypassLegacyBotMessages = async (
   ticket: Ticket,
-  companyId: number
+  _companyId: number
 ): Promise<boolean> => {
   if (!isAiFeaturesEnabled()) {
     return false;
@@ -109,6 +113,6 @@ export const shouldAiBypassLegacyBotMessages = async (
     return false;
   }
 
-  const agent = await getActiveAgent(companyId, ticket.queueId);
+  const agent = await getActiveAgentForTicket(ticket);
   return !!agent && (canAiEngageTicket(ticket) || isAiHandlingTicket(ticket));
 };

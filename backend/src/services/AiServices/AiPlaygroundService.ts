@@ -1,8 +1,9 @@
+import { Op } from "sequelize";
 import AiAgent from "../../models/AiAgent";
 import KnowledgeBase from "../../models/KnowledgeBase";
 import Ticket from "../../models/Ticket";
 import AppError from "../../errors/AppError";
-import { getActiveAgent, resolveSpecialistAgent } from "./AiHelpers";
+import { resolveSpecialistAgent } from "./AiHelpers";
 import { isOrchestratorEnabledForCompany } from "./AiOrchestratorFeatureFlag";
 import { generateSpecialistAiReply } from "./AiSpecialistReplyService";
 import { estimateCostUsd } from "./pricing/AiPricingCatalog";
@@ -113,7 +114,14 @@ export const runPlaygroundQuery = async ({
         throw new AppError("Active AI agent not found", 404);
       }
     } else {
-      agent = await getActiveAgent(companyId);
+      agent = await AiAgent.findOne({
+        where: {
+          companyId,
+          active: true,
+          role: { [Op.in]: ["legacy", "specialist"] }
+        },
+        order: [["id", "ASC"]]
+      });
       if (!agent) {
         throw new AppError("Active AI agent not found", 404);
       }

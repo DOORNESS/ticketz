@@ -4,7 +4,7 @@ import Ticket from "../../models/Ticket";
 import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
-import { getActiveAgent, canAiEngageTicket } from "./AiHelpers";
+import { getActiveAgentForTicket, canAiEngageTicket } from "./AiHelpers";
 import { getAiInboundQueue } from "./AiInboundQueueService";
 import { tryEngageAiFromStoredMessage } from "./AiReengagementService";
 import { persistAiDecisionLog } from "./AiDecisionLogger";
@@ -71,7 +71,7 @@ export const runAiProactiveFollowUp = async (): Promise<void> => {
         continue;
       }
 
-      const agent = await getActiveAgent(ticket.companyId, ticket.queueId);
+      const agent = await getActiveAgentForTicket(ticket);
       if (!agent) {
         await redis.del(proactiveKey(ticket.id));
         continue;

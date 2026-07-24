@@ -119,14 +119,12 @@ const internalFindOrCreateTicketService = async (
 
     let queueId = queue?.id || null;
 
-    if (groupContact) {
-      const whatsapp = await Whatsapp.findByPk(whatsappId, {
-        include: ["queues"]
-      });
+    const whatsapp = await Whatsapp.findByPk(whatsappId, {
+      include: ["queues"]
+    });
 
-      if (whatsapp?.queues.length === 1) {
-        queueId = whatsapp.queues[0].id;
-      }
+    if (!queueId && whatsapp?.queues.length === 1) {
+      queueId = whatsapp.queues[0].id;
     }
 
     if (findOnly && !ticket) {

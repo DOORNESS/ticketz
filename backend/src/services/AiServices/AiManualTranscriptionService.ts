@@ -2,7 +2,7 @@ import Message from "../../models/Message";
 import Ticket from "../../models/Ticket";
 import User from "../../models/User";
 import AppError from "../../errors/AppError";
-import { getActiveAgent } from "./AiHelpers";
+import { getActiveAgentForTicket } from "./AiHelpers";
 import { evaluateAudioTranscriptionPolicy } from "./Triage/AudioTranscriptionPolicyService";
 import { resolveInboundAudioText } from "./AudioInboundResolver";
 import { readMediaBuffer } from "../../helpers/mediaStorage";
@@ -51,7 +51,7 @@ export const transcribeTicketMessage = async ({
     transcriptionReason: "manual_request"
   } as any);
 
-  const agent = await getActiveAgent(ticket.companyId, ticket.queueId);
+  const agent = await getActiveAgentForTicket(ticket);
   if (!agent) {
     throw new AppError("ERR_NO_ACTIVE_AI_AGENT", 404);
   }

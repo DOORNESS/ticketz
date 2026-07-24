@@ -2,7 +2,7 @@ import Queue, { Job } from "bull";
 import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
 import { logger } from "../../utils/logger";
-import { getActiveAgent, canAiEngageTicket } from "./AiHelpers";
+import { getActiveAgentForTicket, canAiEngageTicket } from "./AiHelpers";
 import ProcessInboundMessageService, {
   InboundMessageItem
 } from "./ProcessInboundMessageService";
@@ -109,7 +109,7 @@ const revalidateTicketForAi = async (
     return null;
   }
 
-  const agent = await getActiveAgent(companyId, ticket.queueId);
+  const agent = await getActiveAgentForTicket(ticket);
   if (!agent?.active) {
     return null;
   }
@@ -416,7 +416,7 @@ export const enqueueAiInboundMessage = async (
 
   const ticket = await Ticket.findByPk(payload.ticketId);
   const agent = ticket
-    ? await getActiveAgent(payload.companyId, ticket.queueId)
+    ? await getActiveAgentForTicket(ticket)
     : null;
 
   if (ticket && agent) {
