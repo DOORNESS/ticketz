@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.34] — 2026-07-24
+
+### Corrigido (hotfix)
+
+- **Travamento total da página:** loop infinito `syncTicketView` ↔ `currentTicket` removido; listas não zeram a cada refresh; socket Fortmax usa polling estável.
+
+---
+
 ## [1.5.33] — 2026-07-24
 
 ### Corrigido / performance

@@ -448,38 +448,28 @@ const NotificationsPopOver = props => {
     return <div onClick={handleClickAway}>{children}</div>;
   };
 
-  const browserNotification = () => {
+  useEffect(() => {
     const numbers = "⓿➊➋➌➍➎➏➐➑➒➓⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴";
     const pageTitle = brandTokens.appTitle;
-    if (notifications.length > 0) {
-      if (notifications.length < 21) {
-        document.title =
-          numbers.substring(notifications.length, notifications.length + 1) +
-          " - " +
-          pageTitle;
-      } else {
-        document.title = "(" + notifications.length + ")" + pageTitle;
-      }
+    const count = notifications.length;
+    if (count > 0) {
+      document.title =
+        count < 21
+          ? numbers.substring(count, count + 1) + " - " + pageTitle
+          : "(" + count + ")" + pageTitle;
     } else {
       document.title = pageTitle;
     }
-    return (
-      <>
-        <Favicon
-          animated={true}
-          url={
-            theme?.appLogoFavicon ? theme.appLogoFavicon : defaultLogoFavicon
-          }
-          alertCount={Math.min(notifications.length, 99)}
-          iconSize={195}
-        />
-      </>
-    );
-  };
+  }, [notifications.length]);
 
   return (
     <>
-      {browserNotification()}
+      <Favicon
+        animated={false}
+        url={theme?.appLogoFavicon ? theme.appLogoFavicon : defaultLogoFavicon}
+        alertCount={Math.min(notifications.length, 99)}
+        iconSize={195}
+      />
       <IconButton
         onClick={handleClick}
         ref={anchorEl}

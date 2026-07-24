@@ -89,9 +89,7 @@ const Ticket = () => {
     observationMode,
     setObservationMode,
     setListSubTab,
-    setCurrentTicket,
-    currentTicket,
-    listRevision
+    setCurrentTicket
   } = useContext(TicketsContext);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -124,12 +122,34 @@ const Ticket = () => {
 
   const syncTicketView = updatedTicket => {
     if (!updatedTicket?.id) return;
-    setTicket(updatedTicket);
-    setObservationMode(isTicketObservationMode(updatedTicket, user));
-    setCurrentTicket({
-      ...updatedTicket,
-      code: updatedTicket.status === "open" ? "#open" : "#pending"
+
+    setTicket(prev => {
+      if (
+        prev?.id === updatedTicket.id &&
+        prev?.userId === updatedTicket.userId &&
+        prev?.status === updatedTicket.status &&
+        prev?.updatedAt === updatedTicket.updatedAt
+      ) {
+        return prev;
+      }
+      return updatedTicket;
     });
+
+    setObservationMode(isTicketObservationMode(updatedTicket, user));
+
+    const code = updatedTicket.status === "open" ? "#open" : "#pending";
+    setCurrentTicket(prev => {
+      if (
+        prev?.id === updatedTicket.id &&
+        prev?.userId === updatedTicket.userId &&
+        prev?.status === updatedTicket.status &&
+        prev?.code === code
+      ) {
+        return prev;
+      }
+      return { ...updatedTicket, code };
+    });
+
     const column = getTicketListColumn(updatedTicket);
     if (column === "ai" || column === "pending" || column === "open") {
       setListSubTab(column);
@@ -176,20 +196,6 @@ const Ticket = () => {
     }, 150);
     return () => clearTimeout(delayDebounceFn);
   }, [ticketId, user, authLoading, history, setObservationMode]);
-
-  useEffect(() => {
-    if (!currentTicket?.id || authLoading || !user?.id) {
-      return;
-    }
-
-    const routeMatches =
-      String(currentTicket.uuid || currentTicket.id) === String(ticketId) ||
-      String(currentTicket.id) === String(ticketId);
-
-    if (routeMatches && currentTicket.userId) {
-      syncTicketView(currentTicket);
-    }
-  }, [currentTicket, ticketId, authLoading, user?.id]);
 
   useEffect(() => {
     if (!ticket.id) {

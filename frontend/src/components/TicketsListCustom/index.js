@@ -218,8 +218,7 @@ const TicketsListCustom = props => {
     aiFilter,
     supervision,
     listMode,
-    showAll,
-    listRevision
+    showAll
   ]);
 
   const {

@@ -399,8 +399,13 @@ const socketManager = {
       this.currentCompanyId = companyId;
       this.currentUserId = userId;
 
+      const host = window.location.hostname || "";
+      const usePollingOnly =
+        host.includes("fortmax.com.br") || host.includes("ticketz.host");
+
       this.currentSocket = openSocket(getBackendSocketURL(), {
-        transports: ["polling", "websocket"],
+        transports: usePollingOnly ? ["polling"] : ["polling", "websocket"],
+        upgrade: !usePollingOnly,
         pingTimeout: 60000,
         pingInterval: 25000,
         reconnection: true,
