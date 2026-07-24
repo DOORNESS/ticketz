@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.40] — 2026-07-24
+
+### Corrigido
+
+- **Zerar base de clientes (`ERR_WIPE_CUSTOMER_BASE_FAILED`):** `ResetTestEnvironmentService` passa a executar deletes SQL **sequencialmente** na transação (node-pg não suporta queries paralelas na mesma conexão) e usa subqueries por `companyId` em vez de listas `IN` com milhares de IDs; log Postgres com `constraint`/`detail` no controller.
+
+---
+
 ## [1.5.39] — 2026-07-24
 
 ### Corrigido

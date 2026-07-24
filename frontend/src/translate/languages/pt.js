@@ -1443,6 +1443,8 @@ const messages = {
         ERR_USER_CREATION_DISABLED:
           "A criação do usuário foi desabilitada pelo administrador.",
         ERR_NO_PERMISSION: "Você não tem permissão para acessar este recurso.",
+        ERR_WIPE_CUSTOMER_BASE_FAILED:
+          "Não foi possível zerar a base de clientes. Tente novamente ou contate o suporte.",
         ERR_TICKET_NOT_AI_HANDLING:
           "Este ticket não está mais sendo atendido pela IA.",
         ERR_TICKET_ALREADY_ASSIGNED:

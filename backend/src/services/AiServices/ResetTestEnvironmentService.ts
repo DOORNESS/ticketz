@@ -1,31 +1,9 @@
-import { Op, Transaction } from "sequelize";
+import { Transaction } from "sequelize";
 import sequelize from "../../database";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
-import OldMessage from "../../models/OldMessage";
-import TicketTraking from "../../models/TicketTraking";
-import TicketTag from "../../models/TicketTag";
-import TicketNote from "../../models/TicketNote";
-import UserRating from "../../models/UserRating";
-import AiConversationLog from "../../models/AiConversationLog";
-import AiReplayLog from "../../models/AiReplayLog";
-import MessageMediaFile from "../../models/MessageMediaFile";
-import MediaDeletionAudit from "../../models/MediaDeletionAudit";
 import Contact from "../../models/Contact";
-import ContactCustomField from "../../models/ContactCustomField";
-import ContactTag from "../../models/ContactTag";
-import Schedule from "../../models/Schedule";
-import WhatsappLidMap from "../../models/WhatsappLidMap";
-import ContactAiMemory from "../../models/ContactAiMemory";
-import ContactAiMemoryJob from "../../models/ContactAiMemoryJob";
-import ContactAiMemoryLog from "../../models/ContactAiMemoryLog";
-import AiToolExecutionLog from "../../models/AiToolExecutionLog";
-import AiToolIdempotencyRecord from "../../models/AiToolIdempotencyRecord";
-import AiTicketTimelineEvent from "../../models/AiTicketTimelineEvent";
-import AiKnowledgeSuggestion from "../../models/AiKnowledgeSuggestion";
-import AiCopilotSuggestion from "../../models/AiCopilotSuggestion";
-import AiRoutingLog from "../../models/AiRoutingLog";
-import ContentRepositoryUsageLog from "../../models/ContentRepositoryUsageLog";
+import AiConversationLog from "../../models/AiConversationLog";
 import { getAiInboundQueue } from "./AiInboundQueueService";
 import { logger } from "../../utils/logger";
 
@@ -43,6 +21,11 @@ export type ResetOptions = {
 };
 
 const COMPANY_SCOPED_SQL_DELETES = [
+  `"ContactAiMemoryLogs"`,
+  `"ContactAiMemoryJobs"`,
+  `"ContactAiMemories"`,
+  `"AiToolExecutionLogs"`,
+  `"AiToolIdempotencyRecords"`,
   `"MessageMediaFiles"`,
   `"MediaDeletionAudits"`,
   `"AiTicketTimelineEvents"`,
@@ -51,37 +34,20 @@ const COMPANY_SCOPED_SQL_DELETES = [
   `"AiReplayLogs"`,
   `"AiConversationLogs"`,
   `"AiRoutingLogs"`,
-  `"ContentRepositoryUsageLogs"`,
-  `"AiToolExecutionLogs"`,
-  `"AiToolIdempotencyRecords"`,
-  `"ContactAiMemoryLogs"`,
-  `"ContactAiMemoryJobs"`,
-  `"ContactAiMemories"`
+  `"ContentRepositoryUsageLogs"`
+];
+
+const TICKET_SCOPED_SQL_DELETES = [
+  `"TicketTraking"`,
+  `"TicketTags"`,
+  `"TicketNotes"`,
+  `"UserRatings"`,
+  `"Schedules"`
 ];
 
 const isMissingTableError = (error: unknown): boolean => {
   const code = (error as { parent?: { code?: string } })?.parent?.code;
   return code === "42P01";
-};
-
-const isForeignKeyError = (error: unknown): boolean => {
-  const code = (error as { parent?: { code?: string } })?.parent?.code;
-  return code === "23503";
-};
-
-const safeDestroy = async (
-  step: string,
-  destroyFn: () => Promise<number>
-): Promise<number> => {
-  try {
-    return await destroyFn();
-  } catch (error) {
-    if (isMissingTableError(error)) {
-      logger.warn({ step }, "Reset skipped optional table");
-      return 0;
-    }
-    throw error;
-  }
 };
 
 const safeSql = async (
@@ -97,40 +63,60 @@ const safeSql = async (
       logger.warn({ step }, "Reset skipped optional SQL table");
       return;
     }
-    if (isForeignKeyError(error)) {
-      logger.error(
-        { step, error },
-        "Reset SQL blocked by foreign key — retrying cleanup"
-      );
-      throw error;
-    }
     throw error;
   }
 };
 
-const destroyByCompany = async (
-  model: { destroy: (options: object) => Promise<number> },
+const deleteFromTableByCompany = async (
+  step: string,
+  tableName: string,
   companyId: number,
   transaction: Transaction
-): Promise<number> =>
-  model.destroy({
-    where: { companyId },
+): Promise<void> => {
+  await safeSql(
+    step,
+    `DELETE FROM ${tableName} WHERE "companyId" = :companyId`,
+    { companyId },
     transaction
-  });
+  );
+};
 
-const destroyByTicketIds = async (
-  model: { destroy: (options: object) => Promise<number> },
-  ticketIds: number[],
+const deleteFromTableByCompanyTickets = async (
+  step: string,
+  tableName: string,
+  companyId: number,
   transaction: Transaction
-): Promise<number> => {
-  if (!ticketIds.length) {
-    return 0;
-  }
-
-  return model.destroy({
-    where: { ticketId: { [Op.in]: ticketIds } },
+): Promise<void> => {
+  await safeSql(
+    step,
+    `
+      DELETE FROM ${tableName}
+      WHERE "ticketId" IN (
+        SELECT "id" FROM "Tickets" WHERE "companyId" = :companyId
+      )
+    `,
+    { companyId },
     transaction
-  });
+  );
+};
+
+const deleteFromTableByCompanyContacts = async (
+  step: string,
+  tableName: string,
+  companyId: number,
+  transaction: Transaction
+): Promise<void> => {
+  await safeSql(
+    step,
+    `
+      DELETE FROM ${tableName}
+      WHERE "contactId" IN (
+        SELECT "id" FROM "Contacts" WHERE "companyId" = :companyId
+      )
+    `,
+    { companyId },
+    transaction
+  );
 };
 
 const clearPattern = async (pattern: string): Promise<number> => {
@@ -157,8 +143,12 @@ const clearPattern = async (pattern: string): Promise<number> => {
 const clearAiRedisState = async (): Promise<number> => {
   try {
     const patterns = ["ai:buffer:*", "ai:lock:*", "ai:ack:sent:*"];
-    const clearedCounts = await Promise.all(patterns.map(clearPattern));
-    return clearedCounts.reduce((total, count) => total + count, 0);
+    let cleared = 0;
+    await patterns.reduce(async (prev, pattern) => {
+      await prev;
+      cleared += await clearPattern(pattern);
+    }, Promise.resolve());
+    return cleared;
   } catch (error) {
     logger.warn({ error }, "Failed to clear AI redis state during reset");
     return 0;
@@ -169,24 +159,43 @@ const runCompanyScopedSqlDeletes = async (
   companyId: number,
   transaction: Transaction
 ): Promise<void> => {
-  await Promise.all(
-    COMPANY_SCOPED_SQL_DELETES.map(tableName =>
-      safeSql(
-        tableName,
-        `DELETE FROM ${tableName} WHERE "companyId" = :companyId`,
-        { companyId },
-        transaction
-      )
-    )
-  );
+  await COMPANY_SCOPED_SQL_DELETES.reduce(async (prev, tableName) => {
+    await prev;
+    await deleteFromTableByCompany(
+      tableName,
+      tableName,
+      companyId,
+      transaction
+    );
+  }, Promise.resolve());
 };
 
 const wipeTicketRelatedData = async (
   companyId: number,
-  ticketIds: number[],
   transaction: Transaction
 ): Promise<{ messagesDeleted: number; aiLogsDeleted: number }> => {
+  const messagesDeleted = await Message.count({
+    where: { companyId },
+    transaction
+  });
+  const aiLogsDeleted = await AiConversationLog.count({
+    where: { companyId },
+    transaction
+  });
+
   await runCompanyScopedSqlDeletes(companyId, transaction);
+
+  await safeSql(
+    "OutOfTicketMessagesByWhatsapp",
+    `
+      DELETE FROM "OutOfTicketMessages"
+      WHERE "whatsappId" IN (
+        SELECT "id" FROM "Whatsapps" WHERE "companyId" = :companyId
+      )
+    `,
+    { companyId },
+    transaction
+  );
 
   await safeSql(
     "OldMessagesByTicket",
@@ -230,60 +239,11 @@ const wipeTicketRelatedData = async (
     transaction
   );
 
-  await safeDestroy("MessageMediaFile", () =>
-    destroyByCompany(MessageMediaFile, companyId, transaction)
-  );
-  await safeDestroy("MediaDeletionAudit", () =>
-    destroyByCompany(MediaDeletionAudit, companyId, transaction)
-  );
-  await safeDestroy("AiTicketTimelineEvent", () =>
-    destroyByCompany(AiTicketTimelineEvent, companyId, transaction)
-  );
-  await safeDestroy("AiKnowledgeSuggestion", () =>
-    destroyByCompany(AiKnowledgeSuggestion, companyId, transaction)
-  );
-  await safeDestroy("AiCopilotSuggestion", () =>
-    destroyByCompany(AiCopilotSuggestion, companyId, transaction)
-  );
-  await safeDestroy("AiRoutingLog", () =>
-    destroyByCompany(AiRoutingLog, companyId, transaction)
-  );
-  await safeDestroy("ContentRepositoryUsageLog", () =>
-    destroyByCompany(ContentRepositoryUsageLog, companyId, transaction)
-  );
-  await safeDestroy("AiToolExecutionLog", () =>
-    destroyByCompany(AiToolExecutionLog, companyId, transaction)
-  );
-  await safeDestroy("AiToolIdempotencyRecord", () =>
-    destroyByCompany(AiToolIdempotencyRecord, companyId, transaction)
-  );
-  await safeDestroy("ContactAiMemoryJob", () =>
-    destroyByCompany(ContactAiMemoryJob, companyId, transaction)
-  );
-
-  const aiLogsDeleted = await safeDestroy("AiConversationLog", () =>
-    AiConversationLog.destroy({
-      where: { companyId },
-      transaction
-    })
-  );
-  await safeDestroy("AiReplayLog", () =>
-    AiReplayLog.destroy({
-      where: { companyId },
-      transaction
-    })
-  );
-
-  let messagesDeleted = await destroyByTicketIds(
-    Message,
-    ticketIds,
+  await safeSql(
+    "MessagesByCompany",
+    `DELETE FROM "Messages" WHERE "companyId" = :companyId`,
+    { companyId },
     transaction
-  );
-  messagesDeleted += await safeDestroy("MessageByCompany", () =>
-    Message.destroy({
-      where: { companyId },
-      transaction
-    })
   );
 
   await safeSql(
@@ -298,7 +258,6 @@ const wipeTicketRelatedData = async (
     transaction
   );
 
-  await destroyByTicketIds(OldMessage, ticketIds, transaction);
   await safeSql(
     "OldMessagesResidual",
     `
@@ -311,11 +270,15 @@ const wipeTicketRelatedData = async (
     transaction
   );
 
-  await destroyByTicketIds(TicketTraking, ticketIds, transaction);
-  await destroyByTicketIds(TicketTag, ticketIds, transaction);
-  await destroyByTicketIds(TicketNote, ticketIds, transaction);
-  await destroyByTicketIds(UserRating, ticketIds, transaction);
-  await destroyByTicketIds(Schedule, ticketIds, transaction);
+  await TICKET_SCOPED_SQL_DELETES.reduce(async (prev, tableName) => {
+    await prev;
+    await deleteFromTableByCompanyTickets(
+      tableName,
+      tableName,
+      companyId,
+      transaction
+    );
+  }, Promise.resolve());
 
   return { messagesDeleted, aiLogsDeleted };
 };
@@ -324,18 +287,14 @@ const wipeCompanyContacts = async (
   companyId: number,
   transaction: Transaction
 ): Promise<number> => {
-  const contacts = await Contact.findAll({
+  const contactsDeleted = await Contact.count({
     where: { companyId },
-    attributes: ["id"],
     transaction
   });
-  const contactIds = contacts.map(contact => contact.id);
 
-  if (!contactIds.length) {
+  if (!contactsDeleted) {
     return 0;
   }
-
-  const contactScope = { contactId: { [Op.in]: contactIds } };
 
   await safeSql(
     "MessagesByContact",
@@ -349,48 +308,69 @@ const wipeCompanyContacts = async (
     transaction
   );
 
-  await ContactCustomField.destroy({
-    where: contactScope,
+  await deleteFromTableByCompanyContacts(
+    "ContactCustomFieldsByCompany",
+    `"ContactCustomFields"`,
+    companyId,
     transaction
-  });
-  await ContactTag.destroy({
-    where: contactScope,
-    transaction
-  });
-  await Schedule.destroy({
-    where: contactScope,
-    transaction
-  });
-  await WhatsappLidMap.destroy({
-    where: { companyId },
-    transaction
-  });
-  await safeDestroy("ContactAiMemoryLog", () =>
-    destroyByCompany(ContactAiMemoryLog, companyId, transaction)
   );
-  await safeDestroy("ContactAiMemoryJob", () =>
-    destroyByCompany(ContactAiMemoryJob, companyId, transaction)
+  await deleteFromTableByCompanyContacts(
+    "ContactTagsByCompany",
+    `"ContactTags"`,
+    companyId,
+    transaction
   );
-  await safeDestroy("ContactAiMemory", () =>
-    destroyByCompany(ContactAiMemory, companyId, transaction)
+  await deleteFromTableByCompanyContacts(
+    "SchedulesByContact",
+    `"Schedules"`,
+    companyId,
+    transaction
   );
 
   await safeSql(
-    "OutOfTicketMessagesByWhatsapp",
+    "TicketNotesByContact",
     `
-      DELETE FROM "OutOfTicketMessages"
-      WHERE "whatsappId" IN (
-        SELECT "id" FROM "Whatsapps" WHERE "companyId" = :companyId
+      DELETE FROM "TicketNotes"
+      WHERE "contactId" IN (
+        SELECT "id" FROM "Contacts" WHERE "companyId" = :companyId
       )
     `,
     { companyId },
     transaction
   );
 
-  return Contact.destroy({
+  await deleteFromTableByCompany(
+    "WhatsappLidMapsByCompany",
+    `"WhatsappLidMaps"`,
+    companyId,
+    transaction
+  );
+
+  await deleteFromTableByCompanyContacts(
+    "ContactAiMemoryLogsByContact",
+    `"ContactAiMemoryLogs"`,
+    companyId,
+    transaction
+  );
+  await deleteFromTableByCompanyContacts(
+    "ContactAiMemoryJobsByContact",
+    `"ContactAiMemoryJobs"`,
+    companyId,
+    transaction
+  );
+  await deleteFromTableByCompanyContacts(
+    "ContactAiMemoriesByContact",
+    `"ContactAiMemories"`,
+    companyId,
+    transaction
+  );
+
+  await Contact.destroy({
     where: { companyId },
     transaction
   });
+
+  return contactsDeleted;
 };
 
 export const resetTestEnvironmentForCompany = async (
@@ -400,16 +380,8 @@ export const resetTestEnvironmentForCompany = async (
   const wipeContacts = options.wipeContacts === true;
 
   const summary = await sequelize.transaction(async transaction => {
-    const tickets = await Ticket.findAll({
-      where: { companyId },
-      attributes: ["id"],
-      transaction
-    });
-    const ticketIds = tickets.map(ticket => ticket.id);
-
     const { messagesDeleted, aiLogsDeleted } = await wipeTicketRelatedData(
       companyId,
-      ticketIds,
       transaction
     );
 

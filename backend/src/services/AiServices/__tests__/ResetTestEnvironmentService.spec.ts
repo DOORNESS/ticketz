@@ -1,4 +1,5 @@
 const mockDestroy = jest.fn().mockResolvedValue(0);
+const mockCount = jest.fn().mockResolvedValue(0);
 const mockFindAll = jest.fn().mockResolvedValue([]);
 
 jest.mock("../../../models/Ticket", () => ({
@@ -11,55 +12,27 @@ jest.mock("../../../models/Ticket", () => ({
 
 jest.mock("../../../models/Message", () => ({
   __esModule: true,
-  default: { destroy: (...args: unknown[]) => mockDestroy(...args) }
+  default: {
+    count: (...args: unknown[]) => mockCount(...args),
+    destroy: (...args: unknown[]) => mockDestroy(...args)
+  }
 }));
 
 jest.mock("../../../models/Contact", () => ({
   __esModule: true,
   default: {
-    findAll: (...args: unknown[]) => mockFindAll(...args),
+    count: (...args: unknown[]) => mockCount(...args),
     destroy: (...args: unknown[]) => mockDestroy(...args)
   }
 }));
 
 jest.mock("../../../models/AiConversationLog", () => ({
   __esModule: true,
-  default: { destroy: (...args: unknown[]) => mockDestroy(...args) }
+  default: {
+    count: (...args: unknown[]) => mockCount(...args),
+    destroy: (...args: unknown[]) => mockDestroy(...args)
+  }
 }));
-
-const passthroughModel = {
-  destroy: (...args: unknown[]) => mockDestroy(...args)
-};
-
-[
-  "OldMessage",
-  "TicketTraking",
-  "TicketTag",
-  "TicketNote",
-  "UserRating",
-  "AiReplayLog",
-  "MessageMediaFile",
-  "MediaDeletionAudit",
-  "ContactCustomField",
-  "ContactTag",
-  "Schedule",
-  "WhatsappLidMap",
-  "ContactAiMemory",
-  "ContactAiMemoryJob",
-  "ContactAiMemoryLog",
-  "AiToolExecutionLog",
-  "AiToolIdempotencyRecord",
-  "AiTicketTimelineEvent",
-  "AiKnowledgeSuggestion",
-  "AiCopilotSuggestion",
-  "AiRoutingLog",
-  "ContentRepositoryUsageLog"
-].forEach(modelName => {
-  jest.mock(`../../../models/${modelName}`, () => ({
-    __esModule: true,
-    default: passthroughModel
-  }));
-});
 
 jest.mock("../../../database", () => ({
   __esModule: true,
@@ -92,6 +65,7 @@ describe("ResetTestEnvironmentService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDestroy.mockResolvedValue(0);
+    mockCount.mockResolvedValue(0);
     mockFindAll.mockResolvedValue([]);
   });
 
@@ -102,18 +76,22 @@ describe("ResetTestEnvironmentService", () => {
       fn(transaction)
     );
 
-    mockFindAll
-      .mockResolvedValueOnce([{ id: 10 }])
-      .mockResolvedValueOnce([{ id: 20 }]);
+    mockCount
+      .mockResolvedValueOnce(5)
+      .mockResolvedValueOnce(2)
+      .mockResolvedValueOnce(3);
+    mockDestroy.mockResolvedValueOnce(4);
 
     const summary = await resetTestEnvironmentForCompany(1, {
       wipeContacts: true
     });
 
     expect(sequelize.transaction).toHaveBeenCalled();
-    expect(mockDestroy).toHaveBeenCalled();
+    expect(sequelize.query).toHaveBeenCalled();
     expect(summary.companyId).toBe(1);
-    expect(summary.contactsDeleted).toBeGreaterThanOrEqual(0);
-    expect(summary.ticketsDeleted).toBeGreaterThanOrEqual(0);
+    expect(summary.contactsDeleted).toBe(3);
+    expect(summary.ticketsDeleted).toBe(4);
+    expect(summary.messagesDeleted).toBe(5);
+    expect(summary.aiLogsDeleted).toBe(2);
   });
 });

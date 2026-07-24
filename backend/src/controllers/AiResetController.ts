@@ -4,6 +4,28 @@ import { resetTestEnvironmentForCompany } from "../services/AiServices/ResetTest
 import { assertMasterAdmin } from "../helpers/isMasterAdmin";
 import { logger } from "../utils/logger";
 
+const extractDbError = (
+  error: unknown
+): {
+  message: string;
+  code?: string;
+  constraint?: string;
+  detail?: string;
+} => {
+  const parent = (
+    error as {
+      parent?: { code?: string; constraint?: string; detail?: string };
+    }
+  )?.parent;
+
+  return {
+    message: error instanceof Error ? error.message : String(error),
+    code: parent?.code,
+    constraint: parent?.constraint,
+    detail: parent?.detail
+  };
+};
+
 export const resetEnvironment = async (
   req: Request,
   res: Response
@@ -52,7 +74,10 @@ export const wipeCustomerBase = async (
       throw error;
     }
 
-    logger.error({ error, companyId }, "Failed to wipe customer base");
+    logger.error(
+      { companyId, dbError: extractDbError(error), error },
+      "Failed to wipe customer base"
+    );
     throw new AppError("ERR_WIPE_CUSTOMER_BASE_FAILED", 500);
   }
 };
