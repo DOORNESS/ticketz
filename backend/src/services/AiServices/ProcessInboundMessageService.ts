@@ -208,7 +208,7 @@ const applyTriageDecision = async ({
   }
 
   if (decision.action === "investigate") {
-    await sendInvestigationResponse({
+    const handled = await sendInvestigationResponse({
       ticket,
       agent,
       snapshot,
@@ -216,7 +216,7 @@ const applyTriageDecision = async ({
       companyId,
       userText
     });
-    return true;
+    return handled;
   }
 
   if (decision.action === "confirm_handoff") {
@@ -343,8 +343,7 @@ const ProcessInboundMessageService = async ({
     return;
   }
 
-  let agent =
-    providedAgent || (await getActiveAgentForTicket(ticket));
+  let agent = providedAgent || (await getActiveAgentForTicket(ticket));
 
   if (!agent) {
     await persistAiDecisionLog({
@@ -363,6 +362,7 @@ const ProcessInboundMessageService = async ({
 
   let userText = "";
   const triageV2Enabled = await isTriageV2Active(companyId);
+  let shouldFinalizeAiState = triageV2Enabled;
 
   try {
     if (triageV2Enabled) {
@@ -421,9 +421,7 @@ const ProcessInboundMessageService = async ({
         ticket
       });
 
-      if (triageV2Enabled) {
-        await finalizeAiResponse(ticket, primaryMessageId);
-      }
+      await finalizeAiResponse(ticket, primaryMessageId);
 
       await persistAiDecisionLog({
         companyId,
@@ -986,8 +984,7 @@ const ProcessInboundMessageService = async ({
 
     logger.error({ error, ticketId: ticket.id }, "AI processing failed");
 
-    const agent =
-      providedAgent || (await getActiveAgentForTicket(ticket));
+    const agent = providedAgent || (await getActiveAgentForTicket(ticket));
 
     if (agent) {
       const conversationText =
@@ -1040,6 +1037,20 @@ const ProcessInboundMessageService = async ({
       userMessage: maskSensitiveLog(userText),
       aiResponse: TRANSIENT_ERROR_FALLBACK
     });
+  } finally {
+    if (shouldFinalizeAiState) {
+      try {
+        await ticket.reload();
+        if ((ticket as any).aiProcessingState === "processing") {
+          await finalizeAiResponse(ticket, primaryMessageId);
+        }
+      } catch (finalizeError) {
+        logger.warn(
+          { finalizeError, ticketId: ticket.id },
+          "Failed to finalize AI processing state"
+        );
+      }
+    }
   }
 };
 

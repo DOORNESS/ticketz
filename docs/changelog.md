@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.39] — 2026-07-24
+
+### Corrigido
+
+- **IA silenciosa após 1ª resposta:** triagem v2 não engole FAQs/informativas — `sendInvestigationResponse` retorna `false` e o fluxo segue para LLM/RAG; identidade (Nivelton/Webin) sempre finaliza `aiProcessingState`; `finally` desbloqueia tickets presos em `processing`.
+- **Fila IA imediata (`AI_QUEUE_DEBOUNCE_MS=0`):** mensagens recebidas durante lock Redis agendam retry (~750ms) em vez de ficarem só no buffer.
+- **Zerar base de clientes:** delete de `OutOfTicketMessages` por `whatsappId`; controller com log e `ERR_WIPE_CUSTOMER_BASE_FAILED`.
+
+---
+
 ## [1.5.38] — 2026-07-24
 
 ### Corrigido

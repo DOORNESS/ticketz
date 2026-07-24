@@ -375,6 +375,18 @@ const wipeCompanyContacts = async (
     destroyByCompany(ContactAiMemory, companyId, transaction)
   );
 
+  await safeSql(
+    "OutOfTicketMessagesByWhatsapp",
+    `
+      DELETE FROM "OutOfTicketMessages"
+      WHERE "whatsappId" IN (
+        SELECT "id" FROM "Whatsapps" WHERE "companyId" = :companyId
+      )
+    `,
+    { companyId },
+    transaction
+  );
+
   return Contact.destroy({
     where: { companyId },
     transaction

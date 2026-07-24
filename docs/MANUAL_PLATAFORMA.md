@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.19 — auditada contra o código  
+**Versão:** 1.5.39 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -335,7 +335,7 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Botão no topo da lista de tickets (`TicketsManagerTabs`), **antes** das abas Abertas/Resolvidos
 - Visível para **master admin** (`isMasterAdminUser`: `super`, `profile=admin` ou email em `MASTER_ADMIN_EMAILS`)
 - Endpoint: `POST /ai/wipe-customer-base` (`AiResetController.wipeCustomerBase`)
-- Serviço: `ResetTestEnvironmentService.resetTestEnvironmentForCompany(companyId, { wipeContacts: true })` — transação Sequelize + SQL defensivo (inclui `quotedMsgId`, `TicketNotes`); remove dependências antes de apagar `Tickets` e `Contacts`
+- Serviço: `ResetTestEnvironmentService.resetTestEnvironmentForCompany(companyId, { wipeContacts: true })` — transação Sequelize + SQL defensivo (inclui `quotedMsgId`, `TicketNotes`, `OutOfTicketMessages` por `whatsappId`); remove dependências antes de apagar `Tickets` e `Contacts`; erros não-`AppError` viram `ERR_WIPE_CUSTOMER_BASE_FAILED` com log
 - **Admin master:** email `fernandofortmax@gmail.com` (env `MASTER_ADMIN_EMAILS`) + `profile=admin` ou `super=true`
 - Apaga tickets, mensagens, logs IA e **todos os contatos** da empresa — próximo WhatsApp entra como cliente novo
 - **Um clique:** sem confirmação modal; limpa a UI via socket `wipe` + redirect `/tickets`
@@ -982,9 +982,9 @@ Componentes em `backend/src/services/AiServices/Triage/`:
 **Regras principais:**
 
 - Mensagens genéricas (`Estou com problema`, `Não consigo entrar`) **não** geram handoff imediato.
-- Perguntas **informativas/comerciais** (`quero saber`, `como funciona`, `saber mais`, `como pode ajudar minha empresa`) **não** disparam investigação de suporte (ex.: *Em qual tela/módulo você encontrou esse problema?*). A IA responde e aguarda o cliente; `isInformationalIntent` em `CaseCompletenessEngine`.
+- Perguntas **informativas/comerciais** (`quero saber`, `como funciona`, `saber mais`, `como pode ajudar minha empresa`) **não** disparam investigação de suporte — `HandoffPolicyService` retorna `action=none` e `sendInvestigationResponse` devolve `false` para o fluxo seguir para o LLM/RAG (evita silêncio após identidade ou FAQ).
 - Conversas **meta** (nome do assistente, `Qual seu nome`, `Será Webin`, agradecimentos curtos, aguardar horário comercial) também não disparam investigação de suporte — `isMetaConversationIntent` / `shouldSkipSupportInvestigation`.
-- Identidade fixa do assistente: **Webin** — pergunta sobre nome → *Me chamo Webin, Assistente Virtual da Fortmax.* (`AI_ASSISTANT_IDENTITY_REPLY` em `AiHelpers`).
+- Identidade do assistente vem do `basePrompt` do agente (`buildAgentIdentityReply`) — Nivelton (Nível) ≠ Webin (Fortmax); resposta de identidade sempre chama `finalizeAiResponse` e libera `aiProcessingState`.
 - Após resposta substantiva da IA (≥120 caracteres, fora de templates de investigação), `sendInvestigationResponse` não envia nova pergunta de triagem no mesmo turno — evita mensagem duplicada fora de contexto.
 - Saudação pura (`Oi`, `Olá`, `Bom dia`) na **primeira rodada** recebe cumprimento por horário + *Em que posso ajudar?* (`buildTimeBasedGreeting`).
 - Handoff automático (tool `request_human_handoff`, baixa confiança, sem base) exige **mínimo 2 rodadas de investigação** e caso `caseReadyForHandoff`; pedido explícito de humano ou assunto sensível continuam liberados.
@@ -1222,7 +1222,7 @@ frontend/src/
 |---------|------------------|
 | `wbotMessageListener.ts` | Entrada de mensagens WA; roteamento IA/chatbot |
 | `AiReengagementService.ts` | Gate IA no inbound; enqueue |
-| `AiInboundQueueService.ts` | Fila Bull, debounce, buffer Redis |
+| `AiInboundQueueService.ts` | Fila Bull, debounce, buffer Redis; com debounce `0`, lock ativo reagenda processamento (~750ms) |
 | `ProcessInboundMessageService.ts` | Orquestração resposta IA |
 | `RetrievalEngine.ts` | Busca vetorial + keyword |
 | `KnowledgeContextService.ts` | Monta contexto RAG para prompt |

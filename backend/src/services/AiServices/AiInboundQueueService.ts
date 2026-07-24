@@ -382,7 +382,19 @@ export const enqueueAiInboundMessage = async (
 
   const isProcessing = await redis.exists(lockKey(payload.ticketId));
   if (isProcessing) {
-    if (!usesImmediateProcessing()) {
+    if (usesImmediateProcessing()) {
+      setTimeout(() => {
+        void processBufferedAiInbound(
+          payload.companyId,
+          payload.ticketId
+        ).catch(error => {
+          logger.error(
+            { error, ticketId: payload.ticketId, companyId: payload.companyId },
+            "Deferred immediate AI processing failed"
+          );
+        });
+      }, 750);
+    } else {
       await scheduleDebouncedJob(payload.companyId, payload.ticketId);
     }
     return true;
@@ -415,9 +427,7 @@ export const enqueueAiInboundMessage = async (
   }
 
   const ticket = await Ticket.findByPk(payload.ticketId);
-  const agent = ticket
-    ? await getActiveAgentForTicket(ticket)
-    : null;
+  const agent = ticket ? await getActiveAgentForTicket(ticket) : null;
 
   if (ticket && agent) {
     await sendOptionalAck(ticket, agent, payload.ticketId);

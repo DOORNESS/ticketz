@@ -76,11 +76,9 @@ export const sendInvestigationResponse = async ({
   messageId?: string;
   companyId: number;
   userText: string;
-}): Promise<void> => {
+}): Promise<boolean> => {
   if (shouldSkipSupportInvestigation(userText)) {
-    await markInboundMessagesReadForAi(ticket, messageId);
-    await ticket.update({ aiProcessingState: "awaiting_customer" } as any);
-    return;
+    return false;
   }
 
   const lastOutbound = await Message.findOne({
@@ -90,9 +88,7 @@ export const sendInvestigationResponse = async ({
   });
 
   if (lastOutbound?.body && isSubstantiveAiReply(lastOutbound.body)) {
-    await markInboundMessagesReadForAi(ticket, messageId);
-    await ticket.update({ aiProcessingState: "awaiting_customer" } as any);
-    return;
+    return false;
   }
 
   const question =
@@ -108,7 +104,7 @@ export const sendInvestigationResponse = async ({
   ) {
     await markInboundMessagesReadForAi(ticket, messageId);
     await ticket.update({ aiProcessingState: "awaiting_customer" } as any);
-    return;
+    return true;
   }
 
   await SendWhatsAppMessage({
@@ -147,6 +143,8 @@ export const sendInvestigationResponse = async ({
       investigationRound: snapshot.investigationRound + 1
     }
   });
+
+  return true;
 };
 
 export const sendHandoffConfirmationRequest = async ({
