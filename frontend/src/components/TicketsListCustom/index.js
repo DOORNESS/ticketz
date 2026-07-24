@@ -247,6 +247,12 @@ const TicketsListCustom = props => {
   });
 
   useEffect(() => {
+    if (listRevision > 0) {
+      refetchTickets();
+    }
+  }, [listRevision, refetchTickets]);
+
+  useEffect(() => {
     const filteredTickets = tickets.filter(ticket =>
       shouldShowTicketInList({
         ticket,

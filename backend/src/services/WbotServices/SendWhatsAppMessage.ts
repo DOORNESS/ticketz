@@ -1,4 +1,3 @@
-import { WAMessage } from "libzapitu-rf";
 import * as Sentry from "@sentry/node";
 import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
@@ -23,7 +22,7 @@ const SendWhatsAppMessage = async ({
   ticket,
   userId,
   quotedMsg
-}: Request): Promise<WAMessage> => {
+}: Request): Promise<Message> => {
   let options = {};
 
   const connection = await Whatsapp.findByPk(ticket.whatsappId);
@@ -73,11 +72,10 @@ const SendWhatsAppMessage = async ({
     wbot.cacheMessage(sentMessage);
 
     if (sentMessage?.message?.extendedTextMessage?.thumbnailDirectPath) {
-      await verifyMediaMessage(sentMessage, ticket, ticket.contact, { wbot });
-    } else {
-      await verifyMessage(sentMessage, ticket, ticket.contact);
+      return verifyMediaMessage(sentMessage, ticket, ticket.contact, { wbot });
     }
-    return sentMessage;
+
+    return verifyMessage(sentMessage, ticket, ticket.contact);
   } catch (err) {
     Sentry.captureException(err);
     console.log(err);

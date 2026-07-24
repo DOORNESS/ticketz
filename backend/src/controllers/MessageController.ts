@@ -194,7 +194,13 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       );
     }
   } else if (channel === "whatsapp") {
-    await SendWhatsAppMessage({ body, ticket, userId, quotedMsg });
+    const createdMessage = await SendWhatsAppMessage({
+      body,
+      ticket,
+      userId,
+      quotedMsg
+    });
+    return res.status(200).json(createdMessage);
   }
 
   return res.send();

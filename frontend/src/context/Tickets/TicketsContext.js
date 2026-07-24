@@ -1,4 +1,4 @@
-import React, { useState, createContext } from "react";
+import React, { useState, useRef, useCallback, createContext } from "react";
 
 const TicketsContext = createContext();
 
@@ -11,10 +11,27 @@ const TicketsContextProvider = ({ children }) => {
   const [observationMode, setObservationMode] = useState(false);
   const [listSubTab, setListSubTab] = useState("open");
   const [listRevision, setListRevision] = useState(0);
+  const messageHandlersRef = useRef({});
 
   const refreshTicketLists = () => {
     setListRevision(value => value + 1);
   };
+
+  const registerMessageHandlers = useCallback(handlers => {
+    messageHandlersRef.current = handlers || {};
+    return () => {
+      messageHandlersRef.current = {};
+    };
+  }, []);
+
+  const notifyMessageSent = useCallback(message => {
+    const handlers = messageHandlersRef.current;
+    if (message?.id && handlers.append) {
+      handlers.append(message);
+      return;
+    }
+    handlers.refresh?.();
+  }, []);
 
   return (
     <TicketsContext.Provider
@@ -26,7 +43,9 @@ const TicketsContextProvider = ({ children }) => {
         listSubTab,
         setListSubTab,
         listRevision,
-        refreshTicketLists
+        refreshTicketLists,
+        registerMessageHandlers,
+        notifyMessageSent
       }}
     >
       {children}

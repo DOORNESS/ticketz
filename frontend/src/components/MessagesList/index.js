@@ -53,6 +53,7 @@ import MediaGalleryLightbox, {
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { SocketContext } from "../../context/Socket/SocketContext";
+import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import { i18n } from "../../translate/i18n";
 import vCard from "vcard-parser";
 import { generateColor } from "../../helpers/colorGenerator";
@@ -739,6 +740,7 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
   const [contactPresence, setContactPresence] = useState("available");
 
   const socketManager = useContext(SocketContext);
+  const { registerMessageHandlers } = useContext(TicketsContext);
 
   function loadData(incrementPage = false) {
     if (incrementPage && !nextId) {
@@ -830,7 +832,7 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
     socketManager.onConnect(onConnect);
 
     const onAppMessage = data => {
-      if (data.message.ticketId === currentTicketId.current) {
+      if (Number(data.message.ticketId) === Number(currentTicketId.current)) {
         setContactPresence("available");
         if (data.action === "create") {
           const message = data.message;
@@ -951,6 +953,19 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   };
+
+  useEffect(() => {
+    return registerMessageHandlers({
+      append: message => {
+        if (Number(message?.ticketId) !== Number(currentTicketId.current)) {
+          return;
+        }
+        dispatch({ type: "ADD_MESSAGE", payload: message });
+        scrollToBottom();
+      },
+      refresh: () => refreshMessagesList()
+    });
+  }, [registerMessageHandlers, ticketId]);
 
   const scrollStickedToBottom = () => {
     if (stickedRef.current) {

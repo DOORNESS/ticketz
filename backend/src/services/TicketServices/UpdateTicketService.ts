@@ -338,9 +338,7 @@ const UpdateTicketService = async ({
         );
 
         if (ticket.channel === "whatsapp" && !isGroup) {
-          const sentMessage = await SendWhatsAppMessage({ body, ticket });
-
-          await verifyMessage(sentMessage, ticket, ticket.contact);
+          await SendWhatsAppMessage({ body, ticket });
         }
       }
 

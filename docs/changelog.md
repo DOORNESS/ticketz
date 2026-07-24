@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.31] — 2026-07-24
+
+### Corrigido
+
+- **Lista de tickets:** aceitar conversa atualiza abas Atendendo/Aguardando/IA sem F5; ticket assumido por humano sai da aba IA.
+- **Conversa em tempo real:** mensagens enviadas aparecem na tela imediatamente (POST retorna mensagem + refresh local); ticket sincroniza ao aceitar sem debounce longo.
+- **Copiloto:** estado do ticket atualizado ao assumir — botão Sugerir resposta passa a consultar a IA.
+
+---
+
 ## [1.5.30] — 2026-07-24
 
 ### Corrigido

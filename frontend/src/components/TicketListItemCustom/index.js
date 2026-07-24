@@ -256,8 +256,12 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
   const [openTicketMessageDialog, setOpenTicketMessageDialog] = useState(false);
   const { ticketId } = useParams();
   const isMounted = useRef(true);
-  const { setCurrentTicket, setObservationMode, refreshTicketLists } =
-    useContext(TicketsContext);
+  const {
+    setCurrentTicket,
+    setObservationMode,
+    refreshTicketLists,
+    setListSubTab
+  } = useContext(TicketsContext);
   const { user } = useContext(AuthContext);
   const { profile } = user;
   const [actionLoading, setActionLoading] = useState(false);
@@ -337,9 +341,12 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
         code: "#open"
       });
       refreshTicketLists?.();
+      setListSubTab?.("open");
       toast.success(i18n.t("ticketsList.acceptSuccess"));
-      history.push(`/tickets/${data.uuid || data.id || ticket.uuid || id}`);
-      setTabOpen("open");
+      history.push(`/tickets/${data.uuid || data.id || ticket.uuid || id}`, {
+        ticketSnapshot: data
+      });
+      setTabOpen?.("open");
     } catch (err) {
       toastError(err);
     } finally {

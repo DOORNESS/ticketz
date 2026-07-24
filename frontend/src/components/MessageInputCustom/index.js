@@ -51,6 +51,7 @@ import api from "../../services/api";
 import RecordingTimer from "./RecordingTimer";
 import { ReplyMessageContext } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import { useLocalStorage } from "../../hooks/useLocalStorage";
 import { toast } from "react-toastify";
 import toastError from "../../errors/toastError";
@@ -845,6 +846,7 @@ const MessageInputCustom = forwardRef((props, ref) => {
     useContext(ReplyMessageContext);
   const { setEditingMessage, editingMessage } = useContext(EditMessageContext);
   const { user } = useContext(AuthContext);
+  const { notifyMessageSent } = useContext(TicketsContext);
 
   const [signMessage, setSignMessage] = useLocalStorage("signOption", true);
 
@@ -1060,7 +1062,8 @@ const MessageInputCustom = forwardRef((props, ref) => {
         : `/messages/${ticketId}`;
 
     try {
-      await api.post(url, message);
+      const { data } = await api.post(url, message);
+      notifyMessageSent?.(data);
       setInputMessage("");
       setShowEmoji(false);
       setReplyingMessage(null);

@@ -1,4 +1,8 @@
-import { isAiHandlingTicket, isHandoffPendingTicket } from "./aiTicketStatus";
+import {
+  isAiHandlingTicket,
+  isHandoffPendingTicket,
+  isHumanHandlingTicket
+} from "./aiTicketStatus";
 
 export const isAiSupervisionTicket = ticket =>
   !!ticket?.aiAgentId && ticket?.status !== "closed";
@@ -45,13 +49,16 @@ export const shouldShowTicketInList = ({
     return false;
   }
 
-  const bypassQueueScope =
-    superUser || supervision || profile === "admin";
+  const bypassQueueScope = superUser || supervision || profile === "admin";
 
   if (listMode === "ai") {
+    if (isHumanHandlingTicket(ticket) && ticket.status === "open") {
+      return false;
+    }
+
     const inAiScope =
       aiFilter === "ai_supervision" || bypassQueueScope
-        ? isAiSupervisionTicket(ticket)
+        ? isAiSupervisionTicket(ticket) && !ticket.userId
         : isAiHandlingTicket(ticket);
 
     if (!inAiScope) {

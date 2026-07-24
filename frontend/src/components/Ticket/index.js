@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from "react";
-import { useParams, useHistory } from "react-router-dom";
+import { useParams, useHistory, useLocation } from "react-router-dom";
 
 import clsx from "clsx";
 
@@ -81,6 +81,7 @@ const useStyles = makeStyles(theme => ({
 const Ticket = () => {
   const { ticketId } = useParams();
   const history = useHistory();
+  const location = useLocation();
   const classes = useStyles();
 
   const { user, loading: authLoading } = useContext(AuthContext);
@@ -88,7 +89,9 @@ const Ticket = () => {
     observationMode,
     setObservationMode,
     setListSubTab,
-    setCurrentTicket
+    setCurrentTicket,
+    currentTicket,
+    listRevision
   } = useContext(TicketsContext);
 
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -138,6 +141,17 @@ const Ticket = () => {
       return undefined;
     }
 
+    if (location.state?.ticketSnapshot) {
+      syncTicketView(location.state.ticketSnapshot);
+      setLoading(false);
+      history.replace({
+        pathname: location.pathname,
+        search: location.search,
+        state: {}
+      });
+      return undefined;
+    }
+
     setLoading(true);
     const delayDebounceFn = setTimeout(() => {
       const fetchTicket = async () => {
@@ -159,9 +173,35 @@ const Ticket = () => {
         }
       };
       fetchTicket();
-    }, 500);
+    }, 150);
     return () => clearTimeout(delayDebounceFn);
-  }, [ticketId, user, authLoading, history, setObservationMode]);
+  }, [ticketId, user, authLoading, history, setObservationMode, listRevision]);
+
+  useEffect(() => {
+    if (!currentTicket?.id || authLoading || !user?.id) {
+      return;
+    }
+
+    const routeMatches =
+      String(currentTicket.uuid || currentTicket.id) === String(ticketId) ||
+      String(currentTicket.id) === String(ticketId);
+
+    if (routeMatches && currentTicket.userId) {
+      syncTicketView(currentTicket);
+    }
+  }, [currentTicket, ticketId, authLoading, user?.id]);
+
+  useEffect(() => {
+    if (!ticket.id) {
+      return undefined;
+    }
+
+    const companyId = localStorage.getItem("companyId");
+    const socket = socketManager.GetSocket(companyId);
+    socket.emit("joinChatBox", `${ticket.id}`);
+
+    return undefined;
+  }, [ticket.id, ticket.userId, ticket.status, socketManager]);
 
   useEffect(() => {
     const companyId = localStorage.getItem("companyId");

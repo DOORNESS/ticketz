@@ -122,7 +122,7 @@ const AiCopilotPanel = ({
     const socket = socketManager.GetSocket(companyId);
 
     const onCopilotUpdate = data => {
-      if (data.ticketId === ticket?.id) {
+      if (Number(data.ticketId) === Number(ticket?.id)) {
         setSuggestion(data.suggestion);
       }
     };
