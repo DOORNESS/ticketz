@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.40 — auditada contra o código  
+**Versão:** 1.5.41 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -567,6 +567,8 @@ Cron `0 * * * * *` — **a cada minuto**, no segundo 0; gera fatura quando `diff
 ### Conexão (`libs/socket.ts`)
 Auth: `query.token` (JWT). Cliente: `frontend/src/context/Socket/SocketContext.js`
 
+**Chat aberto:** `MessagesList` emite `joinChatBox` ao montar o ticket e escuta `company-{id}-appMessage`; cleanup usa `socket.off` (não `disconnect()`), para não perder eventos quando o ticket atualiza via socket. Reconexão reentra nas salas (`joinChatBox`) mesmo com sessão Socket.IO recuperada.
+
 ### Rooms verificados
 
 | Room | Quem entra |
@@ -984,7 +986,9 @@ Componentes em `backend/src/services/AiServices/Triage/`:
 - Mensagens genéricas (`Estou com problema`, `Não consigo entrar`) **não** geram handoff imediato.
 - Perguntas **informativas/comerciais** (`quero saber`, `como funciona`, `saber mais`, `como pode ajudar minha empresa`) **não** disparam investigação de suporte — `HandoffPolicyService` retorna `action=none` e `sendInvestigationResponse` devolve `false` para o fluxo seguir para o LLM/RAG (evita silêncio após identidade ou FAQ).
 - Conversas **meta** (nome do assistente, `Qual seu nome`, `Será Webin`, agradecimentos curtos, aguardar horário comercial) também não disparam investigação de suporte — `isMetaConversationIntent` / `shouldSkipSupportInvestigation`.
-- Identidade do assistente vem do `basePrompt` do agente (`buildAgentIdentityReply`) — Nivelton (Nível) ≠ Webin (Fortmax); resposta de identidade sempre chama `finalizeAiResponse` e libera `aiProcessingState`.
+- Identidade do assistente vem do `basePrompt` do agente (`buildAgentIdentityReply`) — Nivelton (Nível) ≠ Webin (Fortmax); resposta de identidade sempre chama `finalizeAiResponse` e libera `aiProcessingState`. `detectAgentIdentityQuestion` não intercepta FAQs sobre produto/programa (`qual o nome do…`, `quero saber mais do Nível`).
+- Se o LLM falhar ou retornar baixa confiança e a triagem não tratar o caso, o cliente recebe fallback (`AI_CUSTOMER_FALLBACK` / `TRANSIENT_ERROR_FALLBACK`) — nunca silêncio.
+- Se a triagem detectaria repetir a mesma pergunta de investigação, devolve `false` para o fluxo seguir ao LLM.
 - Após resposta substantiva da IA (≥120 caracteres, fora de templates de investigação), `sendInvestigationResponse` não envia nova pergunta de triagem no mesmo turno — evita mensagem duplicada fora de contexto.
 - Saudação pura (`Oi`, `Olá`, `Bom dia`) na **primeira rodada** recebe cumprimento por horário + *Em que posso ajudar?* (`buildTimeBasedGreeting`).
 - Handoff automático (tool `request_human_handoff`, baixa confiança, sem base) exige **mínimo 2 rodadas de investigação** e caso `caseReadyForHandoff`; pedido explícito de humano ou assunto sensível continuam liberados.

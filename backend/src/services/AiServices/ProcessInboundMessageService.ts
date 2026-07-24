@@ -89,8 +89,42 @@ type ProcessInboundParams = {
 const TRANSIENT_ERROR_FALLBACK =
   "Desculpe, tive uma instabilidade momentânea. Pode repetir sua pergunta?";
 
+const AI_CUSTOMER_FALLBACK =
+  "Ainda não encontrei uma resposta completa na base. Pode me contar um pouco mais o que você precisa?";
+
 const AUDIO_USER_FALLBACK =
   "Não consegui compreender este áudio. Poderia reenviá-lo ou escrever sua mensagem?";
+
+const sendAiCustomerFallback = async ({
+  ticket,
+  companyId,
+  messageId,
+  reason,
+  userText,
+  body = AI_CUSTOMER_FALLBACK
+}: {
+  ticket: Ticket;
+  companyId: number;
+  messageId?: string;
+  reason: string;
+  userText: string;
+  body?: string;
+}): Promise<void> => {
+  await SendWhatsAppMessage({
+    body: formatBody(body, ticket),
+    ticket
+  });
+  await finalizeAiResponse(ticket, messageId);
+  await persistAiDecisionLog({
+    companyId,
+    ticketId: ticket.id,
+    messageId,
+    action: "respond",
+    reason,
+    userMessage: maskSensitiveLog(userText),
+    aiResponse: body
+  });
+};
 
 const buildConversationHistory = async (
   ticketId: number,
@@ -784,7 +818,16 @@ const ProcessInboundMessageService = async ({
           usedChunks,
           model: completion.model
         });
+        return;
       }
+
+      await sendAiCustomerFallback({
+        ticket,
+        companyId,
+        messageId: primaryMessageId,
+        reason: "low_confidence_fallback",
+        userText
+      });
       return;
     }
 
@@ -1015,7 +1058,17 @@ const ProcessInboundMessageService = async ({
           reason: "provider_error",
           conversationText: userText
         });
+        return;
       }
+
+      await sendAiCustomerFallback({
+        ticket,
+        companyId,
+        messageId: primaryMessageId,
+        reason: "processing_error_fallback",
+        userText: userText || "",
+        body: TRANSIENT_ERROR_FALLBACK
+      });
       return;
     }
 

@@ -241,8 +241,9 @@ const Ticket = () => {
     return () => {
       socket.off(`company-${companyId}-ticket`, onCompanyTicket);
       socket.off(`company-${companyId}-contact`, onCompanyContact);
+      socket.emit("leaveChatBox", `${ticket.id}`);
     };
-  }, [ticketId, ticket, history, socketManager, user, setObservationMode]);
+  }, [ticketId, history, socketManager, user, setObservationMode]);
 
   const isObserving = isTicketObservationMode(ticket, user);
 

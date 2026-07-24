@@ -244,6 +244,15 @@ export const processBufferedAiInbound = async (
         });
         await recordAiJobCompleted(job, "cancelled");
       }
+
+      setTimeout(() => {
+        void processBufferedAiInbound(companyId, ticketId).catch(error => {
+          logger.error(
+            { error, ticketId, companyId },
+            "Retry after AI lock contention failed"
+          );
+        });
+      }, 750);
       return;
     }
 

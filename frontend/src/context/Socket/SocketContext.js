@@ -54,7 +54,7 @@ class ManagedSocket {
     this.joins = [];
 
     this.rawSocket.on("connect", () => {
-      if (this.rawSocket.io.opts.query?.r && !this.rawSocket.recovered) {
+      if (this.rawSocket.io.opts.query?.r) {
         const refreshJoinsOnReady = () => {
           for (const j of this.joins) {
             console.debug("refreshing join", j);

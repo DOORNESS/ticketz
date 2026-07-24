@@ -104,7 +104,7 @@ export const sendInvestigationResponse = async ({
   ) {
     await markInboundMessagesReadForAi(ticket, messageId);
     await ticket.update({ aiProcessingState: "awaiting_customer" } as any);
-    return true;
+    return false;
   }
 
   await SendWhatsAppMessage({

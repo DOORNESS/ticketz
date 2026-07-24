@@ -822,14 +822,16 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
     }
 
     const companyId = localStorage.getItem("companyId");
+    const ticketIdStr = `${ticket.id}`;
 
     const socket = socketManager.GetSocket(companyId);
 
     const onConnect = () => {
-      socket.emit("joinChatBox", `${ticket.id}`);
+      socket.emit("joinChatBox", ticketIdStr);
     };
 
     socketManager.onConnect(onConnect);
+    onConnect();
 
     const onAppMessage = data => {
       if (Number(data.message.ticketId) === Number(currentTicketId.current)) {
@@ -858,8 +860,7 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
       }
     };
 
-    socket.on(`company-${companyId}-appMessage`, onAppMessage);
-    socket.on("wsRefreshRequired", refreshRequired => {
+    const onWsRefreshRequired = refreshRequired => {
       if (!refreshRequired || !currentTicketId.current) {
         return;
       }
@@ -920,9 +921,9 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
           refreshMessagesList();
         }
       });
-    });
+    };
 
-    socket.on(`company-${companyId}-presence`, data => {
+    const onPresence = data => {
       const { scrollTop, clientHeight, scrollHeight } = scrollRef.current;
       const isAtBottom =
         scrollTop + clientHeight >= scrollHeight - clientHeight / 4;
@@ -934,12 +935,19 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
           }
         }
       }
-    });
+    };
+
+    socket.on(`company-${companyId}-appMessage`, onAppMessage);
+    socket.on("wsRefreshRequired", onWsRefreshRequired);
+    socket.on(`company-${companyId}-presence`, onPresence);
 
     return () => {
-      socket.disconnect();
+      socket.off(`company-${companyId}-appMessage`, onAppMessage);
+      socket.off("wsRefreshRequired", onWsRefreshRequired);
+      socket.off(`company-${companyId}-presence`, onPresence);
+      socket.emit("leaveChatBox", ticketIdStr);
     };
-  }, [ticketId, ticket, socketManager]);
+  }, [ticketId, socketManager]);
 
   const loadMore = async () => {
     await loadPageMutex.runExclusive(async () => {

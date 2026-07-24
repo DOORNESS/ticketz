@@ -435,9 +435,33 @@ export const detectAgentIdentityQuestion = (message: string): boolean => {
     return false;
   }
 
-  return /quem (e|esta|está)|vc e|voce e|você é|seu nome|qual (o |)(seu )?nome|quem fala|quem esta|quem está|com quem falo|e voce|é você|e vc|como (voce|você|vc) se chama|precisa ter um nome|sera webin|será webin|me chame de webin|chamar de webin/i.test(
-    text
-  );
+  if (/qual (o |)(nome )?(do|da|de|dos|das)\b/.test(text)) {
+    return false;
+  }
+
+  if (
+    /^(quem (e|esta|está)|com quem falo|quem fala|quem esta|quem está)\b/.test(
+      text
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(qual (o )?seu nome|qual (e|é) (o )?seu nome|como (voce|você|vc) se chama|precisa ter um nome)\b/.test(
+      text
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    /\b(sera webin|será webin|me chame de webin|chamar de webin)\b/.test(text)
+  ) {
+    return true;
+  }
+
+  return /^(vc e|voce e|você é)\b/.test(text);
 };
 
 export const detectHandoffConfirmationAccept = (message: string): boolean => {

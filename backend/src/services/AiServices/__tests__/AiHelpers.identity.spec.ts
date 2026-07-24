@@ -16,6 +16,15 @@ describe("AiHelpers identity", () => {
     ).toBe(true);
   });
 
+  it("does not treat product FAQ as identity question", () => {
+    expect(
+      detectAgentIdentityQuestion(
+        "quero saber mais do nivel, o que é este programa de fidelidade ?"
+      )
+    ).toBe(false);
+    expect(detectAgentIdentityQuestion("qual o nome do produto")).toBe(false);
+  });
+
   it("returns the fixed Webin identity reply when no agent is provided", () => {
     expect(buildAgentIdentityReply()).toBe(AI_ASSISTANT_IDENTITY_REPLY);
   });

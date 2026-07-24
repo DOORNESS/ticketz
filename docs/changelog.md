@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.41] — 2026-07-24
+
+### Corrigido
+
+- **IA silenciosa (Nivelton / Nível Cashback):** triagem não marca mais mensagem como "handled" sem enviar resposta quando a pergunta de investigação seria repetida; LLM vazio/baixa confiança ou erro de provider envia fallback ao cliente em vez de `return` mudo; detecção de identidade do bot não intercepta FAQs ("qual o nome do produto", "quero saber mais do Nível"); fila IA reprocessa buffer após lock Redis.
+- **Mensagens sem F5:** `MessagesList` deixa de chamar `socket.disconnect()` a cada update de ticket (removia listener/`joinChatBox`); usa `socket.off` + `joinChatBox` imediato; reconexão socket reentra nas salas mesmo com sessão recuperada.
+
+---
+
 ## [1.5.40] — 2026-07-24
 
 ### Corrigido
