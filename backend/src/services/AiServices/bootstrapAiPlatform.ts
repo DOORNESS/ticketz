@@ -45,15 +45,28 @@ export const bootstrapAiPlatform = async (): Promise<void> => {
       if (process.env.WIRE_SUPPORT_LINES !== "0") {
         const { wireSupportLinesForConfiguredCompanies } =
           await import("./WireSupportLinesService");
-        wireSupportLinesForConfiguredCompanies().catch(error => {
+        try {
+          await wireSupportLinesForConfiguredCompanies();
+        } catch (error) {
           logger.error({ error }, "Failed to wire support lines on startup");
-        });
+        }
       }
 
-      ensureAiFirstResponderForAllCompanies().catch(error => {
+      try {
+        await ensureAiFirstResponderForAllCompanies();
+      } catch (error) {
         logger.error(
           { error },
           "Failed to ensure AI first responder configuration"
+        );
+      }
+
+      const { reengageStuckAiTicketsForConfiguredCompanies } =
+        await import("./ReengageStuckAiTicketsService");
+      reengageStuckAiTicketsForConfiguredCompanies().catch(error => {
+        logger.error(
+          { error },
+          "Failed to re-engage stuck AI tickets on startup"
         );
       });
     }

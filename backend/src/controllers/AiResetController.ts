@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import AppError from "../errors/AppError";
 import { resetTestEnvironmentForCompany } from "../services/AiServices/ResetTestEnvironmentService";
+import { wireSupportLinesForCompany } from "../services/AiServices/WireSupportLinesService";
+import { reengageStuckAiTicketsForCompany } from "../services/AiServices/ReengageStuckAiTicketsService";
 import { assertMasterAdmin } from "../helpers/isMasterAdmin";
 import { logger } from "../utils/logger";
 
@@ -80,4 +82,23 @@ export const wipeCustomerBase = async (
     );
     throw new AppError("ERR_WIPE_CUSTOMER_BASE_FAILED", 500);
   }
+};
+
+export const wireSupportLines = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+
+  const wiring = await wireSupportLinesForCompany(companyId);
+  const reengage = await reengageStuckAiTicketsForCompany(companyId);
+
+  return res.status(200).json({
+    ok: wiring.ok || Boolean(wiring.nivel || wiring.fortmax),
+    message: wiring.ok
+      ? "Linhas Fortmax e Nível ligadas ao Nivelton/Webin, filas e bases de conhecimento."
+      : "Ligação parcial — veja erros e tente reconectar WhatsApp/filas ausentes.",
+    wiring,
+    reengage
+  });
 };

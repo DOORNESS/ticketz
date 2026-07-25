@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.43] — 2026-07-25
+
+### Corrigido
+
+- **WhatsApp Nível sem atendimento IA:** wiring Fortmax/Nível independente no startup; `EnsureAiFirstResponder` não sobrescreve filas de marca; resolução de fila em WhatsApp multi-fila prefere fila com agente; reengajamento automático de tickets pendentes sem `aiAgentId`; endpoint `POST /ai/wire-support-lines` para religar Nivelton + bases manualmente.
+
+---
+
 ## [1.5.42] — 2026-07-25
 
 ### Corrigido

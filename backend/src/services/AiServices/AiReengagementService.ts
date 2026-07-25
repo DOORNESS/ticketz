@@ -47,6 +47,16 @@ export const tryEngageAiOnInboundMessage = async ({
 
   const activeAgent = await getActiveAgentForTicket(ticket);
   if (!activeAgent) {
+    logger.warn(
+      {
+        ticketId: ticket.id,
+        companyId,
+        queueId: ticket.queueId,
+        whatsappId: ticket.whatsappId,
+        trigger
+      },
+      "No AI agent linked to ticket queue — inbound not handled by IA"
+    );
     return false;
   }
 

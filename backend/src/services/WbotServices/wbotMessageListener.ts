@@ -82,6 +82,7 @@ import {
 import {
   getActiveAgent,
   getActiveAgentForTicket,
+  ensureTicketQueueFromWhatsapp,
   isAiHandlingTicket
 } from "../AiServices/AiHelpers";
 import { isAiFeaturesEnabled } from "../AiServices/AiPlatformState";
@@ -738,8 +739,7 @@ export const verifyMediaMessage = async (
     "disabled"
   );
   const aiAgentForAudio =
-    isAiFeaturesEnabled() &&
-    (await getActiveAgentForTicket(ticket));
+    isAiFeaturesEnabled() && (await getActiveAgentForTicket(ticket));
 
   let inboundAudioBuffer: Buffer | null = null;
 
@@ -1356,14 +1356,17 @@ const verifyQueue = async (
   const { queues, greetingMessage } = whatsapp;
 
   if (queues.length === 1) {
+    const queue = head(queues);
+
     if (isAiFeaturesEnabled()) {
-      const activeAgent = await getActiveAgent(ticket.companyId, queues[0].id);
+      const activeAgent = await getActiveAgent(ticket.companyId, queue.id);
       if (activeAgent) {
+        await ensureTicketQueueFromWhatsapp(ticket);
         return;
       }
     }
 
-    await startQueue(wbot, ticket, head(queues), false);
+    await startQueue(wbot, ticket, queue, false);
     return;
   }
 

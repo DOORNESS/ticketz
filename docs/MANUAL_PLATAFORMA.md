@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.42 — auditada contra o código  
+**Versão:** 1.5.43 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -342,10 +342,12 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 
 ### IA multi-marca (Fortmax vs Nível Cashback)
 - Cadeia: **WhatsApp** → **fila** (`WhatsappQueues`) → **agente** (`AiAgentQueues`) → **bases** (`AiAgentKnowledgeBases` + domínio CMS)
-- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔Fortmax e WhatsApp Nível↔Suporte Nível↔Nivelton↔bases do domínio Nível Cashback
-- Executado no **startup** (`bootstrapAiPlatform`, env `WIRE_SUPPORT_LINES=0` desliga) e no **deploy VPS** (`scripts/wire-support-lines.js` via `restart-after-deploy.ps1`)
+- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔Fortmax e WhatsApp Nível↔Suporte Nível↔Nivelton↔bases do domínio Nível Cashback; **Fortmax e Nível são ligados de forma independente** (falha em uma linha não impede a outra)
+- Executado no **startup** (`bootstrapAiPlatform`, aguarda wiring antes do first-responder; env `WIRE_SUPPORT_LINES=0` desliga) e via **`POST /ai/wire-support-lines`** (admin)
+- Após wiring/restart: `ReengageStuckAiTicketsService` reprocessa tickets abertos/pendentes sem `aiAgentId` mas com agente na fila (última mensagem do cliente)
 - Manual ops: `COMPANY_ID=1 npm run wire:support-lines`
-- `EnsureAiFirstResponderService` **não** sobrescreve filas que já têm agente dedicado
+- `EnsureAiFirstResponderService` **não** liga Webin em filas de marca (`Suporte Nível`, `Suporte Fortmax`, etc.) — só `WireSupportLinesService`
+- `resolveQueueIdForTicket`: se o WhatsApp tiver várias filas, escolhe a que tem agente IA ativo (evita ticket sem fila quando Nivelton já está configurado)
 - Identidade do bot (`buildAgentIdentityReply`) e regras operacionais do prompt vêm do `basePrompt` do agente (Nivelton ≠ Webin)
 
 ### Filtro por linha WhatsApp (lista de tickets)

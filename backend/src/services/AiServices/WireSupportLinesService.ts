@@ -53,25 +53,22 @@ export const findByNameLoose = async (
   return matches.find(Boolean) || null;
 };
 
+type WiredLineSummary = {
+  whatsapp: { id: number; name: string };
+  queue: { id: number; name: string };
+  agent: { id: number; name: string };
+  domain: string;
+  base?: string;
+  bases?: string[];
+  ticketsFixed: number;
+};
+
 export type WireSupportLinesSummary = {
   ok: boolean;
   companyId: number;
-  fortmax: {
-    whatsapp: { id: number; name: string };
-    queue: { id: number; name: string };
-    agent: { id: number; name: string };
-    domain: string;
-    base: string;
-    ticketsFixed: number;
-  };
-  nivel: {
-    whatsapp: { id: number; name: string };
-    queue: { id: number; name: string };
-    agent: { id: number; name: string };
-    domain: string;
-    bases: string[];
-    ticketsFixed: number;
-  };
+  fortmax?: WiredLineSummary;
+  nivel?: WiredLineSummary;
+  errors: Array<{ line: "fortmax" | "nivel"; message: string }>;
 };
 
 const normalizeName = (value: string): string =>
@@ -296,14 +293,19 @@ const wireNivelLine = async (companyId: number) => {
       active: true
     }));
 
-  for (const base of [clientBase, empresaBase]) {
-    if (!base.knowledgeDomainId) {
-      await base.update({ knowledgeDomainId: nivelDomain.id });
-    }
-  }
+  await Promise.all(
+    [clientBase, empresaBase].map(async base => {
+      if (!base.knowledgeDomainId) {
+        await base.update({ knowledgeDomainId: nivelDomain.id });
+      }
+    })
+  );
 
   const queue =
-    (await findByNameLoose(Queue, companyId, ["suporte nivel", "suporte nível"])) ||
+    (await findByNameLoose(Queue, companyId, [
+      "suporte nivel",
+      "suporte nível"
+    ])) ||
     (await Queue.create({
       companyId,
       name: "Suporte Nível",
@@ -371,34 +373,63 @@ const wireNivelLine = async (companyId: number) => {
   };
 };
 
+const mapFortmaxSummary = (
+  fortmax: Awaited<ReturnType<typeof wireFortmaxLine>>
+): WiredLineSummary => ({
+  whatsapp: { id: fortmax.whatsapp.id, name: fortmax.whatsapp.name },
+  queue: { id: fortmax.queue.id, name: fortmax.queue.name },
+  agent: { id: fortmax.agent.id, name: fortmax.agent.name },
+  domain: fortmax.domain.name,
+  base: fortmax.base.name,
+  ticketsFixed: fortmax.ticketsFixed
+});
+
+const mapNivelSummary = (
+  nivel: Awaited<ReturnType<typeof wireNivelLine>>
+): WiredLineSummary => ({
+  whatsapp: { id: nivel.whatsapp.id, name: nivel.whatsapp.name },
+  queue: { id: nivel.queue.id, name: nivel.queue.name },
+  agent: { id: nivel.agent.id, name: nivel.agent.name },
+  domain: nivel.domain.name,
+  bases: nivel.bases.map(base => base.name),
+  ticketsFixed: nivel.ticketsFixed
+});
+
 export const wireSupportLinesForCompany = async (
   companyId: number
 ): Promise<WireSupportLinesSummary> => {
-  const fortmax = await wireFortmaxLine(companyId);
-  const nivel = await wireNivelLine(companyId);
-
   const summary: WireSupportLinesSummary = {
-    ok: true,
+    ok: false,
     companyId,
-    fortmax: {
-      whatsapp: { id: fortmax.whatsapp.id, name: fortmax.whatsapp.name },
-      queue: { id: fortmax.queue.id, name: fortmax.queue.name },
-      agent: { id: fortmax.agent.id, name: fortmax.agent.name },
-      domain: fortmax.domain.name,
-      base: fortmax.base.name,
-      ticketsFixed: fortmax.ticketsFixed
-    },
-    nivel: {
-      whatsapp: { id: nivel.whatsapp.id, name: nivel.whatsapp.name },
-      queue: { id: nivel.queue.id, name: nivel.queue.name },
-      agent: { id: nivel.agent.id, name: nivel.agent.name },
-      domain: nivel.domain.name,
-      bases: nivel.bases.map(base => base.name),
-      ticketsFixed: nivel.ticketsFixed
-    }
+    errors: []
   };
 
-  logger.info(summary, "Support lines wired");
+  try {
+    summary.fortmax = mapFortmaxSummary(await wireFortmaxLine(companyId));
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to wire Fortmax line";
+    summary.errors.push({ line: "fortmax", message });
+    logger.error({ error, companyId }, "Failed to wire Fortmax support line");
+  }
+
+  try {
+    summary.nivel = mapNivelSummary(await wireNivelLine(companyId));
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to wire Nível line";
+    summary.errors.push({ line: "nivel", message });
+    logger.error({ error, companyId }, "Failed to wire Nível support line");
+  }
+
+  summary.ok = Boolean(summary.fortmax && summary.nivel);
+
+  if (summary.ok) {
+    logger.info(summary, "Support lines wired");
+  } else {
+    logger.warn(summary, "Support lines partially wired");
+  }
+
   return summary;
 };
 

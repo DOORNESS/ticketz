@@ -18,6 +18,23 @@ Use a base de conhecimento sobre produtos, histórico da empresa e contatos.
 Responda com objetividade quando a informação estiver na base (ex.: anos no mercado, sistemas WebG3/FortControl).
 Só transfira para humano quando o cliente pedir atendente/pessoa ou em assuntos sensíveis.`;
 
+const normalizeQueueName = (value: string): string =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+const isBrandManagedQueue = (queueName: string): boolean => {
+  const name = normalizeQueueName(queueName);
+  return (
+    name.includes("suporte nivel") ||
+    name.includes("suporte fortmax") ||
+    name.includes("suporte webg3") ||
+    name.includes("nivel cashback")
+  );
+};
+
 const findPreferredHandoffQueue = async (
   companyId: number
 ): Promise<Queue | null> => {
@@ -95,7 +112,7 @@ const ensureQueueLinks = async (
 ): Promise<void> => {
   const queues = await Queue.findAll({
     where: { companyId },
-    attributes: ["id"]
+    attributes: ["id", "name"]
   });
 
   if (!queues.length) {
@@ -112,6 +129,10 @@ const ensureQueueLinks = async (
 
   await Promise.all(
     queues.map(async queue => {
+      if (isBrandManagedQueue(queue.name)) {
+        return;
+      }
+
       const dedicated = await AiAgentQueue.findOne({
         where: { companyId, queueId: queue.id }
       });

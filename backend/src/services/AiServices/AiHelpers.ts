@@ -110,7 +110,7 @@ export const shouldAiHandleTicket = async (
 };
 
 export const resolveQueueIdForTicket = async (
-  ticket: Pick<Ticket, "queueId" | "whatsappId">
+  ticket: Pick<Ticket, "queueId" | "whatsappId" | "companyId">
 ): Promise<number | undefined> => {
   if (ticket.queueId) {
     return ticket.queueId;
@@ -124,8 +124,20 @@ export const resolveQueueIdForTicket = async (
     include: [{ model: Queue, as: "queues", attributes: ["id"] }]
   });
 
-  if (whatsapp?.queues?.length === 1) {
+  if (!whatsapp?.queues?.length) {
+    return undefined;
+  }
+
+  if (whatsapp.queues.length === 1) {
     return whatsapp.queues[0].id;
+  }
+
+  for (let index = 0; index < whatsapp.queues.length; index += 1) {
+    const queue = whatsapp.queues[index];
+    const agent = await getActiveAgent(ticket.companyId, queue.id);
+    if (agent) {
+      return queue.id;
+    }
   }
 
   return undefined;
