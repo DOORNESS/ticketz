@@ -143,7 +143,8 @@ jobs:
           DEPLOY_MODE: "patch"
           DEPLOY_USE_ZIP: "1"
           DEPLOY_B64_CHUNK: "1500"
-          DEPLOY_LOCK_WAIT_SEC: "1800"
+          DEPLOY_LOCK_WAIT_SEC: "1200"
+          DEPLOY_LOCK_MAX_AGE_SEC: "600"
         run: |
           set -euo pipefail
           pip install pywinrm

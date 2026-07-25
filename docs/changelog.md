@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.45] — 2026-07-25
+
+### Corrigido
+
+- **Deploy CI (LOCK_HELD):** lock na VPS usa PID do Windows; detecta lock órfão (processo morto); lê stderr no retry; stale default 10 min.
+
+---
+
 ## [1.5.44] — 2026-07-25
 
 ### Performance (meta ~5s de resposta IA)

@@ -34,13 +34,13 @@ DIST = BACKEND / "dist"
 CHUNK = int(os.environ.get("DEPLOY_B64_CHUNK", "1500"))
 DEPLOY_LOCK = r"C:\ticketz\deploy-cache\.deploy.lock"
 UPLOAD_STAGING = r"C:\ticketz\dc"
-# Lock file younger than this → another deploy is still running.
+# Lock file younger than this → another deploy is still running (unless holder PID is gone).
 LOCK_MAX_AGE_SEC = int(
     os.environ.get("DEPLOY_LOCK_MAX_AGE_SEC")
-    or os.environ.get("DEPLOY_LOCK_STALE_SEC", "2400")
+    or os.environ.get("DEPLOY_LOCK_STALE_SEC", "600")
 )
-LOCK_WAIT_SEC = int(os.environ.get("DEPLOY_LOCK_WAIT_SEC", "0"))
-LOCK_POLL_SEC = int(os.environ.get("DEPLOY_LOCK_POLL_SEC", "30"))
+LOCK_WAIT_SEC = int(os.environ.get("DEPLOY_LOCK_WAIT_SEC", "1200"))
+LOCK_POLL_SEC = int(os.environ.get("DEPLOY_LOCK_POLL_SEC", "20"))
 
 # Hotfix paths — full dist sync is too slow over WinRM (600+ files).
 PATCH_PATHS = [
@@ -210,37 +210,43 @@ $maxAgeSec = {LOCK_MAX_AGE_SEC}
 $force = {force_ps}
 New-Item -ItemType Directory -Force -Path (Split-Path $lock) | Out-Null
 if (Test-Path $lock) {{
-  if ($force) {{
+  $raw = Get-Content $lock -Raw
+  $age = ((Get-Date) - (Get-Item $lock).LastWriteTime).TotalSeconds
+  $stale = $age -ge $maxAgeSec
+  $orphan = $false
+  if ($raw -match 'pid=(\\d+)') {{
+    $lockPid = [int]$matches[1]
+    $orphan = -not (Get-Process -Id $lockPid -ErrorAction SilentlyContinue)
+  }} else {{
+    $orphan = $age -ge 120
+  }}
+  if ($force -or $stale -or $orphan) {{
     Remove-Item $lock -Force
     Get-ChildItem $staging -Directory -EA SilentlyContinue |
       Remove-Item -Recurse -Force -EA SilentlyContinue
   }} else {{
-    $age = ((Get-Date) - (Get-Item $lock).LastWriteTime).TotalSeconds
-    if ($age -lt $maxAgeSec) {{
-      throw "LOCK_HELD:$(Get-Content $lock -Raw)"
-    }}
-    Remove-Item $lock -Force
-    Get-ChildItem $staging -Directory -EA SilentlyContinue |
-      Remove-Item -Recurse -Force -EA SilentlyContinue
+    throw "LOCK_HELD:$raw"
   }}
 }}
-Set-Content -Path $lock -Value "pid={os.getpid()} ts={int(time.time())}" -NoNewline
+$ts = [int][double]::Parse((Get-Date -UFormat %s))
+Set-Content -Path $lock -Value "pid=$PID ts=$ts host=$env:COMPUTERNAME" -NoNewline
 Write-Output "LOCK_ACQUIRED"
 """,
         )
+        combined = f"{out}\n{err}"
         if code == 0:
             return
-        held = "LOCK_HELD:" in out
+        held = "LOCK_HELD:" in combined
         if held and time.time() < deadline:
             remaining = int(deadline - time.time())
             print(
-                f"Deploy lock held ({out.strip()}), retry in {LOCK_POLL_SEC}s "
+                f"Deploy lock held ({combined.strip()[:200]}), retry in {LOCK_POLL_SEC}s "
                 f"(up to {remaining}s left)...",
                 flush=True,
             )
             time.sleep(LOCK_POLL_SEC)
             continue
-        detail = out.strip() or err.strip()
+        detail = combined.strip()
         if held:
             detail = detail.replace("LOCK_HELD:", "deploy in progress: ", 1)
         raise RuntimeError(f"Could not acquire deploy lock: {detail}")
