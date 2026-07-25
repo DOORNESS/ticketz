@@ -9,6 +9,7 @@ import { ingestKnowledgeDocument } from "./IngestKnowledgeDocumentService";
 import { logger } from "../../utils/logger";
 import {
   ensureAnnexResponsesKnowledgeBase,
+  ensureAnnexCategoryId,
   resolveAnnexResponsesBrand
 } from "./EnsureAnnexResponsesKnowledgeBase";
 import {
@@ -203,9 +204,11 @@ export const annexHumanResponseToBase = async ({
   const cmsEnabled = await isKbCmsEnabledForCompany(companyId);
 
   if (cmsEnabled) {
+    const categoryId = await ensureAnnexCategoryId(companyId, base.id);
     const asset = await createKnowledgeAsset({
       companyId,
       knowledgeBaseId: base.id,
+      categoryId,
       assetType: "text",
       title: normalizedTitle,
       rawText: normalizedContent,

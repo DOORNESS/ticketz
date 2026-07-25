@@ -6,6 +6,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.53] — 2026-07-25
+
+### Corrigido (crítico)
+
+- **Sistema travado no spinner (auth/assets):** removido XHR síncrono de `config.json`/`gitinfo.json` que bloqueava a thread principal; config carregada de forma assíncrona antes do App montar; `refresh_token` agora sempre hidrata `user.id` do JWT.
+- **Bases/ativos não carregavam:** retry com backoff (até 10×) para rotas pesadas (`503 ERR_HEAVY_ROUTES_LOADING`) em páginas IA e cliente API global (8 retries).
+- **Tempo real da mesa (IA digitando / lista):** `emitTicketStateRefresh` emitia nos canais Socket.io errados (`open`/`pending` em vez de `company-{id}-{status}`).
+- **Robô parava na 2ª mensagem:** `finalizeAiResponse` agora roda sempre após resposta bem-sucedida; estado `processing` limpo também em resolução/fechamento.
+- **Anexo “Respostas anexas” com CMS:** categoria `respostas-supervisionadas` criada automaticamente (antes falhava com `categoryId required`).
+
+---
+
 ## [1.5.52] — 2026-07-25
 
 ### Corrigido (crítico)

@@ -419,7 +419,7 @@ const ProcessInboundMessageService = async ({
 
   let userText = "";
   const triageV2Enabled = await isTriageV2Active(companyId);
-  let shouldFinalizeAiState = triageV2Enabled;
+  let shouldFinalizeAiState = true;
 
   try {
     if (triageV2Enabled) {
@@ -703,6 +703,7 @@ const ProcessInboundMessageService = async ({
           aiResolvedByAi: true,
           aiHandoff: false,
           aiEndedAt: new Date(),
+          aiProcessingState: null,
           justClose: true
         } as any
       });
@@ -994,9 +995,7 @@ const ProcessInboundMessageService = async ({
       ticket
     });
 
-    if (triageV2Enabled) {
-      await finalizeAiResponse(ticket, primaryMessageId);
-    }
+    await finalizeAiResponse(ticket, primaryMessageId);
 
     if (!ticket.aiStartedAt) {
       await logAiOperationalEvent({

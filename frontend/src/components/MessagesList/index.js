@@ -755,7 +755,10 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
     const thisNextId = incrementPage ? nextId : undefined;
     const delayDebounceFn = setTimeout(() => {
       const fetchMessages = async () => {
-        if (ticketId === undefined) return;
+        if (ticketId === undefined) {
+          setLoading(false);
+          return;
+        }
         try {
           const { data } = await api.get("/messages/" + ticketId, {
             params: { nextId: thisNextId, markAsRead }
@@ -827,7 +830,8 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
         const currentIds = new Set(currentList.map(m => m.id));
         const newMessages = data.messages.filter(m => !currentIds.has(m.id));
         if (newMessages.length > 0) {
-          const { scrollTop, clientHeight, scrollHeight } = scrollRef.current || {};
+          const { scrollTop, clientHeight, scrollHeight } =
+            scrollRef.current || {};
           const isAtBottom =
             scrollTop + clientHeight >= scrollHeight - clientHeight / 4;
           const newestMessage = newMessages.reduce((latest, msg) =>

@@ -1,10 +1,11 @@
 import axios from "axios";
 import { getBackendURL } from "../services/config";
+import { isApiWarmupError } from "../helpers/apiWarmup";
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 const API_TIMEOUT_MS = 45000;
-const MAX_API_RETRIES = 2;
+const MAX_API_RETRIES = 8;
 
 const attachRetryInterceptor = client => {
   client.interceptors.response.use(
@@ -15,7 +16,8 @@ const attachRetryInterceptor = client => {
       const retryCount = originalRequest?._apiRetryCount || 0;
       const retryable =
         retryCount < MAX_API_RETRIES &&
-        (status === 503 ||
+        (isApiWarmupError(error) ||
+          status === 503 ||
           status === 502 ||
           status === 504 ||
           error?.code === "ERR_NETWORK" ||

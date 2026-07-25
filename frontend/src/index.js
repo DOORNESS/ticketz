@@ -1,7 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom";
 import CssBaseline from "@material-ui/core/CssBaseline";
-import App from "./App";
 import { loadConfig } from "./helpers/loadConfig";
 import { i18n } from "./translate/i18n";
 import axios from "axios";
@@ -83,7 +82,7 @@ function showRetryMessage(message, onRetry) {
   }, BACKEND_RETRY_INTERVAL_SECONDS * 1000);
 }
 
-function renderApp() {
+function renderApp(App) {
   clearBackendRetryTimers();
   appMounted = true;
   ReactDOM.render(
@@ -149,7 +148,10 @@ async function bootstrap() {
     return;
   }
 
-  renderApp();
+  window.__APP_CONFIG__ = config;
+
+  const { default: App } = await import("./App");
+  renderApp(App);
   probeBackendInBackground(config);
 }
 

@@ -15,10 +15,9 @@ import { i18n } from "../../translate/i18n";
 import useAuth from "../../hooks/useAuth.js";
 import { useTheme } from "@material-ui/core/styles";
 
-import { loadJSON } from "../../helpers/loadJSON";
+import { loadGitinfo, getGitinfoSync } from "../../helpers/gitinfo";
 import api from "../../services/api";
 
-const frontendGitInfo = loadJSON("/gitinfo.json");
 const logo = "/vector/logo.svg";
 const logoDark = "/vector/logo-dark.svg";
 
@@ -53,6 +52,7 @@ const AboutModal = ({ open, onClose }) => {
   const { getCurrentUserInfo } = useAuth();
   const [currentUser, setCurrentUser] = useState({});
   const [backendGitInfo, setBackendGitInfo] = useState(null);
+  const [frontendGitInfo, setFrontendGitInfo] = useState(getGitinfoSync());
   const theme = useTheme();
 
   const handleClose = () => {
@@ -60,6 +60,7 @@ const AboutModal = ({ open, onClose }) => {
   };
 
   useEffect(() => {
+    loadGitinfo().then(setFrontendGitInfo);
     getCurrentUserInfo().then(user => {
       setCurrentUser(user);
     });

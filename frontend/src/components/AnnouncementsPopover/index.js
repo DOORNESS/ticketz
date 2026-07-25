@@ -43,7 +43,7 @@ const useStyles = makeStyles(theme => ({
 function AnnouncementDialog({ announcement, open, handleClose }) {
   const classes = useStyles();
   const getMediaPath = filename => {
-    return `${getBackendURL()}}/public/${filename}`;
+    return `${getBackendURL()}/public/${filename}`;
   };
   return (
     <Dialog

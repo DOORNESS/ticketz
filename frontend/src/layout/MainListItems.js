@@ -39,9 +39,7 @@ import { isArray } from "lodash";
 import api from "../services/api";
 import { makeStyles } from "@material-ui/core/styles";
 import Typography from "@material-ui/core/Typography";
-import { loadJSON } from "../helpers/loadJSON";
-
-const gitinfo = loadJSON("/gitinfo.json");
+import { loadGitinfo, getGitinfoSync } from "../helpers/gitinfo";
 
 const useStyles = makeStyles(theme => ({
   ListSubheader: {
@@ -254,6 +252,7 @@ const MainListItems = props => {
   const [connectionWarning, setConnectionWarning] = useState(false);
   const [openCampaignSubmenu, setOpenCampaignSubmenu] = useState(false);
   const [openAiSubmenu, setOpenAiSubmenu] = useState(false);
+  const [gitinfo, setGitinfo] = useState(getGitinfoSync());
 
   const [showCampaigns, setShowCampaigns] = useState(false);
   const history = useHistory();
@@ -264,6 +263,10 @@ const MainListItems = props => {
   const [chats, dispatch] = useReducer(reducer, []);
 
   const socketManager = useContext(SocketContext);
+
+  useEffect(() => {
+    loadGitinfo().then(setGitinfo);
+  }, []);
 
   useEffect(() => {
     dispatch({ type: "RESET" });

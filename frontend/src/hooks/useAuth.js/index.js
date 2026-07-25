@@ -88,9 +88,7 @@ const useAuth = () => {
         api.defaults.headers.Authorization = `Bearer ${data.token}`;
         socketManager.syncCurrentSocketToken?.(data.token);
         setIsAuth(true);
-        if (data.user) {
-          setUser(data.user);
-        }
+        setUser(data.user || buildUserFromToken(data.token));
         return data;
       } catch (error) {
         const status = error?.response?.status;

@@ -169,13 +169,29 @@ export const emitTicketStateRefresh = async (
 ): Promise<void> => {
   const { getIO } = await import("../../libs/socket");
   const io = getIO();
+
+  await ticket.reload({ include: ["contact", "queue", "whatsapp", "user"] });
   const serialized = serializeTicketWithOperationalState(ticket, viewerUserId);
 
-  io.to(ticket.id.toString())
-    .to(ticket.status)
-    .emit(`company-${ticket.companyId}-ticket`, {
-      action: "update",
-      ticket: serialized,
-      ticketId: ticket.id
-    });
+  let ioStack = io.to(ticket.id.toString());
+
+  if (ticket.userId) {
+    ioStack = ioStack.to(`user-${ticket.userId}`);
+  }
+
+  if (ticket.queueId) {
+    ioStack = ioStack
+      .to(`queue-${ticket.queueId}-notification`)
+      .to(`queue-${ticket.queueId}-${ticket.status}`);
+  }
+
+  ioStack = ioStack
+    .to(`company-${ticket.companyId}-notification`)
+    .to(`company-${ticket.companyId}-${ticket.status}`);
+
+  ioStack.emit(`company-${ticket.companyId}-ticket`, {
+    action: "update",
+    ticket: serialized,
+    ticketId: ticket.id
+  });
 };

@@ -1,6 +1,7 @@
 import { Op } from "sequelize";
 import AiAgent from "../../models/AiAgent";
 import KnowledgeBase from "../../models/KnowledgeBase";
+import KnowledgeCategory from "../../models/KnowledgeCategory";
 import KnowledgeDomain from "../../models/KnowledgeDomain";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
@@ -165,6 +166,37 @@ export const ensureAnnexResponsesKnowledgeBase = async (
   );
 
   return base;
+};
+
+const ANNEX_CATEGORY_SLUG = "respostas-supervisionadas";
+
+export const ensureAnnexCategoryId = async (
+  companyId: number,
+  knowledgeBaseId: number
+): Promise<number> => {
+  let category = await KnowledgeCategory.findOne({
+    where: {
+      companyId,
+      knowledgeBaseId,
+      slug: ANNEX_CATEGORY_SLUG
+    }
+  });
+
+  if (!category) {
+    category = await KnowledgeCategory.create({
+      companyId,
+      knowledgeBaseId,
+      name: "Respostas supervisionadas",
+      slug: ANNEX_CATEGORY_SLUG,
+      description:
+        "Respostas sugeridas por humanos e anexadas durante supervisão da IA.",
+      sortOrder: 0,
+      depth: 0,
+      pathIds: []
+    });
+  }
+
+  return category.id;
 };
 
 export const ensureAllAnnexResponsesKnowledgeBases = async (

@@ -25,13 +25,11 @@ import { AuthContext } from "../../context/Auth/AuthContext";
 import useSettings from "../../hooks/useSettings";
 import { getBackendURL } from "../../services/config";
 import ColorModeContext from "../../layout/themeContext";
-import { loadJSON } from "../../helpers/loadJSON";
+import { loadGitinfo, getGitinfoSync } from "../../helpers/gitinfo";
 import brandTokens from "../../theme/brandTokens";
 import TurnstileWidget from "../../components/TurnstileWidget";
 import { resolveTurnstileSiteKey } from "../../helpers/turnstileConfig";
 import { resolveErrorMessage } from "../../errors/toastError";
-
-const gitinfo = loadJSON("/gitinfo.json");
 
 const parseLoginLinks = value => {
   if (!value) {
@@ -347,6 +345,7 @@ const Login = () => {
 
   const [user, setUser] = useState({ email: "", password: "" });
   const [allowSignup, setAllowSignup] = useState(false);
+  const [gitinfo, setGitinfo] = useState(getGitinfoSync());
   const [loginLinks, setLoginLinks] = useState([]);
   const [sidePanelImage, setSidePanelImage] = useState("");
   const [backgroundContent, setBackgroundContent] = useState("");
@@ -400,6 +399,10 @@ const Login = () => {
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    loadGitinfo().then(setGitinfo);
+  }, []);
 
   useEffect(() => {
     Promise.allSettled([

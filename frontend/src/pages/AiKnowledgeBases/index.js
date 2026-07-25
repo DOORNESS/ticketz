@@ -23,6 +23,7 @@ import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import api from "../../services/api";
+import { apiGetWithWarmupRetry } from "../../helpers/fetchWithWarmupRetry";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
 import AiSetupWizard from "../../components/AiSetupWizard";
@@ -125,7 +126,7 @@ const AiKnowledgeBases = () => {
 
   const loadAssetCounts = async () => {
     try {
-      const { data } = await api.get("/ai/assets");
+      const { data } = await apiGetWithWarmupRetry("/ai/assets");
       const counts = {};
       (Array.isArray(data) ? data : []).forEach(asset => {
         const baseId = asset.knowledgeBaseId;
@@ -149,8 +150,8 @@ const AiKnowledgeBases = () => {
   const load = async () => {
     try {
       const [{ data: kbData }, { data: domainData }] = await Promise.all([
-        api.get("/ai/knowledge-bases"),
-        api.get("/ai/knowledge-domains")
+        apiGetWithWarmupRetry("/ai/knowledge-bases"),
+        apiGetWithWarmupRetry("/ai/knowledge-domains")
       ]);
       setBases(Array.isArray(kbData) ? kbData : []);
       setDomains(Array.isArray(domainData) ? domainData : []);
