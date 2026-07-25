@@ -31,7 +31,10 @@ PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip()
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 DIST = BACKEND / "dist"
-CHUNK = int(os.environ.get("DEPLOY_B64_CHUNK", "1500"))
+CHUNK = int(os.environ.get("DEPLOY_B64_CHUNK", "2000"))
+UPLOAD_CHUNK_RETRIES = int(os.environ.get("DEPLOY_UPLOAD_CHUNK_RETRIES", "4"))
+UPLOAD_FILE_RETRIES = int(os.environ.get("DEPLOY_UPLOAD_FILE_RETRIES", "3"))
+UPLOAD_VERIFY_PAUSE_SEC = float(os.environ.get("DEPLOY_UPLOAD_VERIFY_PAUSE_SEC", "1.5"))
 DEPLOY_LOCK = r"C:\ticketz\deploy-cache\.deploy.lock"
 UPLOAD_STAGING = r"C:\ticketz\dc"
 # Lock file younger than this → another deploy is still running (unless holder PID is gone).
@@ -277,7 +280,59 @@ def format_upload_label(local_path: Path) -> str:
         return local_path.name
 
 
-def upload_file(s, local_path: Path, remote_path: str) -> None:
+def upload_chunk(
+    s,
+    b64_dir: str,
+    idx: int,
+    chunk: str,
+    total_chunks: int,
+) -> None:
+    part_path = rf"{b64_dir}\{idx:04d}.txt"
+    chunk_b64 = base64.b64encode(chunk.encode("ascii")).decode("ascii")
+    last_err = ""
+    for attempt in range(1, UPLOAD_CHUNK_RETRIES + 1):
+        code, _, err = run_ps(
+            s,
+            f"""
+New-Item -ItemType Directory -Force -Path '{b64_dir}' | Out-Null
+$p = [Text.Encoding]::ASCII.GetString([Convert]::FromBase64String('{chunk_b64}'))
+[IO.File]::WriteAllText('{part_path}', $p, [Text.UTF8Encoding]::new($false))
+if (-not (Test-Path '{part_path}')) {{ throw "part {idx} missing after write" }}
+if ((Get-Item '{part_path}').Length -ne {len(chunk)}) {{ throw "part {idx} size mismatch" }}
+""",
+        )
+        if code == 0:
+            return
+        last_err = err.strip()
+        if attempt < UPLOAD_CHUNK_RETRIES:
+            time.sleep(min(2 * attempt, 6))
+    raise RuntimeError(
+        f"Chunk {idx}/{total_chunks} upload failed after "
+        f"{UPLOAD_CHUNK_RETRIES} attempts: {last_err}"
+    )
+
+
+def list_missing_parts(s, b64_dir: str, total_chunks: int) -> List[int]:
+    code, out, err = run_ps(
+        s,
+        f"""
+$missing = @()
+for ($i = 1; $i -le {total_chunks}; $i++) {{
+  $part = Join-Path '{b64_dir}' ('{{0:D4}}.txt' -f $i)
+  if (-not (Test-Path $part)) {{ $missing += $i }}
+}}
+Write-Output ($missing -join ',')
+""",
+    )
+    if code != 0:
+        raise RuntimeError(f"Failed to verify upload parts: {out} {err}")
+    raw = out.strip()
+    if not raw:
+        return []
+    return [int(part) for part in raw.split(",") if part.strip().isdigit()]
+
+
+def upload_file_once(s, local_path: Path, remote_path: str) -> None:
     data = local_path.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
     b64 = base64.b64encode(data).decode("ascii")
@@ -300,23 +355,30 @@ if (-not (Test-Path '{b64_dir}')) {{ throw "failed to create upload dir" }}
     for idx in range(1, total_chunks + 1):
         i = (idx - 1) * CHUNK
         chunk = b64[i : i + CHUNK]
-        part_path = rf"{b64_dir}\{idx:04d}.txt"
-        chunk_b64 = base64.b64encode(chunk.encode("ascii")).decode("ascii")
-        code, _, err = run_ps(
-            s,
-            f"""
-New-Item -ItemType Directory -Force -Path '{b64_dir}' | Out-Null
-$p = [Text.Encoding]::ASCII.GetString([Convert]::FromBase64String('{chunk_b64}'))
-[IO.File]::WriteAllText('{part_path}', $p, [Text.UTF8Encoding]::new($false))
-if ((Get-Item '{part_path}').Length -ne {len(chunk)}) {{ throw "part {idx} size mismatch" }}
-""",
-        )
-        if code != 0:
-            raise RuntimeError(
-                f"Chunk {idx}/{total_chunks} upload failed for {local_path}: {err}"
-            )
+        upload_chunk(s, b64_dir, idx, chunk, total_chunks)
         if idx == 1 or idx == total_chunks or idx % 20 == 0:
             print(f"    upload {idx}/{total_chunks} chunks", flush=True)
+
+    for verify_attempt in range(1, 4):
+        missing = list_missing_parts(s, b64_dir, total_chunks)
+        if not missing:
+            break
+        print(
+            f"    retrying {len(missing)} missing chunk(s) "
+            f"(verify pass {verify_attempt}/3)...",
+            flush=True,
+        )
+        for idx in missing:
+            i = (idx - 1) * CHUNK
+            chunk = b64[i : i + CHUNK]
+            upload_chunk(s, b64_dir, idx, chunk, total_chunks)
+        time.sleep(UPLOAD_VERIFY_PAUSE_SEC)
+    else:
+        missing = list_missing_parts(s, b64_dir, total_chunks)
+        raise RuntimeError(
+            f"Upload incomplete for {local_path}: missing parts {missing[:20]}"
+            f"{'...' if len(missing) > 20 else ''}"
+        )
 
     code, out, err = run_ps(
         s,
@@ -346,6 +408,27 @@ Remove-Item '{tmp_path}' -Force
     if digest not in out.lower():
         raise RuntimeError(f"SHA256 mismatch for {local_path}: {out} {err}")
     print(f"  ok {format_upload_label(local_path)} ({len(data)} bytes)")
+
+
+def upload_file(s, local_path: Path, remote_path: str) -> None:
+    last_error: Optional[Exception] = None
+    for attempt in range(1, UPLOAD_FILE_RETRIES + 1):
+        try:
+            if attempt > 1:
+                print(
+                    f"  retry upload {format_upload_label(local_path)} "
+                    f"(attempt {attempt}/{UPLOAD_FILE_RETRIES})...",
+                    flush=True,
+                )
+                cleanup_upload_staging(s)
+                time.sleep(min(3 * attempt, 10))
+            upload_file_once(s, local_path, remote_path)
+            return
+        except RuntimeError as error:
+            last_error = error
+            cleanup_upload_staging(s)
+    assert last_error is not None
+    raise last_error
 
 
 def build_zip_bundle(files: List[Path], extra_scripts: List[Path]) -> Path:

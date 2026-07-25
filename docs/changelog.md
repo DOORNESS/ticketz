@@ -10,7 +10,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ### Corrigido (crítico — deploy patch + copilot Nível)
 
-- **Deploy patch não levava o fix da IA:** `VerifyCurrentSchedule.js` faltava em `PATCH_PATHS` do `deploy-vps-backend.py` — produção continuava com erro `cannot extract elements from an object` após push na main.
+- **Deploy WinRM instável:** `deploy-vps-backend.py` agora usa chunks de 2000 bytes, retry por chunk, verificação de partes faltantes e retry completo do upload — corrige `part count mismatch expected=429 got=387`.
 - **Copilot confundia “Nível” com medida:** copilot agora usa persona do agente (`basePrompt`) + regra explícita de que Nível é a marca Nível Cashback.
 - **Prompt Nivelton:** reforço em `NIVEL_PROMPT` e regras operacionais para nunca tratar “Nível” como nível genérico.
 - **Socket na IA:** `emitTicketStateRefresh` não derruba mais o processamento se Socket.io estiver indisponível.
