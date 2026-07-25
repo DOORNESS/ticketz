@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.50 — auditada contra o código  
+**Versão:** 1.5.55 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -973,15 +973,17 @@ Painel administrativo para bases editoriais (Fase 2 CMS). Diferente de `/ai/docu
 
 | Recurso | Endpoint / comportamento |
 |---------|--------------------------|
-| Listar / ver / editar | `GET/PUT /ai/assets`, `GET /ai/assets/:id` |
+| Listar / ver / editar metadados | `GET/PUT /ai/assets`, `GET /ai/assets/:id` |
 | Salvar arquivo | `POST /ai/assets/upload` (PDF, DOCX, TXT, MD, HTML) — botão UI **Salvar documento** |
+| **Substituir arquivo** | `POST /ai/assets/:id/replace-file` (multipart `file`) — UI **Substituir arquivo**; cria nova versão e reindexa |
+| **Baixar anexo** | `GET /ai/assets/:id/download` — stream binário (`Content-Disposition`); fallback URL assinada B2 |
 | Salvar texto | `POST /ai/assets/text` |
 | Salvar site | `POST /ai/assets/url` (http/https; extração HTML na ingestão) |
 | Publicar em 1 clique | `POST /ai/assets/:id/quick-publish` ou `autoPublish=true` no create |
 | Vincular a outra base | `POST /ai/assets/:id/clone` (`targetKnowledgeBaseId`) — cópia do ativo |
 | Reindexar | `POST /ai/assets/:id/reindex` |
 
-**Indexação:** job Bull grava chunks em `KnowledgeChunks`; só versões **publicadas** e **indexadas** entram na busca (`KnowledgeRetrievalPolicy`). Falhas gravam `errorMessage` na versão (ex.: download B2, texto vazio no DOCX, embedding).
+**Indexação:** job Bull grava chunks em `KnowledgeChunks` (`knowledgeDocumentId` nullable desde migration `20260725180000` — CMS não exige documento legado); só versões **publicadas** e **indexadas** entram na busca (`KnowledgeRetrievalPolicy`). Falhas gravam `errorMessage` na versão (ex.: download B2 corrompido, texto vazio no DOCX, embedding). Ativos com status **Falhou** devem usar **Substituir arquivo** (reupload) — download de arquivos corrompidos no storage antigo pode falhar.
 
 **Storage:** chaves B2 usam `companies/{id}/knowledge/...`; handlers resolvem URL pública via `extractStorageKeyFromUrl` (`mediaStorage.ts`).
 
@@ -1134,6 +1136,7 @@ flowchart TD
 | `20260711120000-ai-gen2-intelligence` | AiReplayLogs + campos gen2 |
 | `20260718100000-ai-phase1-orchestrator` | Orchestrator + AiAgentKnowledgeBases + AiRoutingLogs |
 | `20260725100000-ai-phase2-knowledge-cms` | CMS assets, domínios, publicação |
+| `20260725180000-knowledge-chunks-nullable-document` | `KnowledgeChunks.knowledgeDocumentId` nullable (CMS) |
 | `20260730100000-ai-phase3-memory-tools` | Memória contato + AiAgentTools + logs sanitizados |
 
 ### Tabelas IA

@@ -6,6 +6,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.55] — 2026-07-25
+
+### Corrigido (supervisão IA e ativos)
+
+- **Botões sumiam após Participar:** toolbar exige `isAiSupervisionTicket` (inclui IA pausada).
+- **Retomar IA:** botão visível com `aiPaused + aiAgentId`; `/ai/resume` reengaja última mensagem do cliente.
+- **Copilot na supervisão:** Sugerir resposta funciona sem aceitar ticket (`observationMode`).
+- **Ativos — substituir arquivo:** modal "Substituir arquivo" + `POST /ai/assets/:id/replace-file` (reupload + reindexação).
+- **Ativos — download:** stream binário com `Content-Disposition`; fallback URL assinada.
+- **Indexação CMS:** migration `knowledgeDocumentId` nullable em `KnowledgeChunks` (corrige NOT NULL na Fase 2).
+
+---
+
 ## [1.5.54] — 2026-07-25
 
 ### Corrigido

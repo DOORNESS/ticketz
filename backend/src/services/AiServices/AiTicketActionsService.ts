@@ -12,6 +12,8 @@ import {
 } from "../../helpers/assertCanAcceptTicket";
 import { isAiHandlingTicket } from "./AiHelpers";
 import ShowTicketService from "../TicketServices/ShowTicketService";
+import Message from "../../models/Message";
+import { tryEngageAiFromStoredMessage } from "./AiReengagementService";
 
 const canManageAi = (user: User): boolean =>
   user.profile === "admin" || user.super === true;
@@ -30,9 +32,9 @@ export const isAssumeEligibleTicket = (ticket: Ticket): boolean => {
     !ticket.userId &&
     Boolean(
       ticket.aiHandoff ||
-        ticket.aiAgentId ||
-        ticket.aiStartedAt ||
-        ticket.aiHandoffReason
+      ticket.aiAgentId ||
+      ticket.aiStartedAt ||
+      ticket.aiHandoffReason
     )
   );
 };
@@ -202,6 +204,7 @@ export const resumeTicketAi = async ({
       aiSlaBreached: false,
       aiSlaEscalationLevel: 0,
       aiLastSlaAlertAt: null,
+      aiProcessingState: "awaiting_customer",
       status: "pending",
       userId: null
     } as any
@@ -214,7 +217,25 @@ export const resumeTicketAi = async ({
     userId: user.id
   });
 
-  return updated;
+  const refreshed = await ShowTicketService(updated.id, user.companyId);
+
+  const lastInbound = await Message.findOne({
+    where: { ticketId: ticket.id, fromMe: false },
+    order: [["createdAt", "DESC"]]
+  });
+
+  if (lastInbound?.body) {
+    void tryEngageAiFromStoredMessage(
+      refreshed,
+      {
+        messageBody: lastInbound.body,
+        messageId: lastInbound.id
+      },
+      "supervisor_resume_ai"
+    ).catch(() => undefined);
+  }
+
+  return refreshed;
 };
 
 type ReleaseToAiParams = {

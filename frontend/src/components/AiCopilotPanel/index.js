@@ -14,7 +14,13 @@ import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import { SocketContext } from "../../context/Socket/SocketContext";
-import { formatConfidencePercent } from "../../helpers/aiTicketStatus";
+import {
+  formatConfidencePercent
+} from "../../helpers/aiTicketStatus";
+import {
+  isAiSupervisionTicket,
+  isTicketObservationMode
+} from "../../helpers/ticketListVisibility";
 
 const useStyles = makeStyles(theme => ({
   root: {
@@ -51,7 +57,8 @@ const AiCopilotPanel = ({
   compact = false,
   externalInstruction,
   copilotStyle = "default",
-  onApplySuggestion
+  onApplySuggestion,
+  observationMode = false
 }) => {
   const classes = useStyles();
   const [loading, setLoading] = useState(false);
@@ -70,10 +77,18 @@ const AiCopilotPanel = ({
     "Preparar handoff"
   ];
 
+  const canUseCopilot =
+    Boolean(ticket?.userId && ticket.status === "open") ||
+    (observationMode && isAiSupervisionTicket(ticket) && !ticket?.userId);
+
   const requestCopilot = useCallback(
     async (payload = {}) => {
-      if (!ticket?.id || !ticket?.userId || ticket.status !== "open") {
-        toast.info("Aceite o ticket para usar o copiloto.");
+      if (!ticket?.id || !canUseCopilot) {
+        toast.info(
+          observationMode
+            ? "Ticket indisponível para copiloto neste momento."
+            : "Aceite o ticket para usar o copiloto."
+        );
         return;
       }
 
@@ -94,11 +109,11 @@ const AiCopilotPanel = ({
         setGenerating(false);
       }
     },
-    [ticket?.id, ticket?.userId, ticket?.status]
+    [ticket?.id, canUseCopilot, observationMode]
   );
 
   const loadSuggestion = useCallback(async () => {
-    if (!ticket?.id || !ticket?.userId || ticket.status !== "open") {
+    if (!ticket?.id || !canUseCopilot) {
       return;
     }
 
@@ -111,7 +126,7 @@ const AiCopilotPanel = ({
     } finally {
       setLoading(false);
     }
-  }, [ticket?.id, ticket?.userId, ticket?.status]);
+  }, [ticket?.id, canUseCopilot]);
 
   useEffect(() => {
     loadSuggestion();
@@ -168,11 +183,13 @@ const AiCopilotPanel = ({
     }
   };
 
-  if (!ticket?.userId || ticket.status !== "open") {
+  if (!canUseCopilot) {
     if (compact) {
       return (
         <Typography variant="body2" color="textSecondary">
-          Aceite o ticket para usar o copiloto.
+          {observationMode
+            ? "Use Sugerir resposta na barra superior ou clique em Retomar IA se a IA estiver pausada."
+            : "Aceite o ticket para usar o copiloto."}
         </Typography>
       );
     }

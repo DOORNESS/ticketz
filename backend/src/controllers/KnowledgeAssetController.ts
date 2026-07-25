@@ -26,6 +26,7 @@ import {
 import { KnowledgeAssetType } from "../models/KnowledgeAsset";
 import { safeAiQuery } from "../helpers/safeAiQuery";
 import { resolveKnowledgeStorageKey } from "../helpers/mediaStorage";
+import mime from "mime-types";
 
 const currentUserId = (req: Request): number | undefined => {
   const parsed = Number(req.user.id);
@@ -50,7 +51,9 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
         knowledgeBaseId: req.query.knowledgeBaseId
           ? Number(req.query.knowledgeBaseId)
           : undefined,
-        categoryId: req.query.categoryId ? Number(req.query.categoryId) : undefined,
+        categoryId: req.query.categoryId
+          ? Number(req.query.categoryId)
+          : undefined,
         lifecycleStatus: req.query.lifecycleStatus as
           | import("../models/KnowledgeAsset").KnowledgeLifecycleStatus
           | undefined
@@ -568,7 +571,7 @@ export const ingestionJobs = async (
 export const download = async (
   req: Request,
   res: Response
-): Promise<Response> => {
+): Promise<void | Response> => {
   const { companyId, id, profile } = req.user;
   const { assetId } = req.params;
 
@@ -588,15 +591,110 @@ export const download = async (
 
   await StorageService.ensureReady(companyId);
   const storageKey = resolveKnowledgeStorageKey(storageUrl);
-  const signedUrl = await StorageService.getSignedUrl(storageKey, companyId);
   const ext =
-    storageKey.split(".").pop()?.toLowerCase() ||
-    asset.assetType ||
-    "bin";
+    storageKey.split(".").pop()?.toLowerCase() || asset.assetType || "bin";
+  const filename =
+    storageKey.split("/").pop() || `${asset.title}.${ext}`.replace(/\s+/g, "_");
 
-  return res.json({
-    url: signedUrl,
-    filename: storageKey.split("/").pop() || `${asset.title}.${ext}`,
-    storageKey
+  try {
+    const buffer = await StorageService.download(storageKey, companyId);
+    if (!buffer?.length) {
+      throw new AppError("ERR_ASSET_EMPTY_FILE", 404);
+    }
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${encodeURIComponent(filename)}"`
+    );
+    res.setHeader(
+      "Content-Type",
+      mime.lookup(filename) || "application/octet-stream"
+    );
+    res.send(buffer);
+    return;
+  } catch {
+    const signedUrl = await StorageService.getSignedUrl(storageKey, companyId);
+    return res.json({
+      url: signedUrl,
+      filename,
+      storageKey
+    });
+  }
+};
+
+export const replaceFile = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId, id, profile } = req.user;
+  const { assetId } = req.params;
+  const file = req.file;
+  const { autoPublish, title } = req.body;
+
+  if (!file) {
+    throw new AppError("File is required", 400);
+  }
+
+  await assertKnowledgePermission(
+    "write",
+    { companyId, resourceType: "asset", resourceId: Number(assetId) },
+    { id: Number(id), profile, companyId }
+  );
+
+  const ext = file.originalname.split(".").pop()?.toLowerCase() || "bin";
+  const allowed = ["pdf", "docx", "txt", "md", "markdown", "html"];
+  if (!allowed.includes(ext)) {
+    throw new AppError("Unsupported file type", 400);
+  }
+
+  const assetTypeMap: Record<string, KnowledgeAssetType> = {
+    pdf: "pdf",
+    docx: "word",
+    txt: "text",
+    md: "markdown",
+    markdown: "markdown",
+    html: "markdown"
+  };
+
+  await StorageService.ensureReady(companyId);
+  const upload = await StorageService.uploadBuffer(file.buffer, {
+    companyId,
+    filename: file.originalname,
+    contentType: file.mimetype,
+    folder: "knowledge/documents"
   });
+
+  const version = await createNewAssetVersionFromCurrent(
+    companyId,
+    Number(assetId),
+    currentUserId(req),
+    "Arquivo substituído pelo usuário"
+  );
+
+  await version.update({
+    storageUrl: upload.key,
+    ingestionStatus: "pending",
+    errorMessage: null,
+    chunkCount: 0
+  });
+
+  const asset = await getKnowledgeAsset(companyId, Number(assetId));
+  await asset.update({
+    assetType: assetTypeMap[ext] || asset.assetType,
+    ...(title?.trim() ? { title: title.trim() } : {})
+  });
+
+  await enqueueIndexAssetVersion({
+    companyId,
+    assetVersionId: version.id
+  });
+
+  await maybeAutoPublish(
+    companyId,
+    asset.id,
+    parseAutoPublish(autoPublish),
+    currentUserId(req)
+  );
+
+  return res.json(await getKnowledgeAsset(companyId, asset.id));
 };

@@ -133,8 +133,10 @@ const AiAssets = () => {
   const [menuAsset, setMenuAsset] = useState(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [viewAsset, setViewAsset] = useState(null);
-  const [editOpen, setEditOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ title: "", summary: "" });
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [replaceFile, setReplaceFile] = useState(null);
+  const [replaceTitle, setReplaceTitle] = useState("");
+  const [replaceLoading, setReplaceLoading] = useState(false);
   const [cloneOpen, setCloneOpen] = useState(false);
   const [cloneBaseId, setCloneBaseId] = useState("");
   const [cloneAsset, setCloneAsset] = useState(null);
@@ -351,36 +353,81 @@ const AiAssets = () => {
   const handleDownloadAsset = async asset => {
     if (!asset?.id) return;
     try {
-      const { data } = await api.get(`/ai/assets/${asset.id}/download`);
-      if (!data?.url) {
+      const response = await api.get(`/ai/assets/${asset.id}/download`, {
+        responseType: "blob"
+      });
+      const contentType = response.headers["content-type"] || "";
+      if (contentType.includes("application/json")) {
+        const text = await response.data.text();
+        const data = JSON.parse(text);
+        if (data?.url) {
+          window.open(data.url, "_blank", "noopener,noreferrer");
+          return;
+        }
         toast.error("Arquivo não encontrado no storage.");
         return;
       }
-      window.open(data.url, "_blank", "noopener,noreferrer");
+      const extMap = {
+        word: "docx",
+        pdf: "pdf",
+        text: "txt",
+        markdown: "md"
+      };
+      const ext = extMap[asset.assetType] || "bin";
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${(asset.title || "ativo").replace(/\s+/g, "_")}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
     } catch (err) {
       toastError(err);
+    }
+  };
+
+  const openReplace = asset => {
+    setMenuAsset(asset);
+    setReplaceTitle(asset.title || "");
+    setReplaceFile(null);
+    setReplaceOpen(true);
+  };
+
+  const handleReplaceSave = async () => {
+    if (!menuAsset || !replaceFile) {
+      toast.error("Selecione um arquivo para substituir o ativo.");
+      return;
+    }
+    setReplaceLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", replaceFile);
+      if (replaceTitle.trim()) {
+        formData.append("title", replaceTitle.trim());
+      }
+      formData.append("autoPublish", autoPublish ? "true" : "false");
+      await api.post(`/ai/assets/${menuAsset.id}/replace-file`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      toast.success("Arquivo substituído — reindexação iniciada");
+      setReplaceOpen(false);
+      setReplaceFile(null);
+      loadAssets();
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setReplaceLoading(false);
     }
   };
 
   const openEdit = asset => {
-    setMenuAsset(asset);
-    setEditForm({
-      title: asset.title || "",
-      summary: asset.summary || ""
-    });
-    setEditOpen(true);
+    openReplace(asset);
   };
 
   const handleEditSave = async () => {
-    if (!menuAsset) return;
-    try {
-      await api.put(`/ai/assets/${menuAsset.id}`, editForm);
-      toast.success("Ativo atualizado");
-      setEditOpen(false);
-      loadAssets();
-    } catch (err) {
-      toastError(err);
-    }
+    handleReplaceSave();
   };
 
   const openCloneDialog = asset => {
@@ -824,15 +871,17 @@ const AiAssets = () => {
                           <Visibility />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Editar">
+                      <Tooltip title="Substituir arquivo">
                         <IconButton
                           size="small"
-                          onClick={() => openEdit(asset)}
+                          onClick={() => openReplace(asset)}
                         >
                           <Edit />
                         </IconButton>
                       </Tooltip>
-                      {["word", "pdf", "document"].includes(asset.assetType) && (
+                      {["word", "pdf", "document"].includes(
+                        asset.assetType
+                      ) && (
                         <Tooltip title="Baixar anexo">
                           <IconButton
                             size="small"
@@ -974,32 +1023,53 @@ const AiAssets = () => {
       </Dialog>
 
       <Dialog
-        open={editOpen}
-        onClose={() => setEditOpen(false)}
+        open={replaceOpen}
+        onClose={() => !replaceLoading && setReplaceOpen(false)}
         fullWidth
         maxWidth="sm"
       >
-        <DialogTitle>Editar ativo</DialogTitle>
+        <DialogTitle>Substituir arquivo do ativo</DialogTitle>
         <DialogContent dividers>
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            Envie um novo arquivo (.docx, .pdf, .txt) para corrigir falhas de
+            indexação. O conteúdo anterior será substituído e reindexado.
+          </Typography>
           <AiFormTextField
-            label="Título"
-            value={editForm.title}
-            onChange={e => setEditForm({ ...editForm, title: e.target.value })}
+            label="Título (opcional)"
+            value={replaceTitle}
+            onChange={e => setReplaceTitle(e.target.value)}
           />
-          <AiFormTextField
-            label="Resumo"
-            multiline
-            rows={4}
-            value={editForm.summary}
-            onChange={e =>
-              setEditForm({ ...editForm, summary: e.target.value })
-            }
-          />
+          <Box mt={2}>
+            <input
+              type="file"
+              accept=".docx,.pdf,.txt,.md,.html"
+              onChange={e => setReplaceFile(e.target.files?.[0] || null)}
+            />
+            {replaceFile && (
+              <Typography
+                variant="caption"
+                display="block"
+                color="textSecondary"
+              >
+                Selecionado: {replaceFile.name}
+              </Typography>
+            )}
+          </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setEditOpen(false)}>Cancelar</Button>
-          <Button color="primary" variant="contained" onClick={handleEditSave}>
-            Salvar
+          <Button
+            onClick={() => setReplaceOpen(false)}
+            disabled={replaceLoading}
+          >
+            Cancelar
+          </Button>
+          <Button
+            color="primary"
+            variant="contained"
+            onClick={handleReplaceSave}
+            disabled={replaceLoading || !replaceFile}
+          >
+            {replaceLoading ? "Enviando…" : "Substituir e reindexar"}
           </Button>
         </DialogActions>
       </Dialog>

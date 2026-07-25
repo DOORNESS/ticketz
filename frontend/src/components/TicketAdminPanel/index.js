@@ -13,7 +13,10 @@ import DashboardIcon from "@material-ui/icons/Dashboard";
 import AiExplainabilityPanel from "../AiExplainabilityPanel";
 import TicketAiTimeline from "../Ai/TicketAiTimeline";
 import AiCopilotPanel from "../AiCopilotPanel";
-import { canUserOperateTicket } from "../../helpers/ticketListVisibility";
+import {
+  canUserOperateTicket,
+  isAiSupervisionTicket
+} from "../../helpers/ticketListVisibility";
 import { toast } from "react-toastify";
 
 const useStyles = makeStyles(theme => ({
@@ -59,15 +62,24 @@ const TicketAdminPanel = ({
   ticket,
   user,
   onOpenRepository,
-  actionButtons
+  actionButtons,
+  observationMode = false
 }) => {
   const classes = useStyles();
   const [copilotInstruction, setCopilotInstruction] = useState("");
   const [copilotStyle, setCopilotStyle] = useState("default");
 
+  const canUseCopilot =
+    Boolean(ticket?.userId && ticket.status === "open") ||
+    (observationMode && isAiSupervisionTicket(ticket) && !ticket?.userId);
+
   const runCopilotQuick = (instruction, style = copilotStyle) => {
-    if (!ticket?.userId || ticket.status !== "open") {
-      toast.info("Aceite o ticket para usar o copiloto.");
+    if (!canUseCopilot) {
+      toast.info(
+        observationMode
+          ? "Use Retomar IA se a IA estiver pausada, depois tente novamente."
+          : "Aceite o ticket para usar o copiloto."
+      );
       return;
     }
     setCopilotStyle(style);
@@ -149,6 +161,7 @@ const TicketAdminPanel = ({
           <AiCopilotPanel
             ticket={ticket}
             compact
+            observationMode={observationMode}
             externalInstruction={copilotInstruction}
             copilotStyle={copilotStyle}
             onApplySuggestion={text => {
@@ -169,7 +182,9 @@ const TicketAdminPanel = ({
             color="primary"
             onClick={onOpenRepository}
             disabled={
-              ticket?.status === "closed" || !canUserOperateTicket(ticket, user)
+              ticket?.status === "closed" ||
+              (!canUserOperateTicket(ticket, user) &&
+                !(observationMode && isAiSupervisionTicket(ticket)))
             }
           >
             Abrir Repositório

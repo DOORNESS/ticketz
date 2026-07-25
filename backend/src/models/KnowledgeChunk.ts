@@ -29,7 +29,7 @@ class KnowledgeChunk extends Model<KnowledgeChunk> {
   companyId: number;
 
   @ForeignKey(() => KnowledgeDocument)
-  @Column
+  @Column({ allowNull: true })
   knowledgeDocumentId: number;
 
   @BelongsTo(() => KnowledgeDocument)

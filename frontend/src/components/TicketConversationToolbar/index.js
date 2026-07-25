@@ -16,9 +16,13 @@ import EmojiObjectsIcon from "@material-ui/icons/EmojiObjects";
 import {
   getOperationalLabel,
   isAiHandlingTicket,
+  isAiPausedTicket,
   isHandoffPendingTicket
 } from "../../helpers/aiTicketStatus";
-import { canUserOperateTicket } from "../../helpers/ticketListVisibility";
+import {
+  canUserOperateTicket,
+  isAiSupervisionTicket
+} from "../../helpers/ticketListVisibility";
 
 const useStyles = makeStyles(theme => ({
   root: {
@@ -60,7 +64,9 @@ const TicketConversationToolbar = ({
   onParticipate,
   onStopParticipating,
   onSuggestResponse,
+  onResumeAi,
   suggestLoading,
+  resumeLoading,
   tagsExpanded,
   onToggleTags,
   onOpenAdminPanel,
@@ -69,9 +75,13 @@ const TicketConversationToolbar = ({
 }) => {
   const classes = useStyles();
   const aiActive = isAiHandlingTicket(ticket);
+  const aiPaused = isAiPausedTicket(ticket);
   const handoffActive = isHandoffPendingTicket(ticket);
   const canSupervise =
-    observationMode && aiActive && (user?.profile === "admin" || user?.super);
+    observationMode &&
+    isAiSupervisionTicket(ticket) &&
+    !ticket?.userId &&
+    (user?.profile === "admin" || user?.super);
   const canUseRepository =
     ticket?.status !== "closed" &&
     (canUserOperateTicket(ticket, user) || isAiHandlingTicket(ticket));
@@ -111,6 +121,18 @@ const TicketConversationToolbar = ({
             onClick={onStopParticipating}
           >
             Sair da conversa
+          </Button>
+        )}
+        {canSupervise && aiPaused && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="secondary"
+            className={classes.supervisionButton}
+            disabled={resumeLoading}
+            onClick={onResumeAi}
+          >
+            {resumeLoading ? "Retomando…" : "Retomar IA"}
           </Button>
         )}
         {canSupervise && (

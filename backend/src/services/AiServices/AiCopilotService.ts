@@ -6,8 +6,7 @@ import AppError from "../../errors/AppError";
 import { chatCompletion } from "./ModelGateway";
 import {
   getActiveAgentForTicket,
-  getKnowledgeBaseIdsForAgent,
-  isAiHandlingTicket
+  getKnowledgeBaseIdsForAgent
 } from "./AiHelpers";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
 import { searchRepositoryForAi } from "../ContentRepository/ContentRepositoryService";
@@ -99,15 +98,16 @@ export const shouldRunCopilot = (ticket: Ticket): boolean =>
   ticket.status === "open" &&
   Boolean(
     ticket.aiStartedAt ||
-      ticket.aiHandoff ||
-      ticket.aiAgentId ||
-      ticket.aiHumanAssumedAt
+    ticket.aiHandoff ||
+    ticket.aiAgentId ||
+    ticket.aiHumanAssumedAt
   );
 
 const canRunSupervisionCopilot = (ticket: Ticket): boolean =>
   isAiFeaturesEnabled() &&
   Boolean(ticket.aiAgentId || ticket.aiStartedAt) &&
-  (isAiHandlingTicket(ticket) || ticket.status === "pending");
+  !ticket.userId &&
+  ticket.status !== "closed";
 
 export const generateCopilotSuggestion = async ({
   ticket,
@@ -126,7 +126,11 @@ export const generateCopilotSuggestion = async ({
     return null;
   }
 
-  if (instruction && !shouldRunCopilot(ticket) && !canRunSupervisionCopilot(ticket)) {
+  if (
+    instruction &&
+    !shouldRunCopilot(ticket) &&
+    !canRunSupervisionCopilot(ticket)
+  ) {
     return null;
   }
 

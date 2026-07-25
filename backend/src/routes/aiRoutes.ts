@@ -95,6 +95,11 @@ aiRoutes.get("/ai/assets", KnowledgeAssetController.index);
 aiRoutes.post("/ai/assets", KnowledgeAssetController.store);
 aiRoutes.get("/ai/assets/:assetId", KnowledgeAssetController.show);
 aiRoutes.get("/ai/assets/:assetId/download", KnowledgeAssetController.download);
+aiRoutes.post(
+  "/ai/assets/:assetId/replace-file",
+  upload.single("file"),
+  KnowledgeAssetController.replaceFile
+);
 aiRoutes.put("/ai/assets/:assetId", KnowledgeAssetController.update);
 aiRoutes.post(
   "/ai/assets/:assetId/versions",
@@ -123,7 +128,10 @@ aiRoutes.post(
   upload.single("file"),
   KnowledgeAssetController.storeUpload
 );
-aiRoutes.post("/ai/assets/:assetId/clone", KnowledgeAssetController.cloneToBase);
+aiRoutes.post(
+  "/ai/assets/:assetId/clone",
+  KnowledgeAssetController.cloneToBase
+);
 aiRoutes.post(
   "/ai/assets/:assetId/quick-publish",
   KnowledgeAssetController.quickPublish

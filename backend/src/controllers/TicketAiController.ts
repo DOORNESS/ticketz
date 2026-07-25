@@ -22,7 +22,6 @@ import { transcribeTicketMessage } from "../services/AiServices/AiManualTranscri
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
 import formatBody from "../helpers/Mustache";
 import User from "../models/User";
-import Ticket from "../models/Ticket";
 import { listToolExecutionLogs } from "../services/AiServices/tools/ToolExecutorService";
 import canAccessTicketAiData from "../helpers/canAccessTicketAiData";
 import { serializeTicketWithOperationalState } from "../services/TicketServices/TicketOperationalStateService";
@@ -98,7 +97,9 @@ export const resume = async (
 
   const updated = await resumeTicketAi({ ticket, user });
 
-  return res.status(200).json(updated);
+  return res
+    .status(200)
+    .json(serializeTicketWithOperationalState(updated, user.id));
 };
 
 export const releaseToAi = async (

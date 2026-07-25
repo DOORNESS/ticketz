@@ -292,8 +292,8 @@ const TicketActionButtonsCustom = ({
   const showResumeAi =
     canSuperviseAi(user) &&
     ticket.aiPaused &&
-    ticket.aiHandoff &&
-    !ticket.userId;
+    !ticket.userId &&
+    Boolean(ticket.aiAgentId || ticket.aiStartedAt);
 
   const showReleaseToAi = canReleaseTicketToAi(ticket, user);
 

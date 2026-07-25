@@ -109,6 +109,7 @@ const Ticket = () => {
   const [supervisionParticipating, setSupervisionParticipating] =
     useState(false);
   const [suggestLoading, setSuggestLoading] = useState(false);
+  const [resumeLoading, setResumeLoading] = useState(false);
   const [annexDialogOpen, setAnnexDialogOpen] = useState(false);
   const [annexSuggestedText, setAnnexSuggestedText] = useState("");
   const messageInputRef = useRef(null);
@@ -276,10 +277,10 @@ const Ticket = () => {
   }, [ticket?.id, ticket?.aiAgentId, ticket?.aiPaused, ticket?.userId]);
 
   useEffect(() => {
-    if (!isAiHandlingTicket(ticket)) {
+    if (!ticket?.aiAgentId || ticket?.userId || ticket?.status === "closed") {
       setSupervisionParticipating(false);
     }
-  }, [ticket?.id, ticket?.aiAgentId, ticket?.aiPaused, ticket?.userId]);
+  }, [ticket?.id, ticket?.aiAgentId, ticket?.userId, ticket?.status]);
 
   const isObserving = isTicketObservationMode(ticket, user);
 
@@ -313,6 +314,28 @@ const Ticket = () => {
       delete window.__ticketzApplySuggestedReply;
     };
   }, []);
+
+  const handleStopParticipating = async () => {
+    setSupervisionParticipating(false);
+    if (ticket?.aiPaused) {
+      await handleResumeAi();
+    }
+  };
+
+  const handleResumeAi = async () => {
+    if (!ticket?.id) return;
+    setResumeLoading(true);
+    try {
+      const { data } = await api.post(`/tickets/${ticket.id}/ai/resume`);
+      syncTicketView(data);
+      setSupervisionParticipating(false);
+      toast.success("IA retomada — o robô vai responder novamente.");
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setResumeLoading(false);
+    }
+  };
 
   const handleSuggestResponse = async () => {
     if (!ticket?.id) return;
@@ -384,9 +407,11 @@ const Ticket = () => {
           observationMode={isObserving}
           supervisionParticipating={supervisionParticipating}
           onParticipate={() => setSupervisionParticipating(true)}
-          onStopParticipating={() => setSupervisionParticipating(false)}
+          onStopParticipating={handleStopParticipating}
+          onResumeAi={handleResumeAi}
           onSuggestResponse={handleSuggestResponse}
           suggestLoading={suggestLoading}
+          resumeLoading={resumeLoading}
           user={user}
           tagsExpanded={tagsExpanded}
           onToggleTags={() => setTagsExpanded(prev => !prev)}
@@ -415,6 +440,7 @@ const Ticket = () => {
         onClose={() => setAdminPanelOpen(false)}
         ticket={ticket}
         user={user}
+        observationMode={isObserving}
         observationMode={isObserving}
         onOpenRepository={() => {
           setAdminPanelOpen(false);
