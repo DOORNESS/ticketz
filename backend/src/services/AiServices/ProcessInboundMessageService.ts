@@ -111,7 +111,7 @@ const resolveEffectiveMaxTokens = (
     return configured;
   }
 
-  return Math.max(configured, 4096);
+  return Math.max(configured, informationalQuery ? 16384 : configured);
 };
 
 const AUDIO_USER_FALLBACK =

@@ -137,7 +137,10 @@ const Ticket = () => {
         prev?.id === updatedTicket.id &&
         prev?.userId === updatedTicket.userId &&
         prev?.status === updatedTicket.status &&
-        prev?.updatedAt === updatedTicket.updatedAt
+        prev?.updatedAt === updatedTicket.updatedAt &&
+        prev?.aiProcessingState === updatedTicket.aiProcessingState &&
+        prev?.aiPaused === updatedTicket.aiPaused &&
+        prev?.aiAgentId === updatedTicket.aiAgentId
       ) {
         return prev;
       }

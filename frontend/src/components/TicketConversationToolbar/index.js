@@ -12,7 +12,7 @@ import FolderSharedIcon from "@material-ui/icons/FolderShared";
 import LocalOfferOutlinedIcon from "@material-ui/icons/LocalOfferOutlined";
 import AndroidIcon from "@material-ui/icons/Android";
 import EditIcon from "@material-ui/icons/Edit";
-import LightbulbOutlinedIcon from "@material-ui/icons/LightbulbOutlined";
+import EmojiObjectsIcon from "@material-ui/icons/EmojiObjects";
 import {
   getOperationalLabel,
   isAiHandlingTicket,
@@ -118,7 +118,7 @@ const TicketConversationToolbar = ({
             size="small"
             variant="outlined"
             className={classes.supervisionButton}
-            startIcon={<LightbulbOutlinedIcon fontSize="small" />}
+            startIcon={<EmojiObjectsIcon fontSize="small" />}
             disabled={suggestLoading}
             onClick={onSuggestResponse}
           >

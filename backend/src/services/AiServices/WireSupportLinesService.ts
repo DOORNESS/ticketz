@@ -9,7 +9,7 @@ import Ticket from "../../models/Ticket";
 import { syncAgentKnowledgeBases } from "./AiAgentKnowledgeBaseService";
 import { syncExclusiveAgentQueueLinks } from "./syncExclusiveAgentQueueLinks";
 import { auditSupportLinesForCompany } from "./AuditSupportLinesService";
-import { ensureAnnexResponsesKnowledgeBase } from "./EnsureAnnexResponsesKnowledgeBase";
+import { ensureAllAnnexResponsesKnowledgeBases } from "./EnsureAnnexResponsesKnowledgeBase";
 import AssociateWhatsappQueue from "../WhatsappService/AssociateWhatsappQueue";
 import { logger } from "../../utils/logger";
 
@@ -226,7 +226,8 @@ const wireFortmaxLine = async (companyId: number) => {
     basePrompt: agent.basePrompt?.includes("Nivelton")
       ? FORTMAX_PROMPT
       : agent.basePrompt || FORTMAX_PROMPT,
-    fallbackQueueId: queue.id
+    fallbackQueueId: queue.id,
+    maxTokens: 16384
   });
 
   await syncAgentKnowledgeBases({
@@ -346,7 +347,8 @@ const wireNivelLine = async (companyId: number) => {
   await agent.update({
     active: true,
     basePrompt: NIVEL_PROMPT,
-    fallbackQueueId: queue.id
+    fallbackQueueId: queue.id,
+    maxTokens: 16384
   });
 
   await syncAgentKnowledgeBases({
@@ -437,7 +439,7 @@ export const wireSupportLinesForCompany = async (
   }
 
   try {
-    await ensureAnnexResponsesKnowledgeBase(companyId);
+    await ensureAllAnnexResponsesKnowledgeBases(companyId);
   } catch (error) {
     logger.warn(
       { error, companyId },

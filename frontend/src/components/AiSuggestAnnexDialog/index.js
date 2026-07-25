@@ -56,8 +56,8 @@ const AiSuggestAnnexDialog = ({
       <DialogTitle>Sugestão da IA</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="textSecondary" gutterBottom>
-          Deseja salvar esta resposta na base &quot;Respostas anexas&quot; para
-          a IA usar em casos semelhantes?
+          Deseja salvar esta resposta na base &quot;Respostas anexas&quot; da
+        linha (Nível ou Fortmax) para a IA usar em casos semelhantes?
         </Typography>
         <TextField
           fullWidth

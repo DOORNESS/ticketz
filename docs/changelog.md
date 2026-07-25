@@ -6,6 +6,20 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.51] — 2026-07-25
+
+### Corrigido
+
+- **Build SPA:** ícone `LightbulbOutlined` inexistente no MUI v4 → `EmojiObjects`.
+- **Tempo real IA:** `syncTicketView` ignorava mudanças em `aiProcessingState` — indicador "IA digitando" não atualizava.
+
+### Adicionado / melhorado
+
+- Base **Respostas anexas** por linha: `respostas-anexas-nivel` (domínio Nível, agente Nivelton) e `respostas-anexas-fortmax` (Webin); anexo resolve marca pelo ticket.
+- **maxTokens** Nivelton/Webin: 16384 no wiring; consultas informativas usam até 16384 tokens.
+
+---
+
 ## [1.5.50] — 2026-07-25
 
 ### Adicionado

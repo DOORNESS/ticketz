@@ -7,7 +7,10 @@ import StorageService from "../StorageService/StorageService";
 import { chatCompletion } from "./ModelGateway";
 import { ingestKnowledgeDocument } from "./IngestKnowledgeDocumentService";
 import { logger } from "../../utils/logger";
-import { ensureAnnexResponsesKnowledgeBase } from "./EnsureAnnexResponsesKnowledgeBase";
+import {
+  ensureAnnexResponsesKnowledgeBase,
+  resolveAnnexResponsesBrand
+} from "./EnsureAnnexResponsesKnowledgeBase";
 import {
   createKnowledgeAsset,
   promoteAndPublishKnowledgeAsset
@@ -188,7 +191,8 @@ export const annexHumanResponseToBase = async ({
   content: string;
   userId?: number;
 }): Promise<{ base: KnowledgeBase; assetId?: number; documentId?: number }> => {
-  const base = await ensureAnnexResponsesKnowledgeBase(companyId);
+  const brand = await resolveAnnexResponsesBrand(companyId, ticketId);
+  const base = await ensureAnnexResponsesKnowledgeBase(companyId, brand);
   const normalizedTitle = title.trim() || "Resposta supervisionada";
   const normalizedContent = content.trim();
 
