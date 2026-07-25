@@ -6,8 +6,12 @@ import OldMessage from "../../models/OldMessage";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import { logger } from "../../utils/logger";
-import { generateCopilotSuggestion, shouldRunCopilot } from "../AiServices/AiCopilotService";
+import {
+  generateCopilotSuggestion,
+  shouldRunCopilot
+} from "../AiServices/AiCopilotService";
 import { shouldSuppressHumanNotification } from "../AiServices/AiHelpers";
+import { serializeTicketWithOperationalState } from "../TicketServices/TicketOperationalStateService";
 
 interface MessageData {
   id: string;
@@ -41,7 +45,7 @@ export const websocketCreateMessage = (
   const payload = {
     action: "create",
     message,
-    ticket,
+    ticket: serializeTicketWithOperationalState(ticket),
     contact: ticket.contact,
     suppressHumanAlert
   };
@@ -51,13 +55,17 @@ export const websocketCreateMessage = (
     payload
   );
 
-  if (!suppressHumanAlert) {
-    io.to(`company-${message.companyId}-${message.ticket.status}`)
-      .to(`company-${message.companyId}-notification`)
+  let listStack = io
+    .to(`company-${message.companyId}-${message.ticket.status}`)
+    .to(`company-${message.companyId}-notification`);
+
+  if (message.ticket.queueId) {
+    listStack = listStack
       .to(`queue-${message.ticket.queueId}-${message.ticket.status}`)
-      .to(`queue-${message.ticket.queueId}-notification`)
-      .emit(`company-${message.companyId}-appMessage`, payload);
+      .to(`queue-${message.ticket.queueId}-notification`);
   }
+
+  listStack.emit(`company-${message.companyId}-appMessage`, payload);
 
   if (ticket.aiHandoff && ticket.queueId && !message.fromMe) {
     io.to(`queue-${ticket.queueId}-handoff`)
@@ -161,11 +169,7 @@ const CreateMessageService = async ({
     "sending appMessage event"
   );
 
-  if (
-    !message.fromMe &&
-    message.ticket &&
-    shouldRunCopilot(message.ticket)
-  ) {
+  if (!message.fromMe && message.ticket && shouldRunCopilot(message.ticket)) {
     void generateCopilotSuggestion({ ticket: message.ticket }).catch(error => {
       logger.warn(
         { error, ticketId: message.ticketId },

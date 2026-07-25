@@ -6,6 +6,23 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.46] — 2026-07-25
+
+### Corrigido
+
+- **IA silenciosa em perguntas informativas** (`como funciona`, `quero saber`): triage de suporte não bloqueia mais FAQ; base carregada integralmente (`loadStrategy: full`); até 4096 tokens; lock Redis não é mais apagado durante processamento ativo (corrida entre mensagens rápidas).
+
+---
+
+## [1.5.46] — 2026-07-25
+
+### Corrigido
+
+- **Lista em tempo real (aba IA):** eventos WebSocket passam a chegar na lista mesmo com IA ativa (`suppressHumanAlert` só silencia som, não bloqueia socket); ticket emitido após `tryEngageAi` e após respostas rápidas; aba IA assina canais `pending`+`open`; removido delete indevido na aba IA.
+- **IA silenciosa em FAQ** (`como funciona`, `quero saber`): triage não bloqueia; base carregada integralmente; até 4096 tokens; lock Redis não apagado durante processamento ativo.
+
+---
+
 ## [1.5.45] — 2026-07-25
 
 ### Corrigido

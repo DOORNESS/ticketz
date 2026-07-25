@@ -337,6 +337,13 @@ const TicketsListCustom = props => {
     };
 
     const onConnectTicketList = () => {
+      if (listMode === "ai") {
+        socket.emit("joinNotification");
+        socket.emit("joinTickets", "pending");
+        socket.emit("joinTickets", "open");
+        return;
+      }
+
       if (status) {
         socket.emit("joinTickets", status);
       } else {
@@ -365,8 +372,6 @@ const TicketsListCustom = props => {
       ) {
         if (shouldUpdateTicket(data.ticket)) {
           syncTicketUpdate(data.ticket);
-        } else if (listMode === "ai") {
-          dispatch({ type: "DELETE_TICKET", payload: data.ticket?.id });
         }
       }
 
@@ -399,6 +404,7 @@ const TicketsListCustom = props => {
 
       if (
         data.action === "update" &&
+        listMode !== "ai" &&
         status === "open" &&
         data.ticket.status === "open" &&
         data.ticket.operationalState?.listColumn === "ai"
@@ -417,14 +423,14 @@ const TicketsListCustom = props => {
     };
 
     const onCompanyAppMessage = data => {
-      if (
+      const canSyncListPreview =
         data.action === "create" &&
         data.ticket &&
-        shouldUpdateTicket(data.ticket) &&
         (status === undefined ||
           listMode === "ai" ||
-          data.ticket.status === status)
-      ) {
+          data.ticket.status === status);
+
+      if (canSyncListPreview) {
         const previewTicket = {
           ...data.ticket,
           lastMessage:
@@ -433,10 +439,20 @@ const TicketsListCustom = props => {
           updatedAt: data.ticket.updatedAt || new Date().toISOString()
         };
 
-        dispatch({
-          type: "UPDATE_TICKET",
-          payload: previewTicket
-        });
+        if (shouldUpdateTicket(previewTicket)) {
+          dispatch({
+            type: "UPDATE_TICKET",
+            payload: previewTicket
+          });
+        } else if (
+          listMode === "ai" &&
+          (previewTicket.aiAgentId || previewTicket.aiStartedAt)
+        ) {
+          dispatch({
+            type: "UPDATE_TICKET",
+            payload: previewTicket
+          });
+        }
       }
 
       if (data.suppressHumanAlert && !supervision) {
@@ -553,7 +569,11 @@ const TicketsListCustom = props => {
     });
 
     return () => {
-      if (status) {
+      if (listMode === "ai") {
+        socket.emit("leaveNotification");
+        socket.emit("leaveTickets", "pending");
+        socket.emit("leaveTickets", "open");
+      } else if (status) {
         socket.emit("leaveTickets", status);
       } else {
         socket.emit("leaveNotification");
@@ -580,6 +600,7 @@ const TicketsListCustom = props => {
     fetchSince,
     aiFilter,
     supervision,
+    listMode,
     showAll
   ]);
 

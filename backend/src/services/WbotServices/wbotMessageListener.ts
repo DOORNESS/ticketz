@@ -2034,6 +2034,21 @@ const handleMessage = async (
     });
 
     if (aiEngaged) {
+      await ticket.reload({
+        include: [
+          { model: Contact, as: "contact", include: ["tags", "extraInfo"] },
+          "queue",
+          "tags",
+          "user",
+          {
+            model: Whatsapp,
+            as: "whatsapp",
+            attributes: ["name", "id"]
+          }
+        ]
+      });
+      websocketUpdateTicket(ticket);
+
       if (newMessage) {
         await newMessage.reload();
         websocketCreateMessage(newMessage);

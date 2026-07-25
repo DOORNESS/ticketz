@@ -213,7 +213,7 @@ const wireFortmaxLine = async (companyId: number) => {
       transcriptionModel: "gpt-4o-mini-transcribe",
       basePrompt: FORTMAX_PROMPT,
       temperature: 0.3,
-      maxTokens: 1024,
+      maxTokens: 4096,
       fallbackQueueId: queue.id,
       handoffMessage:
         "Vou transferir você para um atendente humano da Fortmax. Por favor, aguarde.",
@@ -335,7 +335,7 @@ const wireNivelLine = async (companyId: number) => {
       transcriptionModel: "gpt-4o-mini-transcribe",
       basePrompt: NIVEL_PROMPT,
       temperature: 0.3,
-      maxTokens: 1024,
+      maxTokens: 4096,
       fallbackQueueId: queue.id,
       handoffMessage:
         "Vou transferir você para um atendente humano da Nível. Por favor, aguarde.",

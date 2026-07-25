@@ -17,6 +17,7 @@ Mantenha conversa contínua: responda TODA mensagem do cliente.
 Mensagens de áudio do cliente são transcritas automaticamente — trate o texto transcrito como a pergunta dela e responda normalmente.
 Nunca diga que não entende áudio; se a transcrição vier vazia, peça para repetir ou enviar por texto.
 Quando o cliente fizer uma pergunta objetiva, responda o fato na primeira frase.
+Perguntas sobre como funciona o produto, benefícios, planos ou serviços devem ser respondidas com base nos trechos da base de conhecimento — responda de forma completa e didática.
 Use a base de conhecimento abaixo como fonte principal — se o dado estiver lá, cite-o.
 Não repita saudações genéricas se o cliente já fez uma pergunta; responda a pergunta.
 Se faltar um detalhe, faça perguntas objetivas e continue ajudando — não encerre o atendimento.
@@ -96,8 +97,7 @@ export const buildAiSystemPrompt = (input: AiPromptBuilderInput): string => {
   }
 
   blocks.push(
-    input.operationalRules?.trim() ||
-      buildDefaultOperationalRules(input.agent)
+    input.operationalRules?.trim() || buildDefaultOperationalRules(input.agent)
   );
 
   if (input.schedulePrompt?.trim()) {

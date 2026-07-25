@@ -10,8 +10,10 @@ import {
 import { ingestKnowledgeDocument } from "./IngestKnowledgeDocumentService";
 import { logger } from "../../utils/logger";
 
-const MAX_CONTEXT_CHARS = 14000;
-const MAX_CHUNK_SNIPPET = 900;
+const MAX_CONTEXT_CHARS = 20000;
+const MAX_CHUNK_SNIPPET = 1200;
+const FULL_CORPUS_DOC_LIMIT = 24;
+const AUTO_FULL_CORPUS_DOC_LIMIT = 24;
 
 export type KnowledgeContextResult = {
   contextBlock: string;
@@ -45,7 +47,8 @@ const buildContextBlock = (
 
 const loadAllReadyChunkTexts = async (
   companyId: number,
-  knowledgeBaseIds: number[]
+  knowledgeBaseIds: number[],
+  chunkLimit = FULL_CORPUS_DOC_LIMIT
 ): Promise<
   {
     id: number;
@@ -70,7 +73,7 @@ const loadAllReadyChunkTexts = async (
       }
     ],
     order: [["id", "ASC"]],
-    limit: 24
+    limit: chunkLimit
   });
 
   return rows.map(row => ({
@@ -120,12 +123,14 @@ export const buildKnowledgeContextForQuery = async ({
   companyId,
   knowledgeBaseIds,
   userText,
-  provider
+  provider,
+  loadStrategy = "auto"
 }: {
   companyId: number;
   knowledgeBaseIds: number[];
   userText: string;
   provider?: string;
+  loadStrategy?: "auto" | "full";
 }): Promise<KnowledgeContextResult> => {
   if (!knowledgeBaseIds.length) {
     return {
@@ -153,10 +158,14 @@ export const buildKnowledgeContextForQuery = async ({
     );
   }
 
-  if (readyCount > 0 && readyCount <= 12) {
+  if (
+    loadStrategy === "full" ||
+    (readyCount > 0 && readyCount <= AUTO_FULL_CORPUS_DOC_LIMIT)
+  ) {
     const usedChunks = await loadAllReadyChunkTexts(
       companyId,
-      knowledgeBaseIds
+      knowledgeBaseIds,
+      loadStrategy === "full" ? 48 : FULL_CORPUS_DOC_LIMIT
     );
     return {
       contextBlock: buildContextBlock(usedChunks),

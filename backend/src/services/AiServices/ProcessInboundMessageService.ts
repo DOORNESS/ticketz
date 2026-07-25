@@ -19,7 +19,12 @@ import {
   buildAgentIdentityReply,
   buildHandoffConfirmationQuestion
 } from "./AiHelpers";
-import { isVagueCustomerStatement, isPureGreetingMessage, buildTimeBasedGreeting } from "./Triage/CaseCompletenessEngine";
+import {
+  isVagueCustomerStatement,
+  isPureGreetingMessage,
+  buildTimeBasedGreeting,
+  isInformationalIntent
+} from "./Triage/CaseCompletenessEngine";
 import {
   buildAiSchedulePromptBlock,
   getAiScheduleContext
@@ -91,6 +96,21 @@ const TRANSIENT_ERROR_FALLBACK =
 
 const AI_CUSTOMER_FALLBACK =
   "Ainda não encontrei uma resposta completa na base. Pode me contar um pouco mais o que você precisa?";
+
+const AI_INFORMATIONAL_FALLBACK =
+  "Estou consultando nossa base de conhecimento. Pode repetir sua pergunta em outras palavras?";
+
+const resolveEffectiveMaxTokens = (
+  agent: AiAgent,
+  informationalQuery: boolean
+): number => {
+  const configured = agent.maxTokens || 1024;
+  if (!informationalQuery) {
+    return configured;
+  }
+
+  return Math.max(configured, 4096);
+};
 
 const AUDIO_USER_FALLBACK =
   "Não consegui compreender este áudio. Poderia reenviá-lo ou escrever sua mensagem?";
@@ -455,6 +475,11 @@ const ProcessInboundMessageService = async ({
 
       await finalizeAiResponse(ticket, primaryMessageId);
 
+      await ticket.reload({
+        include: ["contact", "queue", "whatsapp", "user"]
+      });
+      websocketUpdateTicket(ticket);
+
       await persistAiDecisionLog({
         companyId,
         ticketId: ticket.id,
@@ -476,6 +501,11 @@ const ProcessInboundMessageService = async ({
 
       await finalizeAiResponse(ticket, primaryMessageId);
 
+      await ticket.reload({
+        include: ["contact", "queue", "whatsapp", "user"]
+      });
+      websocketUpdateTicket(ticket);
+
       await persistAiDecisionLog({
         companyId,
         ticketId: ticket.id,
@@ -489,6 +519,7 @@ const ProcessInboundMessageService = async ({
     }
 
     const conversationText = await buildConversationText(ticket.id, userText);
+    const informationalQuery = isInformationalIntent(userText);
 
     if (
       triageV2Enabled &&
@@ -585,7 +616,7 @@ const ProcessInboundMessageService = async ({
       return;
     }
 
-    if (triageV2Enabled) {
+    if (triageV2Enabled && !informationalQuery) {
       const handledByTriage = await runTriageGate({
         companyId,
         ticket,
@@ -601,6 +632,7 @@ const ProcessInboundMessageService = async ({
       }
 
       if (
+        !informationalQuery &&
         isVagueCustomerStatement(userText) &&
         Number((ticket as any).aiInvestigationRound || 0) < 2
       ) {
@@ -694,7 +726,8 @@ const ProcessInboundMessageService = async ({
         companyId,
         knowledgeBaseIds,
         userText,
-        provider: agent.provider
+        provider: agent.provider,
+        loadStrategy: informationalQuery ? "full" : "auto"
       }),
       buildConversationHistory(ticket.id, 4),
       loadVerifiedMemoryForPrompt(companyId, ticket.contactId),
@@ -705,9 +738,12 @@ const ProcessInboundMessageService = async ({
     const usedChunks = knowledgeContext.usedChunks;
     const contextBlock = knowledgeContext.contextBlock;
     const hasReliableContext =
-      usedChunks.length > 0 && usedChunks[0].similarity >= 0.25;
+      informationalQuery && knowledgeContext.hasReadyDocuments
+        ? usedChunks.length > 0
+        : usedChunks.length > 0 && usedChunks[0].similarity >= 0.25;
 
     if (
+      !informationalQuery &&
       knowledgeContext.hasReadyDocuments &&
       !hasReliableContext &&
       userText.length > 20
@@ -746,8 +782,21 @@ const ProcessInboundMessageService = async ({
     const contextHint = contextBlock
       ? contextBlock
       : knowledgeContext.hasReadyDocuments
-        ? "Documentos existem na base, mas nenhum trecho relevante foi recuperado para esta pergunta. Não invente fatos. Faça perguntas objetivas para entender o caso ou use a ferramenta de handoff se o cliente pedir humano."
+        ? informationalQuery
+          ? "Documentos existem na base. Responda com o máximo de detalhes úteis da base sobre como a Nível funciona, planos, benefícios e uso. Não invente fatos."
+          : "Documentos existem na base, mas nenhum trecho relevante foi recuperado para esta pergunta. Não invente fatos. Faça perguntas objetivas para entender o caso ou use a ferramenta de handoff se o cliente pedir humano."
         : "A base de conhecimento ainda não tem documentos publicados para este tema. Não invente políticas, preços ou procedimentos. Seja cordial, peça detalhes específicos e não afirme transferência para humano sem acionar handoff.";
+
+    const effectiveMaxTokens = resolveEffectiveMaxTokens(
+      agent,
+      informationalQuery
+    );
+    const agentForCompletion =
+      effectiveMaxTokens === agent.maxTokens
+        ? agent
+        : Object.assign(Object.create(Object.getPrototypeOf(agent)), agent, {
+            maxTokens: effectiveMaxTokens
+          });
 
     const systemPrompt = buildAiSystemPrompt({
       agent,
@@ -762,7 +811,7 @@ const ProcessInboundMessageService = async ({
 
     const loopResult = await runToolLoop({
       companyId,
-      agent,
+      agent: agentForCompletion,
       messages: [
         { role: "system", content: systemPrompt },
         ...history.map(h => ({ role: h.role, content: h.content })),
@@ -804,26 +853,33 @@ const ProcessInboundMessageService = async ({
       model: loopResult.model
     };
 
-    if (!aiResponse || detectLowConfidenceResponse(aiResponse)) {
+    const rejectModelResponse =
+      !aiResponse ||
+      (detectLowConfidenceResponse(aiResponse) &&
+        !(informationalQuery && aiResponse.length >= 40));
+
+    if (rejectModelResponse) {
       const confidence = computeConfidenceScore({
         topSimilarity: usedChunks[0]?.similarity || 0,
         hasReliableContext,
         responseLength: aiResponse?.length || 0
       });
 
-      const handledByTriage = await runTriageGate({
-        companyId,
-        ticket,
-        agent,
-        userText,
-        conversationText,
-        messageId: primaryMessageId,
-        messages,
-        proposedReason: AI_HANDOFF_REASONS.low_confidence,
-        confidenceScore: confidence,
-        hasReliableContext,
-        hasReadyDocuments: knowledgeContext.hasReadyDocuments
-      });
+      const handledByTriage =
+        !informationalQuery &&
+        (await runTriageGate({
+          companyId,
+          ticket,
+          agent,
+          userText,
+          conversationText,
+          messageId: primaryMessageId,
+          messages,
+          proposedReason: AI_HANDOFF_REASONS.low_confidence,
+          confidenceScore: confidence,
+          hasReliableContext,
+          hasReadyDocuments: knowledgeContext.hasReadyDocuments
+        }));
 
       if (handledByTriage) {
         return;
@@ -848,8 +904,13 @@ const ProcessInboundMessageService = async ({
         ticket,
         companyId,
         messageId: primaryMessageId,
-        reason: "low_confidence_fallback",
-        userText
+        reason: informationalQuery
+          ? "informational_low_confidence_fallback"
+          : "low_confidence_fallback",
+        userText,
+        body: informationalQuery
+          ? AI_INFORMATIONAL_FALLBACK
+          : AI_CUSTOMER_FALLBACK
       });
       return;
     }
@@ -1045,6 +1106,31 @@ const ProcessInboundMessageService = async ({
     }
   } catch (error) {
     if (isTransientAiError(error)) {
+      const canSendTransientFallback =
+        userText &&
+        !isPureGreetingMessage(userText) &&
+        !detectAgentIdentityQuestion(userText);
+
+      if (canSendTransientFallback) {
+        try {
+          await sendAiCustomerFallback({
+            ticket,
+            companyId,
+            messageId: primaryMessageId,
+            reason: "transient_provider_error_fallback",
+            userText,
+            body: isInformationalIntent(userText)
+              ? AI_INFORMATIONAL_FALLBACK
+              : TRANSIENT_ERROR_FALLBACK
+          });
+        } catch (fallbackError) {
+          logger.warn(
+            { fallbackError, ticketId: ticket.id },
+            "Failed to send transient AI fallback message"
+          );
+        }
+      }
+
       throw error;
     }
 

@@ -100,6 +100,22 @@ describe("CaseCompletenessEngine", () => {
     expect(buildInvestigationQuestion(snapshot, userText)).toBeNull();
   });
 
+  it("detects how-it-works questions as informational", () => {
+    const userText = "quero saber como funciona a nivel ?";
+
+    expect(isInformationalIntent(userText)).toBe(true);
+    expect(shouldSkipSupportInvestigation(userText)).toBe(true);
+    expect(
+      buildInvestigationQuestion(
+        evaluateCaseCompleteness({
+          latestMessage: userText,
+          conversationText: `user: ${userText}`
+        }),
+        userText
+      )
+    ).toBeNull();
+  });
+
   it("still treats explicit support problems as non-informational", () => {
     const userText =
       "Estou com um problema no login do WebG3, aparece usuário não encontrado.";
