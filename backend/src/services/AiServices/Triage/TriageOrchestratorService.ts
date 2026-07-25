@@ -9,7 +9,8 @@ import {
   evaluateCaseCompleteness,
   buildInvestigationQuestion,
   shouldSkipSupportInvestigation,
-  isSubstantiveAiReply
+  isSubstantiveAiReply,
+  isVagueCustomerStatement
 } from "./CaseCompletenessEngine";
 import {
   evaluateHandoffPolicy,
@@ -97,7 +98,8 @@ export const sendInvestigationResponse = async ({
 
   if (
     lastOutbound?.body?.trim() === question.trim() ||
-    (lastOutbound?.body?.includes("Em que posso ajudar") &&
+    (isVagueCustomerStatement(userText) &&
+      lastOutbound?.body?.includes("Em que posso ajudar") &&
       question.includes("Em que posso ajudar")) ||
     (lastOutbound?.body?.includes("Pode me explicar o que está acontecendo") &&
       question.includes("Pode me explicar o que está acontecendo"))

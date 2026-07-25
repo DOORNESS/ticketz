@@ -186,6 +186,32 @@ export const getActiveAgentForTicket = async (
   return getActiveAgent(ticket.companyId, queueId);
 };
 
+export const resolveProcessingAgent = async (
+  ticket: Ticket,
+  fallbackAgent?: AiAgent | null
+): Promise<AiAgent | null> => {
+  if (ticket.aiAgentId) {
+    const assigned = await AiAgent.findOne({
+      where: {
+        id: ticket.aiAgentId,
+        companyId: ticket.companyId,
+        active: true,
+        role: { [Op.in]: ["legacy", "specialist"] }
+      }
+    });
+
+    if (assigned) {
+      return assigned;
+    }
+  }
+
+  if (fallbackAgent?.active) {
+    return fallbackAgent;
+  }
+
+  return getActiveAgentForTicket(ticket);
+};
+
 const getLegacyKnowledgeBaseIdsForAgent = async (
   companyId: number,
   agentId: number,
@@ -327,7 +353,7 @@ export const resolveSpecialistAgent = async ({
         id: ticket.aiAgentId,
         companyId,
         active: true,
-        role: "specialist"
+        role: { [Op.in]: ["legacy", "specialist"] }
       }
     });
 

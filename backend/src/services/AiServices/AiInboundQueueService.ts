@@ -2,7 +2,10 @@ import Queue, { Job } from "bull";
 import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
 import { logger } from "../../utils/logger";
-import { getActiveAgentForTicket, canAiEngageTicket } from "./AiHelpers";
+import {
+  resolveProcessingAgent,
+  canAiEngageTicket
+} from "./AiHelpers";
 import ProcessInboundMessageService, {
   InboundMessageItem
 } from "./ProcessInboundMessageService";
@@ -81,6 +84,20 @@ const drainBufferedMessages = async (
     .filter((item): item is AiInboundPayload => item !== null);
 };
 
+const requeueBufferedMessages = async (
+  ticketId: number,
+  payloads: AiInboundPayload[]
+): Promise<void> => {
+  if (!payloads.length) {
+    return;
+  }
+
+  const redis = getAiInboundQueue().client;
+  for (let index = payloads.length - 1; index >= 0; index -= 1) {
+    await redis.lpush(bufferKey(ticketId), JSON.stringify(payloads[index]));
+  }
+};
+
 const mapPayloadToInboundItem = (
   payload: AiInboundPayload
 ): InboundMessageItem => ({
@@ -109,7 +126,7 @@ const revalidateTicketForAi = async (
     return null;
   }
 
-  const agent = await getActiveAgentForTicket(ticket);
+  const agent = await resolveProcessingAgent(ticket);
   if (!agent?.active) {
     return null;
   }
@@ -223,6 +240,7 @@ export const processBufferedAiInbound = async (
   const redis = getAiInboundQueue().client;
   const lockTtlSeconds = getLockTtlSeconds();
   let ownsLock = false;
+  let drainedPayloads: AiInboundPayload[] = [];
 
   if (job) {
     await recordAiJobStarted(job);
@@ -276,8 +294,8 @@ export const processBufferedAiInbound = async (
       return;
     }
 
-    const payloads = await drainBufferedMessages(ticketId);
-    if (!payloads.length) {
+    drainedPayloads = await drainBufferedMessages(ticketId);
+    if (!drainedPayloads.length) {
       if (job) {
         await persistAiDecisionLog({
           companyId,
@@ -295,22 +313,27 @@ export const processBufferedAiInbound = async (
       ticketId,
       action: "job_started",
       reason: job ? "processing_buffered_messages" : "immediate_processing",
-      details: { messageCount: payloads.length, immediate: !job }
+      details: { messageCount: drainedPayloads.length, immediate: !job }
     });
 
     await ProcessInboundMessageService({
       ticket: revalidated.ticket,
       companyId,
       agent: revalidated.agent,
-      messages: payloads.map(mapPayloadToInboundItem)
+      messages: drainedPayloads.map(mapPayloadToInboundItem)
     });
+
+    drainedPayloads = [];
 
     if (job) {
       await recordAiJobCompleted(job, "completed");
     }
-
-    await rescheduleIfBuffered(companyId, ticketId);
   } catch (error) {
+    if (drainedPayloads.length) {
+      await requeueBufferedMessages(ticketId, drainedPayloads);
+      drainedPayloads = [];
+    }
+
     if (
       job &&
       isTransientAiError(error) &&
@@ -332,27 +355,41 @@ export const processBufferedAiInbound = async (
       details: { attemptsMade: job?.attemptsMade || 0, immediate: !job }
     });
 
-    try {
-      const revalidated = await revalidateTicketForAi(ticketId, companyId);
-      if (revalidated) {
-        const payloads = await drainBufferedMessages(ticketId);
-        if (payloads.length) {
-          await ProcessInboundMessageService({
-            ticket: revalidated.ticket,
-            companyId,
-            agent: revalidated.agent,
-            messages: payloads.map(mapPayloadToInboundItem),
-            forceHandoff: false,
-            handoffReason:
-              error instanceof Error ? error.message : "ai_queue_error"
-          });
+    if (
+      !job &&
+      isTransientAiError(error)
+    ) {
+      setTimeout(() => {
+        void processBufferedAiInbound(companyId, ticketId).catch(retryError => {
+          logger.error(
+            { retryError, ticketId, companyId },
+            "Retry after transient AI processing error failed"
+          );
+        });
+      }, getLockRetryMs());
+    } else {
+      try {
+        const revalidated = await revalidateTicketForAi(ticketId, companyId);
+        if (revalidated) {
+          const payloads = await drainBufferedMessages(ticketId);
+          if (payloads.length) {
+            await ProcessInboundMessageService({
+              ticket: revalidated.ticket,
+              companyId,
+              agent: revalidated.agent,
+              messages: payloads.map(mapPayloadToInboundItem),
+              forceHandoff: false,
+              handoffReason:
+                error instanceof Error ? error.message : "ai_queue_error"
+            });
+          }
         }
+      } catch (handoffError) {
+        logger.error(
+          { handoffError, ticketId },
+          "Failed to hand off after definitive AI processing error"
+        );
       }
-    } catch (handoffError) {
-      logger.error(
-        { handoffError, ticketId },
-        "Failed to hand off after definitive AI processing error"
-      );
     }
 
     if (job) {
@@ -362,6 +399,8 @@ export const processBufferedAiInbound = async (
     if (ownsLock) {
       await redis.del(lockKey(ticketId));
     }
+
+    await rescheduleIfBuffered(companyId, ticketId);
   }
 };
 
@@ -439,7 +478,7 @@ export const enqueueAiInboundMessage = async (
   }
 
   const ticket = await Ticket.findByPk(payload.ticketId);
-  const agent = ticket ? await getActiveAgentForTicket(ticket) : null;
+  const agent = ticket ? await resolveProcessingAgent(ticket) : null;
 
   if (ticket && agent) {
     await sendOptionalAck(ticket, agent, payload.ticketId);

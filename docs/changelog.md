@@ -6,11 +6,11 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
-## [1.5.46] — 2026-07-25
+## [1.5.47] — 2026-07-25
 
 ### Corrigido
 
-- **IA silenciosa em perguntas informativas** (`como funciona`, `quero saber`): triage de suporte não bloqueia mais FAQ; base carregada integralmente (`loadStrategy: full`); até 4096 tokens; lock Redis não é mais apagado durante processamento ativo (corrida entre mensagens rápidas).
+- **IA parava após 1ª resposta:** fila Redis recoloca mensagens no buffer se o processamento falhar; follow-up roda após liberar lock; ticket mantém o mesmo agente (`resolveProcessingAgent`, role `legacy`); triage não bloqueia FAQ após saudação.
 
 ---
 

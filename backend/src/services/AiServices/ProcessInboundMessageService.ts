@@ -5,6 +5,7 @@ import AiConversationLog from "../../models/AiConversationLog";
 import { resolveInboundMessageText } from "./MediaInboundResolver";
 import {
   getActiveAgentForTicket,
+  resolveProcessingAgent,
   getKnowledgeBaseIdsForAgent,
   getSpecialtyPromptRules,
   resolveSpecialistAgent,
@@ -397,7 +398,8 @@ const ProcessInboundMessageService = async ({
     return;
   }
 
-  let agent = providedAgent || (await getActiveAgentForTicket(ticket));
+  let agent =
+    (await resolveProcessingAgent(ticket, providedAgent || null)) || null;
 
   if (!agent) {
     await persistAiDecisionLog({
@@ -1136,7 +1138,8 @@ const ProcessInboundMessageService = async ({
 
     logger.error({ error, ticketId: ticket.id }, "AI processing failed");
 
-    const agent = providedAgent || (await getActiveAgentForTicket(ticket));
+    const agent =
+      (await resolveProcessingAgent(ticket, providedAgent || null)) || null;
 
     if (agent) {
       const conversationText =
