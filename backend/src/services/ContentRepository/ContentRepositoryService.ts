@@ -282,7 +282,7 @@ const maybeLinkKnowledgeAsset = async (input: {
           ? "image_ocr"
           : "document";
 
-  const storageUrl = StorageService.getPublicUrl(input.item.storageKey);
+  const storageUrl = input.item.storageKey;
   const asset = await createKnowledgeAsset({
     companyId: input.companyId,
     authorUserId: input.authorUserId,

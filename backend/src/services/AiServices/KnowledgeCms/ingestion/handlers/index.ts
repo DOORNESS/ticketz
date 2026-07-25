@@ -1,7 +1,4 @@
-import {
-  extractStorageKeyFromUrl,
-  normalizeStorageReference
-} from "../../../../../helpers/mediaStorage";
+import { resolveKnowledgeStorageKey } from "../../../../../helpers/mediaStorage";
 import StorageService from "../../../../StorageService/StorageService";
 import { extractTextFromBuffer } from "../../../DocumentParser";
 import {
@@ -10,16 +7,8 @@ import {
   AssetExtractionResult
 } from "../BaseAssetHandler";
 
-const resolveStorageKey = (storageUrl: string): string => {
-  if (/^https?:\/\//i.test(storageUrl)) {
-    return (
-      extractStorageKeyFromUrl(storageUrl) ||
-      normalizeStorageReference(storageUrl)
-    );
-  }
-
-  return normalizeStorageReference(storageUrl);
-};
+const resolveStorageKey = (storageUrl: string): string =>
+  resolveKnowledgeStorageKey(storageUrl);
 
 export class TextAssetHandler extends BaseAssetHandler {
   readonly assetType = "text";

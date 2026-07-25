@@ -25,6 +25,7 @@ import {
 } from "../services/AiServices/KnowledgeCms/KnowledgePermissionService";
 import { KnowledgeAssetType } from "../models/KnowledgeAsset";
 import { safeAiQuery } from "../helpers/safeAiQuery";
+import { resolveKnowledgeStorageKey } from "../helpers/mediaStorage";
 
 const currentUserId = (req: Request): number | undefined => {
   const parsed = Number(req.user.id);
@@ -562,4 +563,40 @@ export const ingestionJobs = async (
 
   const jobs = await listAssetIngestionJobs(companyId, Number(assetId));
   return res.json(jobs);
+};
+
+export const download = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId, id, profile } = req.user;
+  const { assetId } = req.params;
+
+  await assertKnowledgePermission(
+    "read",
+    { companyId, resourceType: "asset", resourceId: Number(assetId) },
+    { id: Number(id), profile, companyId }
+  );
+
+  const asset = await getKnowledgeAsset(companyId, Number(assetId));
+  const version = asset.currentVersion || asset.publishedVersion;
+  const storageUrl = version?.storageUrl;
+
+  if (!storageUrl) {
+    throw new AppError("ERR_ASSET_NO_FILE", 404);
+  }
+
+  await StorageService.ensureReady(companyId);
+  const storageKey = resolveKnowledgeStorageKey(storageUrl);
+  const signedUrl = await StorageService.getSignedUrl(storageKey, companyId);
+  const ext =
+    storageKey.split(".").pop()?.toLowerCase() ||
+    asset.assetType ||
+    "bin";
+
+  return res.json({
+    url: signedUrl,
+    filename: storageKey.split("/").pop() || `${asset.title}.${ext}`,
+    storageKey
+  });
 };

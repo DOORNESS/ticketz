@@ -1019,16 +1019,16 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
   }, [ticketId, socketManager]);
 
   useEffect(() => {
-    if (!ticket?.aiAgentId && !ticket?.aiStartedAt) {
+    if (!ticketId) {
       return undefined;
     }
 
     const interval = setInterval(() => {
       pollNewMessages();
-    }, 2000);
+    }, 1500);
 
     return () => clearInterval(interval);
-  }, [ticket?.id, ticket?.aiAgentId, ticket?.aiStartedAt, pollNewMessages]);
+  }, [ticketId, pollNewMessages]);
 
   const loadMore = async () => {
     await loadPageMutex.runExclusive(async () => {

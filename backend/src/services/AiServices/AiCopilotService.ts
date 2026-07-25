@@ -4,7 +4,11 @@ import AiAgent from "../../models/AiAgent";
 import AiCopilotSuggestion from "../../models/AiCopilotSuggestion";
 import AppError from "../../errors/AppError";
 import { chatCompletion } from "./ModelGateway";
-import { getActiveAgentForTicket, getKnowledgeBaseIdsForAgent } from "./AiHelpers";
+import {
+  getActiveAgentForTicket,
+  getKnowledgeBaseIdsForAgent,
+  isAiHandlingTicket
+} from "./AiHelpers";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
 import { searchRepositoryForAi } from "../ContentRepository/ContentRepositoryService";
 import { getIO } from "../../libs/socket";
@@ -95,10 +99,15 @@ export const shouldRunCopilot = (ticket: Ticket): boolean =>
   ticket.status === "open" &&
   Boolean(
     ticket.aiStartedAt ||
-    ticket.aiHandoff ||
-    ticket.aiAgentId ||
-    ticket.aiHumanAssumedAt
+      ticket.aiHandoff ||
+      ticket.aiAgentId ||
+      ticket.aiHumanAssumedAt
   );
+
+const canRunSupervisionCopilot = (ticket: Ticket): boolean =>
+  isAiFeaturesEnabled() &&
+  Boolean(ticket.aiAgentId || ticket.aiStartedAt) &&
+  (isAiHandlingTicket(ticket) || ticket.status === "pending");
 
 export const generateCopilotSuggestion = async ({
   ticket,
@@ -117,7 +126,7 @@ export const generateCopilotSuggestion = async ({
     return null;
   }
 
-  if (instruction && !ticket.userId) {
+  if (instruction && !shouldRunCopilot(ticket) && !canRunSupervisionCopilot(ticket)) {
     return null;
   }
 

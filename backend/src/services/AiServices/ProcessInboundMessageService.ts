@@ -627,24 +627,22 @@ const ProcessInboundMessageService = async ({
         return;
       }
 
-      if (!triageV2Enabled) {
-        const resolvedHandoffReason = detectSensitiveTopic(userText)
-          ? AI_HANDOFF_REASONS.sensitive_subject
-          : detectHumanHandoffRequest(userText)
-            ? AI_HANDOFF_REASONS.customer_requested_human
-            : (handoffReason as any) ||
-              AI_HANDOFF_REASONS.customer_requested_human;
+      const resolvedHandoffReason = detectSensitiveTopic(userText)
+        ? AI_HANDOFF_REASONS.sensitive_subject
+        : detectHumanHandoffRequest(userText)
+          ? AI_HANDOFF_REASONS.customer_requested_human
+          : (handoffReason as any) ||
+            AI_HANDOFF_REASONS.customer_requested_human;
 
-        await HandoffToHumanService({
-          ticket,
-          agent,
-          userMessage: maskSensitiveLog(userText),
-          messageId: primaryMessageId,
-          reason: handoffReason || "handoff_requested_or_sensitive",
-          handoffReason: resolvedHandoffReason,
-          conversationText
-        });
-      }
+      await HandoffToHumanService({
+        ticket,
+        agent,
+        userMessage: maskSensitiveLog(userText),
+        messageId: primaryMessageId,
+        reason: handoffReason || "handoff_requested_or_sensitive",
+        handoffReason: resolvedHandoffReason,
+        conversationText
+      });
       return;
     }
 

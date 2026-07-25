@@ -70,11 +70,9 @@ class StorageService {
         };
       },
       download: async (key: string): Promise<Buffer> => {
-        const storage = new FileStorage(
-          new LocalStorageAdapter(getPublicPath())
-        );
-        const data = await storage.readToString(key);
-        return Buffer.from(data);
+        const root = getPublicPath();
+        const targetPath = path.join(root, key);
+        return fs.readFileSync(targetPath);
       },
       delete: async (key: string): Promise<void> => {
         const storage = new FileStorage(

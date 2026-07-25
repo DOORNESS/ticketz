@@ -400,11 +400,14 @@ const socketManager = {
       this.currentUserId = userId;
 
       const host = window.location.hostname || "";
+      const forcePollingOnly =
+        window.localStorage.getItem("TICKETZ_FORCE_POLLING") === "1";
       const usePollingOnly =
-        host.includes("fortmax.com.br") || host.includes("ticketz.host");
+        forcePollingOnly ||
+        (host.includes("ticketz.host") && !host.includes("fortmax.com.br"));
 
       this.currentSocket = openSocket(getBackendSocketURL(), {
-        transports: usePollingOnly ? ["polling"] : ["polling", "websocket"],
+        transports: usePollingOnly ? ["polling"] : ["websocket", "polling"],
         upgrade: !usePollingOnly,
         pingTimeout: 60000,
         pingInterval: 25000,

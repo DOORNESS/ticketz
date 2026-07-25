@@ -94,6 +94,7 @@ aiRoutes.delete("/ai/categories/:id", KnowledgeCategoryController.remove);
 aiRoutes.get("/ai/assets", KnowledgeAssetController.index);
 aiRoutes.post("/ai/assets", KnowledgeAssetController.store);
 aiRoutes.get("/ai/assets/:assetId", KnowledgeAssetController.show);
+aiRoutes.get("/ai/assets/:assetId/download", KnowledgeAssetController.download);
 aiRoutes.put("/ai/assets/:assetId", KnowledgeAssetController.update);
 aiRoutes.post(
   "/ai/assets/:assetId/versions",

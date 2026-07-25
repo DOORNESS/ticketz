@@ -33,7 +33,8 @@ import {
   Save,
   Visibility,
   CloudUpload,
-  NoteAdd
+  NoteAdd,
+  GetApp
 } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
@@ -342,6 +343,20 @@ const AiAssets = () => {
       const { data } = await api.get(`/ai/assets/${asset.id}`);
       setViewAsset(data);
       setViewOpen(true);
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  const handleDownloadAsset = async asset => {
+    if (!asset?.id) return;
+    try {
+      const { data } = await api.get(`/ai/assets/${asset.id}/download`);
+      if (!data?.url) {
+        toast.error("Arquivo não encontrado no storage.");
+        return;
+      }
+      window.open(data.url, "_blank", "noopener,noreferrer");
     } catch (err) {
       toastError(err);
     }
@@ -817,6 +832,16 @@ const AiAssets = () => {
                           <Edit />
                         </IconButton>
                       </Tooltip>
+                      {["word", "pdf", "document"].includes(asset.assetType) && (
+                        <Tooltip title="Baixar anexo">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleDownloadAsset(asset)}
+                          >
+                            <GetApp />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                       {asset.lifecycleStatus !== "published" && (
                         <Tooltip title="Publicar agora">
                           <IconButton
@@ -935,6 +960,15 @@ const AiAssets = () => {
           )}
         </DialogContent>
         <DialogActions>
+          {viewAsset?.currentVersion?.storageUrl && (
+            <Button
+              startIcon={<GetApp />}
+              onClick={() => handleDownloadAsset(viewAsset)}
+              color="primary"
+            >
+              Baixar anexo
+            </Button>
+          )}
           <Button onClick={() => setViewOpen(false)}>Fechar</Button>
         </DialogActions>
       </Dialog>

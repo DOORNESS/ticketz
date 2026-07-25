@@ -141,14 +141,21 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
   const ticket = await ShowTicketService(ticketId, companyId);
   const { channel } = ticket;
 
-  if (!ticket.isGroup && ticket.status !== "open" && channel === "whatsapp") {
-    throw new AppError("ERR_TICKET_NOT_OPEN", 400);
-  }
-
   const requestUser = await User.findByPk(userId);
   const isOwner = !!ticket.userId && Number(ticket.userId) === Number(userId);
   const isPrivileged =
     requestUser?.profile === "admin" || requestUser?.super === true;
+  const isSupervisorOnAiTicket =
+    isPrivileged && isAiHandlingTicket(ticket) && !ticket.isGroup;
+
+  if (
+    !ticket.isGroup &&
+    ticket.status !== "open" &&
+    channel === "whatsapp" &&
+    !isSupervisorOnAiTicket
+  ) {
+    throw new AppError("ERR_TICKET_NOT_OPEN", 400);
+  }
 
   if (!ticket.isGroup && !isOwner && !isPrivileged) {
     throw new AppError("ERR_TICKET_NOT_ASSIGNED", 403);

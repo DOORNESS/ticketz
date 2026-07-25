@@ -6,6 +6,20 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.54] — 2026-07-25
+
+### Corrigido
+
+- **DOCX falhando na indexação ("Corrupted zip"):** download local lia binário como UTF-8; chave B2 truncada no ingest legado; repositório gravava URL pública em vez da chave. Helper unificado `resolveKnowledgeStorageKey`.
+- **Download de anexos na base:** endpoint `GET /ai/assets/:id/download` + botão "Baixar anexo" em Ativos.
+- **Participar na supervisão IA:** admin pode enviar mensagem em ticket `pending` atendido pela IA (antes: `ERR_TICKET_NOT_OPEN`).
+- **Sugerir resposta na supervisão:** copilot liberado sem `userId` quando ticket está sob IA.
+- **Robô parava silenciosamente:** handoff forçado agora sempre executa `HandoffToHumanService` (não retorna vazio no Triage V2).
+- **Lista piscando:** skeleton só quando lista vazia; polling IA usa merge incremental (fetchSince) em vez de refetch completo a cada 2s.
+- **Tempo real mais rápido:** WebSocket habilitado em fortmax.com.br; poll de mensagens a cada 1,5s como fallback.
+
+---
+
 ## [1.5.53] — 2026-07-25
 
 ### Corrigido (crítico)

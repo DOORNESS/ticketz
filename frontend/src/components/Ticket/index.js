@@ -14,8 +14,9 @@ import MessagesList from "../MessagesList";
 import api from "../../services/api";
 import { ReplyMessageProvider } from "../../context/ReplyingMessage/ReplyingMessageContext";
 import { EditMessageProvider } from "../../context/EditingMessage/EditingMessageContext";
-import toastError from "../../errors/toastError";
 import { AuthContext } from "../../context/Auth/AuthContext";
+import toastError from "../../errors/toastError";
+import { toast } from "react-toastify";
 import { TagsContainer } from "../TagsContainer";
 import ClosedTicketBar from "../ClosedTicketBar";
 import TicketConversationToolbar from "../TicketConversationToolbar";
@@ -324,6 +325,9 @@ const Ticket = () => {
       });
       const text = data?.suggestion?.suggestedResponse;
       if (!text) {
+        toast.error(
+          "Não foi possível gerar sugestão da IA. Tente novamente em instantes."
+        );
         return;
       }
       setAnnexSuggestedText(text);

@@ -617,11 +617,57 @@ const TicketsListCustom = props => {
     }
 
     const interval = setInterval(() => {
-      refetchTickets();
-    }, 2000);
+      const currentList = ticketsListRef.current;
+      if (currentList.length === 0) {
+        refetchTickets();
+        return;
+      }
+
+      const maxUpdatedAt = currentList.reduce(
+        (max, ticket) => (ticket.updatedAt > max ? ticket.updatedAt : max),
+        currentList[0].updatedAt
+      );
+
+      fetchSince(maxUpdatedAt)
+        .then(newTickets => {
+          newTickets
+            .filter(ticket =>
+              shouldShowTicketInList({
+                ticket,
+                status,
+                supervision,
+                listMode,
+                selectedQueueIds,
+                selectedWhatsappIds,
+                profile,
+                showAll,
+                userId: user?.id,
+                superUser: user?.super,
+                aiFilter
+              })
+            )
+            .forEach(ticket => {
+              dispatch({ type: "UPDATE_TICKET", payload: ticket });
+            });
+        })
+        .catch(() => {});
+    }, 4000);
 
     return () => clearInterval(interval);
-  }, [listMode, refetchTickets]);
+  }, [
+    listMode,
+    refetchTickets,
+    fetchSince,
+    status,
+    supervision,
+    selectedQueueIds,
+    selectedWhatsappIds,
+    profile,
+    showAll,
+    user?.id,
+    user?.super,
+    aiFilter
+  ]);
 
   const loadMore = () => {
     const lastTicket = ticketsList[ticketsList.length - 1];
@@ -679,7 +725,7 @@ const TicketsListCustom = props => {
               ))}
             </>
           )}
-          {loading && <TicketsListSkeleton />}
+          {loading && ticketsList.length === 0 && <TicketsListSkeleton />}
         </List>
       </Paper>
     </Paper>

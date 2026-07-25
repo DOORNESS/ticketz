@@ -31,11 +31,19 @@ const useTickets = ({
   const [tickets, setTickets] = useState([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const skipDebounceRef = useRef(false);
+  const ticketsRef = useRef([]);
+
+  ticketsRef.current = tickets;
 
   useEffect(() => {
     const debounceMs = skipDebounceRef.current ? 0 : 200;
+    const isBackgroundRefetch =
+      skipDebounceRef.current && ticketsRef.current.length > 0;
     skipDebounceRef.current = false;
-    setLoading(true);
+
+    if (!isBackgroundRefetch) {
+      setLoading(true);
+    }
     const delayDebounceFn = setTimeout(() => {
       const fetchTickets = async () => {
         let attempt = 0;

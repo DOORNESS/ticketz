@@ -16,7 +16,19 @@ export const extractTextFromBuffer = async (
     return parsed.text || "";
   }
 
-  if (ext === "docx" || type === "docx") {
+  if (ext === "docx" || type === "docx" || type === "word") {
+    if (
+      buffer.length < 4 ||
+      buffer[0] !== 0x50 ||
+      buffer[1] !== 0x4b ||
+      buffer[2] !== 0x03 ||
+      buffer[3] !== 0x04
+    ) {
+      throw new Error(
+        "Arquivo DOCX inválido ou corrompido no storage — verifique upload B2 e reindexe"
+      );
+    }
+
     const result = await mammoth.extractRawText({ buffer });
     return result.value || "";
   }

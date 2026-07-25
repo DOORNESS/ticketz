@@ -2,6 +2,7 @@ import sequelize from "../../database";
 import KnowledgeDocument from "../../models/KnowledgeDocument";
 import KnowledgeChunk from "../../models/KnowledgeChunk";
 import StorageService from "../StorageService/StorageService";
+import { resolveKnowledgeStorageKey } from "../../helpers/mediaStorage";
 import { createEmbedding } from "./ModelGateway";
 import { splitTextIntoChunks } from "./ChunkingService";
 import { extractTextFromBuffer } from "./DocumentParser";
@@ -64,9 +65,7 @@ export const ingestKnowledgeDocument = async (
           text = document.storageUrl;
         }
       } else {
-        const key = document.storageUrl.includes("://")
-          ? document.storageUrl.split("/").slice(-3).join("/")
-          : document.storageUrl.replace(/^\/public\//, "");
+        const key = resolveKnowledgeStorageKey(document.storageUrl);
         const buffer = await StorageService.download(key, companyId);
         text = await extractTextFromBuffer(
           buffer,

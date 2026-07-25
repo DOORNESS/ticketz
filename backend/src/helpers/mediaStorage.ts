@@ -121,6 +121,17 @@ export const extractStorageKeyFromUrl = (mediaUrl: string): string | null => {
   return null;
 };
 
+export const resolveKnowledgeStorageKey = (storageUrl: string): string => {
+  if (/^https?:\/\//i.test(storageUrl)) {
+    return (
+      extractStorageKeyFromUrl(storageUrl) ||
+      normalizeStorageReference(storageUrl)
+    );
+  }
+
+  return normalizeStorageReference(storageUrl);
+};
+
 export const readMediaBuffer = async (
   mediaPath: string,
   companyId: number
