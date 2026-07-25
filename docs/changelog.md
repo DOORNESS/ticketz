@@ -39,6 +39,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.40] — 2026-07-25
+
+### Corrigido
+
+- **WhatsApp “conectado” mas sem mensagens:** watchdog e startup detectam sessão zombie (socket morto ou listener ausente), reanexam `messages.upsert` e reiniciam a sessão; logs `Inbound WhatsApp message received` no backend.
+
+---
+
 ## [1.5.39] — 2026-07-24
 
 ### Corrigido

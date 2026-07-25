@@ -117,12 +117,20 @@ const scheduleSessionRestart = (
     await whatsapp.reload();
 
     try {
-      getWbot(whatsapp.id);
-      logger.info(
+      const wbot = getWbot(whatsapp.id);
+      if (isWhatsAppSessionHealthy(wbot)) {
+        logger.info(
+          { whatsappId: whatsapp.id },
+          "Scheduled session restart skipped — session already active"
+        );
+        return;
+      }
+
+      logger.warn(
         { whatsappId: whatsapp.id },
-        "Scheduled session restart skipped — session already active"
+        "Scheduled session restart — existing session unhealthy"
       );
-      return;
+      await removeWbot(whatsapp.id, false);
     } catch {
       // session not in memory — continue
     }
@@ -149,6 +157,19 @@ export const getWbot = (whatsappId: number): Session => {
   return sessions[sessionIndex];
 };
 
+export const isWhatsAppSessionHealthy = (session: Session): boolean => {
+  if (!session?.user?.id) {
+    return false;
+  }
+
+  const ws = session.ws as { readyState?: number } | undefined;
+  if (ws && typeof ws.readyState === "number" && ws.readyState !== 1) {
+    return false;
+  }
+
+  return true;
+};
+
 export const removeWbot = async (
   whatsappId: number,
   isLogout = true
@@ -168,6 +189,9 @@ export const removeWbot = async (
       sessions[sessionIndex].ev.removeAllListeners("group-participants.update");
       sessions[sessionIndex].ev.removeAllListeners("contacts.upsert");
       sessions[sessionIndex].ev.removeAllListeners("contacts.update");
+      sessions[sessionIndex].ev.removeAllListeners("messages.upsert");
+      sessions[sessionIndex].ev.removeAllListeners("message-receipt.update");
+      sessions[sessionIndex].ev.removeAllListeners("messages.update");
       sessions[sessionIndex].end(null);
 
       sessions[sessionIndex].ws.removeAllListeners();

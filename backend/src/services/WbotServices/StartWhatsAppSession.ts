@@ -1,6 +1,11 @@
-import { initWASocket } from "../../libs/wbot";
+import {
+  getWbot,
+  initWASocket,
+  isWhatsAppSessionHealthy,
+  removeWbot
+} from "../../libs/wbot";
 import Whatsapp from "../../models/Whatsapp";
-import { wbotMessageListener } from "./wbotMessageListener";
+import { ensureWbotMessageListener } from "./wbotMessageListener";
 import wbotMonitor from "./wbotMonitor";
 import { logger } from "../../utils/logger";
 import { sendWhatsappUpdate } from "../WhatsappService/SocketSendWhatsappUpdate";
@@ -90,13 +95,22 @@ export const StartWhatsAppSession = async (
 
   if (!isRefresh && whatsapp.status === "CONNECTED") {
     try {
-      const { getWbot } = await import("../../libs/wbot");
-      getWbot(whatsapp.id);
-      logger.info(
+      const wbot = getWbot(whatsapp.id);
+      if (isWhatsAppSessionHealthy(wbot)) {
+        ensureWbotMessageListener(wbot, companyId);
+        logger.info(
+          { whatsappId: whatsapp.id },
+          "WhatsApp session already connected — ensured message listener"
+        );
+        return;
+      }
+
+      logger.warn(
         { whatsappId: whatsapp.id },
-        "WhatsApp session already connected — skipping start"
+        "WhatsApp session marked connected but socket unhealthy — restarting"
       );
-      return;
+      await removeWbot(whatsapp.id, false);
+      await whatsapp.update({ status: "OPENING", qrcode: "" });
     } catch {
       // stale CONNECTED status — proceed with start
     }
@@ -110,7 +124,7 @@ export const StartWhatsAppSession = async (
 
     initPromise
       .then(wbot => {
-        wbotMessageListener(wbot, companyId);
+        ensureWbotMessageListener(wbot, companyId);
         wbotMonitor(wbot, whatsapp, companyId);
       })
       .catch(async err => {

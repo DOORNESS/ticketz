@@ -1,10 +1,11 @@
 import Whatsapp from "../../models/Whatsapp";
-import { getWbot } from "../../libs/wbot";
+import { getWbot, isWhatsAppSessionHealthy } from "../../libs/wbot";
 import { logger } from "../../utils/logger";
 import {
   StartWhatsAppSession,
   isWhatsAppSessionStarting
 } from "./StartWhatsAppSession";
+import { ensureWbotMessageListener } from "./wbotMessageListener";
 
 export const StartAllWhatsAppsSessions = async (
   companyId: number
@@ -26,8 +27,16 @@ export const StartAllWhatsAppsSessions = async (
         }
 
         try {
-          getWbot(whatsapp.id);
-          return;
+          const wbot = getWbot(whatsapp.id);
+          if (isWhatsAppSessionHealthy(wbot)) {
+            ensureWbotMessageListener(wbot, companyId);
+            return;
+          }
+
+          logger.warn(
+            { whatsappId: whatsapp.id, status: whatsapp.status },
+            "WhatsApp session in memory but unhealthy on startup — restarting"
+          );
         } catch {
           // not in memory — start below
         }

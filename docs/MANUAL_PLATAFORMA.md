@@ -1229,6 +1229,7 @@ frontend/src/
 | `wbotMessageListener.ts` | Entrada de mensagens WA; roteamento IA/chatbot |
 | `AiReengagementService.ts` | Gate IA no inbound; enqueue |
 | `AiInboundQueueService.ts` | Fila Bull, debounce, buffer Redis; com debounce `0`, lock ativo reagenda processamento (~750ms) |
+| `WhatsAppSessionWatchdogService.ts` | A cada 5 min verifica sessões Baileys: socket vivo + listener de mensagens; reinicia sessões zombie |
 | `ProcessInboundMessageService.ts` | Orquestração resposta IA |
 | `RetrievalEngine.ts` | Busca vetorial + keyword |
 | `KnowledgeContextService.ts` | Monta contexto RAG para prompt |

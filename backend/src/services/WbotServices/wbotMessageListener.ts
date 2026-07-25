@@ -2380,6 +2380,24 @@ const filterMessages = (msg: WAMessage): boolean => {
   return true;
 };
 
+const MESSAGE_LISTENER_ATTACHED = Symbol("messageListenerAttached");
+
+export const ensureWbotMessageListener = (
+  wbot: Session,
+  companyId: number
+): void => {
+  const session = wbot as Session & {
+    [MESSAGE_LISTENER_ATTACHED]?: boolean;
+  };
+
+  if (session[MESSAGE_LISTENER_ATTACHED]) {
+    return;
+  }
+
+  session[MESSAGE_LISTENER_ATTACHED] = true;
+  void wbotMessageListener(wbot, companyId);
+};
+
 const wbotMessageListener = async (
   wbot: Session,
   companyId: number
@@ -2400,6 +2418,17 @@ const wbotMessageListener = async (
             "wbotMessageListener: messages.upsert without supported content"
           );
           return;
+        }
+
+        if (!message.key.fromMe) {
+          logger.info(
+            {
+              whatsappId: wbot.id,
+              remoteJid: message.key.remoteJid,
+              messageId: message.key.id
+            },
+            "Inbound WhatsApp message received"
+          );
         }
 
         if (await verifyRecentCampaign(message, companyId)) {
