@@ -137,6 +137,7 @@ PATCH_PATHS = [
     "models/MediaDeletionAudit.js",
     "queues.js",
     "services/MessageServices/ListMessagesService.js",
+    "services/MessageServices/CreateMessageService.js",
     "services/AiServices/media/UnifiedMediaPersistenceService.js",
     "services/AiServices/ResetTestEnvironmentService.js",
     "database/migrations/20260723130000-media-lifecycle-b2-private.js",
@@ -154,6 +155,11 @@ PATCH_PATHS = [
     "models/ContentRepositoryUsageLog.js",
     "models/ContentRepositoryPermission.js",
     "controllers/ContentRepositoryController.js",
+    "controllers/KnowledgeAssetController.js",
+    "controllers/KnowledgeBaseController.js",
+    "controllers/KnowledgeCategoryController.js",
+    "controllers/KnowledgeDomainController.js",
+    "controllers/KnowledgeDocumentController.js",
     "routes/aiRoutes.js",
     "services/ContentRepository/ContentRepositoryService.js",
     "services/ContentRepository/ContentRepositoryPermissionService.js",
@@ -414,6 +420,7 @@ def collect_files() -> List[Path]:
 
     for pattern in (
         "services/AiServices/Triage/**/*.js",
+        "services/AiServices/KnowledgeCms/**/*.js",
         "services/AiServices/media/**/*.js",
         "services/StorageService/**/*.js",
         "services/MediaServices/**/*.js",
@@ -470,6 +477,7 @@ def main() -> int:
         wire_lines_script = BACKEND / "scripts" / "wire-support-lines.js"
         report_wa_script = BACKEND / "scripts" / "report-whatsapp-status.js"
         verify_script = BACKEND / "scripts" / "verify-runtime-ready.js"
+        verify_heavy_script = BACKEND / "scripts" / "verify-heavy-routes-ready.js"
         restart_script = BACKEND / "scripts" / "restart-after-deploy.ps1"
         for script in (
             reset_script,
@@ -481,6 +489,7 @@ def main() -> int:
             wire_lines_script,
             report_wa_script,
             verify_script,
+            verify_heavy_script,
             restart_script,
         ):
             if script.is_file():

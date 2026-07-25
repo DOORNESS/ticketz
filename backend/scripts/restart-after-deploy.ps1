@@ -74,6 +74,15 @@ try {
   if ($LASTEXITCODE -ne 0) {
     throw "verify-runtime-ready failed exit=$LASTEXITCODE"
   }
+
+  Write-Output "verify-heavy-routes-ready..."
+  if (-not (Test-Path "scripts\verify-heavy-routes-ready.js")) {
+    throw "verify-heavy-routes-ready.js missing"
+  }
+  node scripts\verify-heavy-routes-ready.js 2>&1
+  if ($LASTEXITCODE -ne 0) {
+    throw "verify-heavy-routes-ready failed exit=$LASTEXITCODE"
+  }
 } catch {
   Write-Output "PRESTART_FAIL $($_.Exception.Message)"
   Pop-Location
@@ -101,8 +110,12 @@ for ($i = 0; $i -lt 18; $i++) {
     $h = Invoke-WebRequest http://127.0.0.1:8080/health -UseBasicParsing -TimeoutSec 10
     Write-Output "health=$($h.Content)"
     if ($h.StatusCode -eq 200) {
-      $healthOk = $true
-      break
+      $payload = $h.Content | ConvertFrom-Json
+      if ($payload.heavyRoutes -eq $true) {
+        $healthOk = $true
+        break
+      }
+      Write-Output "health heavyRoutes=false error=$($payload.heavyRoutesError)"
     }
   } catch {
     Write-Output "health wait attempt=$i $($_.Exception.Message)"

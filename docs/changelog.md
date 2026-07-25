@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.49] — 2026-07-25
+
+### Corrigido
+
+- **Produção 503 (API inteira fora):** deploy `patch` enviava `aiRoutes.js` novo sem `KnowledgeAssetController.js` — Express falhava ao registrar rotas CMS (`heavyRoutesError`). Patch passa a incluir controllers CMS + pasta `KnowledgeCms/**`.
+- **CI/deploy:** `verify-heavy-routes-ready.js` no build e restart; health exige `heavyRoutes: true` (não só HTTP 200).
+
+---
+
 ## [1.5.48] — 2026-07-25
 
 ### Adicionado
