@@ -6,6 +6,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.50] — 2026-07-25
+
+### Adicionado
+
+- **Supervisão IA:** botões **Participar** (admin escreve na conversa), **Sugerir resposta** (copilot + dialog anexar à base), base **Respostas anexas** (`EnsureAnnexResponsesKnowledgeBase`, `POST /tickets/:id/ai/annex-response`).
+- **Tempo real IA:** indicador "IA digitando…" via `aiProcessingState=processing` + emit socket no processamento; poll ticket 1s na conversa IA.
+
+### Corrigido
+
+- **Deploy Windows:** `verify-heavy-routes-ready.js` usa só `require()` (sem `import()` ESM com path `c:`).
+
+---
+
 ## [1.5.49] — 2026-07-25
 
 ### Corrigido

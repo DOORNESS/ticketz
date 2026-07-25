@@ -21,9 +21,13 @@ import ClosedTicketBar from "../ClosedTicketBar";
 import TicketConversationToolbar from "../TicketConversationToolbar";
 import RepositoryPanel from "../RepositoryPanel";
 import TicketAdminPanel from "../TicketAdminPanel";
+import AiSuggestAnnexDialog from "../AiSuggestAnnexDialog";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import useSettings from "../../hooks/useSettings";
-import { getTicketListColumn } from "../../helpers/aiTicketStatus";
+import {
+  getTicketListColumn,
+  isAiHandlingTicket
+} from "../../helpers/aiTicketStatus";
 import { isTicketObservationMode } from "../../helpers/ticketListVisibility";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
 
@@ -101,6 +105,11 @@ const Ticket = () => {
   const [adminPanelOpen, setAdminPanelOpen] = useState(false);
   const [repositoryOpen, setRepositoryOpen] = useState(false);
   const [tagsExpanded, setTagsExpanded] = useState(false);
+  const [supervisionParticipating, setSupervisionParticipating] =
+    useState(false);
+  const [suggestLoading, setSuggestLoading] = useState(false);
+  const [annexDialogOpen, setAnnexDialogOpen] = useState(false);
+  const [annexSuggestedText, setAnnexSuggestedText] = useState("");
   const messageInputRef = useRef(null);
   const { getSetting } = useSettings();
 
@@ -245,6 +254,29 @@ const Ticket = () => {
     };
   }, [ticketId, history, socketManager, user, setObservationMode]);
 
+  useEffect(() => {
+    if (!ticket?.id || !isAiHandlingTicket(ticket)) {
+      return undefined;
+    }
+
+    const interval = setInterval(async () => {
+      try {
+        const { data } = await api.get(`/tickets/${ticket.id}`);
+        syncTicketView(data);
+      } catch (_) {
+        /* ignore transient poll errors */
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [ticket?.id, ticket?.aiAgentId, ticket?.aiPaused, ticket?.userId]);
+
+  useEffect(() => {
+    if (!isAiHandlingTicket(ticket)) {
+      setSupervisionParticipating(false);
+    }
+  }, [ticket?.id, ticket?.aiAgentId, ticket?.aiPaused, ticket?.userId]);
+
   const isObserving = isTicketObservationMode(ticket, user);
 
   const handleDrawerOpen = () => {
@@ -278,6 +310,28 @@ const Ticket = () => {
     };
   }, []);
 
+  const handleSuggestResponse = async () => {
+    if (!ticket?.id) return;
+    setSuggestLoading(true);
+    try {
+      const { data } = await api.post(`/tickets/${ticket.id}/ai/copilot`, {
+        instruction:
+          "Analise a conversa e sugira a melhor resposta para o cliente agora. Seja claro, objetivo e use a base de conhecimento quando possível.",
+        refresh: true
+      });
+      const text = data?.suggestion?.suggestedResponse;
+      if (!text) {
+        return;
+      }
+      setAnnexSuggestedText(text);
+      setAnnexDialogOpen(true);
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setSuggestLoading(false);
+    }
+  };
+
   const renderMessagesList = () => {
     return (
       <>
@@ -293,6 +347,7 @@ const Ticket = () => {
           ticket={ticket}
           showTabGroups
           observationMode={isObserving}
+          supervisionParticipating={supervisionParticipating}
           onOpenRepository={() => setRepositoryOpen(true)}
           onOpenAdminPanel={() => setAdminPanelOpen(true)}
         />
@@ -320,6 +375,11 @@ const Ticket = () => {
         <TicketConversationToolbar
           ticket={ticket}
           observationMode={isObserving}
+          supervisionParticipating={supervisionParticipating}
+          onParticipate={() => setSupervisionParticipating(true)}
+          onStopParticipating={() => setSupervisionParticipating(false)}
+          onSuggestResponse={handleSuggestResponse}
+          suggestLoading={suggestLoading}
           user={user}
           tagsExpanded={tagsExpanded}
           onToggleTags={() => setTagsExpanded(prev => !prev)}
@@ -368,6 +428,20 @@ const Ticket = () => {
         contact={contact}
         loading={loading}
         ticket={ticket}
+      />
+      <AiSuggestAnnexDialog
+        open={annexDialogOpen}
+        onClose={() => setAnnexDialogOpen(false)}
+        ticketId={ticket.id}
+        suggestedText={annexSuggestedText}
+        onApplyToInput={text => {
+          if (!supervisionParticipating) {
+            setSupervisionParticipating(true);
+          }
+          if (messageInputRef.current?.applySuggestedText) {
+            messageInputRef.current.applySuggestedText(text);
+          }
+        }}
       />
     </div>
   );

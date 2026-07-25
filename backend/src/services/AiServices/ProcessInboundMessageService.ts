@@ -425,6 +425,9 @@ const ProcessInboundMessageService = async ({
     if (triageV2Enabled) {
       await bootstrapTriageContext(ticket, primaryMessageId);
       await ticket.update({ aiProcessingState: "processing" } as any);
+      const { emitTicketStateRefresh } =
+        await import("../TicketServices/TicketOperationalStateService");
+      await emitTicketStateRefresh(ticket);
     }
 
     userText = await resolveInboundText({

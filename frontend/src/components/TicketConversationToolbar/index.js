@@ -1,9 +1,18 @@
 import React from "react";
-import { Box, Chip, IconButton, Tooltip, makeStyles } from "@material-ui/core";
+import {
+  Box,
+  Button,
+  Chip,
+  IconButton,
+  Tooltip,
+  makeStyles
+} from "@material-ui/core";
 import DashboardIcon from "@material-ui/icons/Dashboard";
 import FolderSharedIcon from "@material-ui/icons/FolderShared";
 import LocalOfferOutlinedIcon from "@material-ui/icons/LocalOfferOutlined";
 import AndroidIcon from "@material-ui/icons/Android";
+import EditIcon from "@material-ui/icons/Edit";
+import LightbulbOutlinedIcon from "@material-ui/icons/LightbulbOutlined";
 import {
   getOperationalLabel,
   isAiHandlingTicket,
@@ -20,12 +29,14 @@ const useStyles = makeStyles(theme => ({
     padding: theme.spacing(0.5, 1),
     borderBottom: `1px solid ${theme.palette.divider}`,
     minHeight: 36,
-    flexShrink: 0
+    flexShrink: 0,
+    flexWrap: "wrap"
   },
   actions: {
     display: "flex",
     alignItems: "center",
-    gap: 2
+    gap: 2,
+    flexWrap: "wrap"
   },
   aiActive: {
     color: theme.palette.primary.main
@@ -35,12 +46,21 @@ const useStyles = makeStyles(theme => ({
   },
   stateChip: {
     maxWidth: "100%"
+  },
+  supervisionButton: {
+    textTransform: "none",
+    marginLeft: theme.spacing(0.5)
   }
 }));
 
 const TicketConversationToolbar = ({
   ticket,
   observationMode,
+  supervisionParticipating,
+  onParticipate,
+  onStopParticipating,
+  onSuggestResponse,
+  suggestLoading,
   tagsExpanded,
   onToggleTags,
   onOpenAdminPanel,
@@ -50,6 +70,8 @@ const TicketConversationToolbar = ({
   const classes = useStyles();
   const aiActive = isAiHandlingTicket(ticket);
   const handoffActive = isHandoffPendingTicket(ticket);
+  const canSupervise =
+    observationMode && aiActive && (user?.profile === "admin" || user?.super);
   const canUseRepository =
     ticket?.status !== "closed" &&
     (canUserOperateTicket(ticket, user) || isAiHandlingTicket(ticket));
@@ -68,6 +90,41 @@ const TicketConversationToolbar = ({
         }
       />
       <Box className={classes.actions}>
+        {canSupervise && !supervisionParticipating && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="primary"
+            className={classes.supervisionButton}
+            startIcon={<EditIcon fontSize="small" />}
+            onClick={onParticipate}
+          >
+            Participar
+          </Button>
+        )}
+        {canSupervise && supervisionParticipating && (
+          <Button
+            size="small"
+            variant="contained"
+            color="primary"
+            className={classes.supervisionButton}
+            onClick={onStopParticipating}
+          >
+            Sair da conversa
+          </Button>
+        )}
+        {canSupervise && (
+          <Button
+            size="small"
+            variant="outlined"
+            className={classes.supervisionButton}
+            startIcon={<LightbulbOutlinedIcon fontSize="small" />}
+            disabled={suggestLoading}
+            onClick={onSuggestResponse}
+          >
+            Sugerir resposta
+          </Button>
+        )}
         {aiActive && (
           <Tooltip title="IA atendendo — abrir painel">
             <IconButton

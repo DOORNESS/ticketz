@@ -154,6 +154,13 @@ ticketRoutes.post(
 );
 
 ticketRoutes.post(
+  "/tickets/:ticketId/ai/annex-response",
+  isAuth,
+  isCompliant,
+  TicketAiController.annexResponse
+);
+
+ticketRoutes.post(
   "/tickets/:ticketId/ai/learning/draft",
   isAuth,
   isCompliant,

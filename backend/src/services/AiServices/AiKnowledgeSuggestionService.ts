@@ -7,6 +7,12 @@ import StorageService from "../StorageService/StorageService";
 import { chatCompletion } from "./ModelGateway";
 import { ingestKnowledgeDocument } from "./IngestKnowledgeDocumentService";
 import { logger } from "../../utils/logger";
+import { ensureAnnexResponsesKnowledgeBase } from "./EnsureAnnexResponsesKnowledgeBase";
+import {
+  createKnowledgeAsset,
+  promoteAndPublishKnowledgeAsset
+} from "./KnowledgeCms/KnowledgeAssetCmsService";
+import { isKbCmsEnabledForCompany } from "./KnowledgeCms/AiKbCmsFeatureFlag";
 
 const SUGGESTION_PROMPT = `Analise o atendimento encerrado e proponha um documento para a base de conhecimento.
 Responda APENAS JSON:
@@ -168,3 +174,92 @@ export const getKnowledgeSuggestionForTicket = async (
     where: { ticketId, companyId, status: "pending" },
     order: [["createdAt", "DESC"]]
   });
+
+export const annexHumanResponseToBase = async ({
+  companyId,
+  ticketId,
+  title,
+  content,
+  userId
+}: {
+  companyId: number;
+  ticketId?: number;
+  title: string;
+  content: string;
+  userId?: number;
+}): Promise<{ base: KnowledgeBase; assetId?: number; documentId?: number }> => {
+  const base = await ensureAnnexResponsesKnowledgeBase(companyId);
+  const normalizedTitle = title.trim() || "Resposta supervisionada";
+  const normalizedContent = content.trim();
+
+  if (!normalizedContent) {
+    throw new Error("ERR_ANNEX_CONTENT_REQUIRED");
+  }
+
+  const cmsEnabled = await isKbCmsEnabledForCompany(companyId);
+
+  if (cmsEnabled) {
+    const asset = await createKnowledgeAsset({
+      companyId,
+      knowledgeBaseId: base.id,
+      assetType: "text",
+      title: normalizedTitle,
+      rawText: normalizedContent,
+      authorUserId: userId,
+      metadata: {
+        source: "human_supervision",
+        ticketId: ticketId || null
+      }
+    });
+
+    await promoteAndPublishKnowledgeAsset(companyId, asset.id, userId);
+
+    await AiKnowledgeSuggestion.create({
+      companyId,
+      ticketId: ticketId || null,
+      suggestedTitle: normalizedTitle,
+      suggestedContent: normalizedContent,
+      status: "approved",
+      knowledgeBaseId: base.id,
+      actionType: "annex_response"
+    });
+
+    return { base, assetId: asset.id };
+  }
+
+  await StorageService.ensureReady(companyId);
+  const upload = await StorageService.uploadBuffer(
+    Buffer.from(normalizedContent, "utf-8"),
+    {
+      companyId,
+      filename: `${normalizedTitle}.txt`,
+      contentType: "text/plain",
+      folder: "knowledge/text"
+    }
+  );
+
+  const document = await KnowledgeDocument.create({
+    companyId,
+    knowledgeBaseId: base.id,
+    title: normalizedTitle,
+    type: "text",
+    originalFilename: `${normalizedTitle}.txt`,
+    storageUrl: upload.key,
+    status: "pending"
+  });
+
+  await ingestKnowledgeDocument(document.id, companyId, normalizedContent);
+
+  await AiKnowledgeSuggestion.create({
+    companyId,
+    ticketId: ticketId || null,
+    suggestedTitle: normalizedTitle,
+    suggestedContent: normalizedContent,
+    status: "approved",
+    knowledgeBaseId: base.id,
+    documentId: document.id,
+    actionType: "annex_response"
+  });
+
+  return { base, documentId: document.id };
+};

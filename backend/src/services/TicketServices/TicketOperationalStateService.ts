@@ -162,3 +162,20 @@ export const serializeTicketWithOperationalState = (
     operationalState: buildTicketOperationalState(ticket, viewerUserId)
   };
 };
+
+export const emitTicketStateRefresh = async (
+  ticket: Ticket,
+  viewerUserId?: number
+): Promise<void> => {
+  const { getIO } = await import("../../libs/socket");
+  const io = getIO();
+  const serialized = serializeTicketWithOperationalState(ticket, viewerUserId);
+
+  io.to(ticket.id.toString())
+    .to(ticket.status)
+    .emit(`company-${ticket.companyId}-ticket`, {
+      action: "update",
+      ticket: serialized,
+      ticketId: ticket.id
+    });
+};

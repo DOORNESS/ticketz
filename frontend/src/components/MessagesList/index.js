@@ -60,6 +60,7 @@ import { generateColor } from "../../helpers/colorGenerator";
 import { getInitials } from "../../helpers/getInitials";
 import { downloadFile } from "../../helpers/downloadFile";
 import { Mutex } from "async-mutex";
+import { isAiHandlingTicket } from "../../helpers/aiTicketStatus";
 
 const loadPageMutex = new Mutex();
 
@@ -738,6 +739,8 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
   const messageOptionsMenuOpen = Boolean(anchorEl);
   const currentTicketId = useRef(ticketId);
   const [contactPresence, setContactPresence] = useState("available");
+  const showAiTyping =
+    isAiHandlingTicket(ticket) && ticket?.aiProcessingState === "processing";
 
   const socketManager = useContext(SocketContext);
   const { registerMessageHandlers } = useContext(TicketsContext);
@@ -2151,8 +2154,13 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
           </div>
         )}
         {messagesList.length > 0 ? renderMessages() : []}
-        {contactPresence === "composing" && (
+        {(contactPresence === "composing" || showAiTyping) && (
           <div className={classes.messageLeft}>
+            {showAiTyping && (
+              <Typography variant="caption" color="textSecondary">
+                IA digitando…
+              </Typography>
+            )}
             <div className={classes.wave}>
               <span className={classes.dot}></span>
               <span className={classes.dot}></span>

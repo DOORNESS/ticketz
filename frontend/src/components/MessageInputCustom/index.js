@@ -830,7 +830,13 @@ const CustomInput = props => {
 };
 
 const MessageInputCustom = forwardRef((props, ref) => {
-  const { ticket, showTabGroups, onOpenRepository, onOpenAdminPanel } = props;
+  const {
+    ticket,
+    showTabGroups,
+    onOpenRepository,
+    onOpenAdminPanel,
+    supervisionParticipating
+  } = props;
   const { status: ticketStatus, id: ticketId } = ticket;
   const classes = useStyles();
 
@@ -946,15 +952,23 @@ const MessageInputCustom = forwardRef((props, ref) => {
   }));
 
   const isGroup = showTabGroups && ticket.isGroup;
+  const isSupervisionWrite =
+    props.observationMode &&
+    supervisionParticipating &&
+    (user?.profile === "admin" || user?.super);
   const userCanSend = isGroup
     ? ticketStatus !== "closed"
-    : canUserOperateTicket(ticket, user);
+    : canUserOperateTicket(ticket, user) || isSupervisionWrite;
   const disableOption = loading || !userCanSend;
   const inputPlaceholder = userCanSend
-    ? i18n.t("messagesInput.placeholderOpen")
+    ? isSupervisionWrite
+      ? "Participando da conversa — escreva para o cliente"
+      : i18n.t("messagesInput.placeholderOpen")
     : props.observationMode
       ? i18n.t("messagesInput.placeholderObservation")
       : i18n.t("messagesInput.placeholderClosed");
+  const effectiveTicketStatus =
+    (isGroup && "open") || (isSupervisionWrite ? "open" : ticketStatus);
 
   const handleUploadMedia = async e => {
     if (disableOption || !medias.length) return;
@@ -1252,7 +1266,7 @@ const MessageInputCustom = forwardRef((props, ref) => {
             handleChangeMedias={handleChangeMedias}
           />
 
-          {!props.observationMode && userCanSend && (
+          {(isSupervisionWrite || (!props.observationMode && userCanSend)) && (
             <>
               <Tooltip title="Sugerir resposta com IA">
                 <IconButton
@@ -1263,20 +1277,24 @@ const MessageInputCustom = forwardRef((props, ref) => {
                   <AndroidIcon />
                 </IconButton>
               </Tooltip>
-              <Tooltip title="Repositório">
-                <IconButton
-                  size="small"
-                  disabled={disableOption}
-                  onClick={onOpenRepository}
-                >
-                  <FolderSharedIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Painel administrativo">
-                <IconButton size="small" onClick={onOpenAdminPanel}>
-                  <DashboardIcon />
-                </IconButton>
-              </Tooltip>
+              {!props.observationMode && (
+                <>
+                  <Tooltip title="Repositório">
+                    <IconButton
+                      size="small"
+                      disabled={disableOption}
+                      onClick={onOpenRepository}
+                    >
+                      <FolderSharedIcon />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title="Painel administrativo">
+                    <IconButton size="small" onClick={onOpenAdminPanel}>
+                      <DashboardIcon />
+                    </IconButton>
+                  </Tooltip>
+                </>
+              )}
             </>
           )}
 
@@ -1290,7 +1308,7 @@ const MessageInputCustom = forwardRef((props, ref) => {
           <CustomInput
             loading={loading}
             inputRef={inputRef}
-            ticketStatus={(isGroup && "open") || ticketStatus}
+            ticketStatus={effectiveTicketStatus}
             inputMessage={inputMessage}
             setInputMessage={setInputMessage}
             // handleChangeInput={handleChangeInput}

@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.48 — auditada contra o código  
+**Versão:** 1.5.50 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -319,7 +319,7 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Barra de ticket fechado: apenas ícones (Reabrir / Reabrir e chamar IA)
 - `TicketConversationToolbar`: ícones para Repositório, Tags (colapsável), Painel administrativo e estado IA
 - Diagnóstico IA (timeline, explicabilidade, copiloto) concentrados no drawer `TicketAdminPanel`, não no topo da conversa
-- **Supervisão / observação:** `MessagesList` com `markAsRead={false}` carrega automaticamente todas as páginas de histórico e exibe botão **Carregar mensagens anteriores** quando houver mais registros
+- **Supervisão / observação:** `MessagesList` com `markAsRead={false}` carrega automaticamente todas as páginas de histórico e exibe botão **Carregar mensagens anteriores** quando houver mais registros; polling **1s** no chat + indicador **IA digitando…** quando `aiProcessingState=processing`; barra com **Participar**, **Sugerir resposta** e dialog para anexar à base **Respostas anexas** (`POST /tickets/:id/ai/annex-response`)
 - **Lista IA:** ao assumir ticket (`userId` preenchido), o socket remove o item da aba **IA** imediatamente (`TicketsListCustom`)
 
 ### Controllers
@@ -342,7 +342,7 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 
 ### IA multi-marca (Fortmax vs Nível Cashback)
 - Cadeia obrigatória: **WhatsApp** → **fila** (`WhatsappQueues`) → **agente** (`AiAgentQueues`) → **bases** (`AiAgentKnowledgeBases`) → **domínio CMS** (`KnowledgeDomain`)
-- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔Fortmax e WhatsApp Nível↔Suporte Nível↔Nivelton↔bases do domínio Nível Cashback; **Fortmax e Nível são ligados de forma independente** (falha em uma linha não impede a outra)
+- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔Fortmax e WhatsApp Nível↔Suporte Nível↔Nivelton↔bases do domínio Nível Cashback; **Fortmax e Nível são ligados de forma independente** (falha em uma linha não impede a outra); cria/vincula base **Respostas anexas** (`EnsureAnnexResponsesKnowledgeBase`, slug `respostas-anexas`) a todos os agentes legacy/specialist
 - Auditoria: `AuditSupportLinesService.auditSupportLinesForCompany(companyId)` — valida a cadeia completa por linha; `GET /ai/audit-support-lines` (master); `npm run audit:support-lines`
 - `POST /ai/wire-support-lines` executa wire + auditoria + reengajamento de tickets presos
 - Executado no **startup** (`bootstrapAiPlatform`, aguarda wiring antes do first-responder; env `WIRE_SUPPORT_LINES=0` desliga) e via **`POST /ai/wire-support-lines`** (admin)

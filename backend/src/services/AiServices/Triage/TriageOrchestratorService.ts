@@ -296,4 +296,7 @@ export const finalizeAiResponse = async (
 ): Promise<void> => {
   await markInboundMessagesReadForAi(ticket, messageId);
   await ticket.update({ aiProcessingState: "awaiting_customer" } as any);
+  const { emitTicketStateRefresh } =
+    await import("../../TicketServices/TicketOperationalStateService");
+  await emitTicketStateRefresh(ticket);
 };

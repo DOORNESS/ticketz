@@ -27,7 +27,7 @@ const mustExport = (rel, exports) => {
   }
 };
 
-const run = async () => {
+const run = () => {
   mustExport("controllers/KnowledgeAssetController.js", [
     "index",
     "storeUpload",
@@ -40,7 +40,7 @@ const run = async () => {
   mustExport("controllers/KnowledgeBaseController.js", ["index"]);
 
   try {
-    await import(path.join(__dirname, "..", "dist", "routes", "heavyRoutes.js"));
+    require(path.join(__dirname, "..", "dist", "routes", "heavyRoutes.js"));
   } catch (err) {
     fail("heavyRoutes", { error: err && err.message });
   }
@@ -49,6 +49,4 @@ const run = async () => {
   process.exit(0);
 };
 
-run().catch(err => {
-  fail("runtime", { error: err && err.message });
-});
+run();

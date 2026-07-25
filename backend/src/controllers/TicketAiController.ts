@@ -14,6 +14,7 @@ import {
 } from "../services/AiServices/AiCopilotService";
 import {
   approveKnowledgeSuggestion,
+  annexHumanResponseToBase,
   generateKnowledgeSuggestion,
   getKnowledgeSuggestionForTicket
 } from "../services/AiServices/AiKnowledgeSuggestionService";
@@ -257,4 +258,30 @@ export const approveKnowledge = async (
   });
 
   return res.status(200).json(suggestion);
+};
+
+export const annexResponse = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticket, user } = await loadTicketForUser(req);
+  const { title, content } = req.body || {};
+
+  if (!content || typeof content !== "string") {
+    throw new AppError("ERR_INVALID_ANNEX_CONTENT", 400);
+  }
+
+  if (user.profile !== "admin" && !user.super) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  const result = await annexHumanResponseToBase({
+    companyId: ticket.companyId,
+    ticketId: ticket.id,
+    title: typeof title === "string" ? title : `Resposta ticket #${ticket.id}`,
+    content,
+    userId: Number(user.id)
+  });
+
+  return res.status(201).json(result);
 };

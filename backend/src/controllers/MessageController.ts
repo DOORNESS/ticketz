@@ -13,6 +13,8 @@ import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import DeleteWhatsAppMessage from "../services/WbotServices/DeleteWhatsAppMessage";
 import SendWhatsAppMedia from "../services/WbotServices/SendWhatsAppMedia";
 import SendWhatsAppMessage from "../services/WbotServices/SendWhatsAppMessage";
+import { isAiHandlingTicket } from "../services/AiServices/AiHelpers";
+import { emitTicketStateRefresh } from "../services/TicketServices/TicketOperationalStateService";
 import CheckContactNumber from "../services/WbotServices/CheckNumber";
 import EditWhatsAppMessage from "../services/WbotServices/EditWhatsAppMessage";
 
@@ -152,6 +154,23 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     throw new AppError("ERR_TICKET_NOT_ASSIGNED", 403);
   }
 
+  const pauseAiIfSupervisorParticipating = async (): Promise<void> => {
+    if (
+      ticket.isGroup ||
+      !isPrivileged ||
+      !requestUser ||
+      !isAiHandlingTicket(ticket)
+    ) {
+      return;
+    }
+
+    await ticket.update({
+      aiPaused: true,
+      aiProcessingState: "awaiting_human"
+    } as never);
+    await emitTicketStateRefresh(ticket, userId || undefined);
+  };
+
   if (channel === "whatsapp") {
     const connection = await Whatsapp.findByPk(ticket.whatsappId);
     if (!connection || connection.status !== "CONNECTED") {
@@ -192,6 +211,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
           }
         })
       );
+      await pauseAiIfSupervisorParticipating();
     }
   } else if (channel === "whatsapp") {
     const createdMessage = await SendWhatsAppMessage({
@@ -200,6 +220,7 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
       userId,
       quotedMsg
     });
+    await pauseAiIfSupervisorParticipating();
     return res.status(200).json(createdMessage);
   }
 
