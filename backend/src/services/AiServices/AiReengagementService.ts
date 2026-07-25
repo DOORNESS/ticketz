@@ -5,7 +5,7 @@ import {
   getActiveAgentForTicket
 } from "./AiHelpers";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
-import { enqueueAiInboundMessage } from "./AiInboundQueueService";
+import { enqueueAiInboundMessage, getAiInboundQueue } from "./AiInboundQueueService";
 import { logger } from "../../utils/logger";
 
 export type EngageAiInboundParams = {
@@ -72,6 +72,28 @@ export const tryEngageAiOnInboundMessage = async ({
       chatbot: false
     });
     await ticket.reload();
+  }
+
+  const processingState = (ticket as { aiProcessingState?: string })
+    .aiProcessingState;
+  if (processingState === "processing") {
+    await ticket.update({ aiProcessingState: "awaiting_customer" } as never);
+    await ticket.reload();
+  }
+
+  const queue = getAiInboundQueue();
+  const redis = queue.client;
+  const lockExists = await redis.exists(`ai:lock:${ticket.id}`);
+  if (
+    lockExists &&
+    (ticket as { aiProcessingState?: string }).aiProcessingState !==
+      "processing"
+  ) {
+    await redis.del(`ai:lock:${ticket.id}`);
+    logger.warn(
+      { ticketId: ticket.id, companyId, trigger },
+      "Cleared stale AI inbound lock before enqueue"
+    );
   }
 
   const enqueued = await enqueueAiInboundMessage({

@@ -39,6 +39,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.42] — 2026-07-25
+
+### Corrigido
+
+- **Lista de tickets em tempo real (IA):** mensagens inbound passam a emitir `websocketUpdateTicket`; frontend atualiza preview mesmo com `suppressHumanAlert`.
+- **IA parada com ticket ativo:** reengajamento inclui tickets com `aiAgentId` quando última msg é do cliente; limpa lock Redis stale e estado `processing` preso.
+
+---
+
 ## [1.5.41] — 2026-07-25
 
 ### Adicionado / corrigido

@@ -36,7 +36,8 @@ import { logger } from "../../utils/logger";
 import FindOrCreateTicketService from "../TicketServices/FindOrCreateTicketService";
 import ShowWhatsAppService from "../WhatsappService/ShowWhatsAppService";
 import UpdateTicketService, {
-  UpdateTicketData
+  UpdateTicketData,
+  websocketUpdateTicket
 } from "../TicketServices/UpdateTicketService";
 import ReopenTicketFromCustomerMessageService from "../TicketServices/ReopenTicketFromCustomerMessageService";
 import formatBody from "../../helpers/Mustache";
@@ -911,7 +912,8 @@ export const verifyMessage = async (
   };
 
   await ticket.update({
-    lastMessage: body.substring(0, 255).replace(/\n/g, " ")
+    lastMessage: body.substring(0, 255).replace(/\n/g, " "),
+    updatedAt: new Date()
   });
 
   const newMessage = await CreateMessageService({
@@ -919,6 +921,23 @@ export const verifyMessage = async (
     companyId: ticket.companyId,
     skipWebsocket
   });
+
+  if (newMessage && !msg.key.fromMe) {
+    await newMessage.ticket.reload({
+      include: [
+        { model: Contact, as: "contact", include: ["tags", "extraInfo"] },
+        "queue",
+        "tags",
+        "user",
+        {
+          model: Whatsapp,
+          as: "whatsapp",
+          attributes: ["name", "id"]
+        }
+      ]
+    });
+    websocketUpdateTicket(newMessage.ticket);
+  }
 
   return newMessage;
 };
@@ -2015,7 +2034,7 @@ const handleMessage = async (
     });
 
     if (aiEngaged) {
-      if (justCreated && newMessage) {
+      if (newMessage) {
         await newMessage.reload();
         websocketCreateMessage(newMessage);
       }

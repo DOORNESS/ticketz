@@ -417,6 +417,28 @@ const TicketsListCustom = props => {
     };
 
     const onCompanyAppMessage = data => {
+      if (
+        data.action === "create" &&
+        data.ticket &&
+        shouldUpdateTicket(data.ticket) &&
+        (status === undefined ||
+          listMode === "ai" ||
+          data.ticket.status === status)
+      ) {
+        const previewTicket = {
+          ...data.ticket,
+          lastMessage:
+            data.message?.body?.substring(0, 255)?.replace(/\n/g, " ") ||
+            data.ticket.lastMessage,
+          updatedAt: data.ticket.updatedAt || new Date().toISOString()
+        };
+
+        dispatch({
+          type: "UPDATE_TICKET",
+          payload: previewTicket
+        });
+      }
+
       if (data.suppressHumanAlert && !supervision) {
         return;
       }
