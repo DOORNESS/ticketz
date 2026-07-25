@@ -88,6 +88,7 @@ PATCH_PATHS = [
     "services/WbotServices/wbotMessageListener.js",
     "services/WbotServices/SendWhatsAppMessage.js",
     "services/WbotServices/SendWhatsAppMedia.js",
+    "services/CompanyService/VerifyCurrentSchedule.js",
     "services/MigrationServices/ApplyAiSchemaService.js",
     "services/MigrationServices/MigrationService.js",
     "services/AiServices/AudioTranscriptionService.js",

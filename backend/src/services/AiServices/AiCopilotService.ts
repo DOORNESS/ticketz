@@ -45,6 +45,17 @@ Responda APENAS em JSON válido:
 }
 confidence entre 0 e 1.`;
 
+const COPILOT_BRAND_RULES = `"Nível" (com acento) neste atendimento é a marca Nível Cashback — nunca interprete como medida, grau ou nível genérico.
+Use a persona do agente e a base de conhecimento para sugerir respostas corretas sobre o produto.`;
+
+const buildCopilotSystemPrompt = (agent?: AiAgent | null): string => {
+  const blocks = [COPILOT_SYSTEM, COPILOT_BRAND_RULES];
+  if (agent?.basePrompt?.trim()) {
+    blocks.push(`Persona do agente ativo:\n${agent.basePrompt.trim()}`);
+  }
+  return blocks.join("\n\n");
+};
+
 const buildHistory = async (ticketId: number) => {
   const messages = await Message.findAll({
     where: { ticketId },
@@ -203,7 +214,7 @@ export const generateCopilotSuggestion = async ({
       maxTokens: 700,
       providerId: activeAgent.provider,
       messages: [
-        { role: "system", content: COPILOT_SYSTEM },
+        { role: "system", content: buildCopilotSystemPrompt(activeAgent) },
         {
           role: "user",
           content: [

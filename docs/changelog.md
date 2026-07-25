@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.57] — 2026-07-25
+
+### Corrigido (crítico — deploy patch + copilot Nível)
+
+- **Deploy patch não levava o fix da IA:** `VerifyCurrentSchedule.js` faltava em `PATCH_PATHS` do `deploy-vps-backend.py` — produção continuava com erro `cannot extract elements from an object` após push na main.
+- **Copilot confundia “Nível” com medida:** copilot agora usa persona do agente (`basePrompt`) + regra explícita de que Nível é a marca Nível Cashback.
+- **Prompt Nivelton:** reforço em `NIVEL_PROMPT` e regras operacionais para nunca tratar “Nível” como nível genérico.
+- **Socket na IA:** `emitTicketStateRefresh` não derruba mais o processamento se Socket.io estiver indisponível.
+
+---
+
 ## [1.5.56] — 2026-07-25
 
 ### Corrigido (crítico — IA parava na 2ª mensagem e copilot)
