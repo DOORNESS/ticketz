@@ -8,6 +8,7 @@ import KnowledgeDomain from "../../models/KnowledgeDomain";
 import Ticket from "../../models/Ticket";
 import { syncAgentKnowledgeBases } from "./AiAgentKnowledgeBaseService";
 import { syncExclusiveAgentQueueLinks } from "./syncExclusiveAgentQueueLinks";
+import { auditSupportLinesForCompany } from "./AuditSupportLinesService";
 import AssociateWhatsappQueue from "../WhatsappService/AssociateWhatsappQueue";
 import { logger } from "../../utils/logger";
 
@@ -68,17 +69,20 @@ export type WireSupportLinesSummary = {
   companyId: number;
   fortmax?: WiredLineSummary;
   nivel?: WiredLineSummary;
+  audit?: Awaited<ReturnType<typeof auditSupportLinesForCompany>>;
   errors: Array<{ line: "fortmax" | "nivel"; message: string }>;
 };
 
-const normalizeName = (value: string): string =>
+export const normalizeSupportLineName = (value: string): string =>
   value
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
-const findWhatsappByBrand = async (
+const normalizeName = normalizeSupportLineName;
+
+export const findWhatsappByBrand = async (
   companyId: number,
   brand: "fortmax" | "nivel"
 ): Promise<Whatsapp | null> => {
@@ -163,7 +167,8 @@ const wireFortmaxLine = async (companyId: number) => {
     (await findByNameLoose(KnowledgeBase, companyId, [
       "fortmax site",
       "suporte webg3",
-      "webg3"
+      "webg3",
+      "site"
     ])) ||
     (await KnowledgeBase.create({
       companyId,
@@ -181,7 +186,7 @@ const wireFortmaxLine = async (companyId: number) => {
     (await findByNameLoose(Queue, companyId, [
       "suporte fortmax",
       "suporte webg3",
-      "central de atendimento"
+      "webg3"
     ])) ||
     (await Queue.create({
       companyId,
@@ -192,8 +197,9 @@ const wireFortmaxLine = async (companyId: number) => {
 
   let agent =
     (await findByNameLoose(AiAgent, companyId, [
-      "atendimento geral fortmax",
+      "webin fortmax",
       "webin",
+      "atendimento geral fortmax",
       "atendente inicial fortmax"
     ])) ||
     (await AiAgent.create({
@@ -423,6 +429,11 @@ export const wireSupportLinesForCompany = async (
   }
 
   summary.ok = Boolean(summary.fortmax && summary.nivel);
+
+  summary.audit = await auditSupportLinesForCompany(companyId);
+  if (!summary.audit.ok) {
+    summary.ok = false;
+  }
 
   if (summary.ok) {
     logger.info(summary, "Support lines wired");

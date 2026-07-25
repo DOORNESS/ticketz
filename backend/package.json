@@ -34,7 +34,8 @@
     "reset:test-env": "ts-node-dev --transpile-only scripts/reset-test-environment.ts",
     "set:user-password": "ts-node-dev --transpile-only scripts/set-user-password.ts",
     "wire:nivel-support": "ts-node-dev --transpile-only scripts/wireNivelSupport.ts",
-    "wire:support-lines": "ts-node-dev --transpile-only scripts/wireSupportLines.ts"
+    "wire:support-lines": "ts-node-dev --transpile-only scripts/wireSupportLines.ts",
+    "audit:support-lines": "ts-node-dev --transpile-only scripts/auditSupportLines.ts"
   },
   "author": "",
   "license": "MIT",

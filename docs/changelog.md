@@ -39,6 +39,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.41] — 2026-07-25
+
+### Adicionado / corrigido
+
+- **Auditoria multi-marca:** `AuditSupportLinesService` valida WhatsApp → fila → agente → domínio → bases; `GET /ai/audit-support-lines`; `npm run audit:support-lines`.
+- **Wire reforçado:** padrões de fila/agente/base ajustados (WebG3/Fortmax vs Nível); wire executa auditoria ao final e falha se cadeia incompleta.
+
+---
+
 ## [1.5.40] — 2026-07-25
 
 ### Corrigido

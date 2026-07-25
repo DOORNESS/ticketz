@@ -36,6 +36,7 @@ aiRoutes.get("/ai/diagnostics", AiDiagnosticsController.index);
 aiRoutes.post("/ai/reset-environment", AiResetController.resetEnvironment);
 aiRoutes.post("/ai/wipe-customer-base", AiResetController.wipeCustomerBase);
 aiRoutes.post("/ai/wire-support-lines", AiResetController.wireSupportLines);
+aiRoutes.get("/ai/audit-support-lines", AiResetController.auditSupportLines);
 aiRoutes.post("/ai/diagnostics/run", AiDiagnosticsController.run);
 aiRoutes.get("/ai/setup/status", AiSetupController.status);
 

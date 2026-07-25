@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import AppError from "../errors/AppError";
 import { resetTestEnvironmentForCompany } from "../services/AiServices/ResetTestEnvironmentService";
 import { wireSupportLinesForCompany } from "../services/AiServices/WireSupportLinesService";
+import { auditSupportLinesForCompany } from "../services/AiServices/AuditSupportLinesService";
 import { reengageStuckAiTicketsForCompany } from "../services/AiServices/ReengageStuckAiTicketsService";
 import { assertMasterAdmin } from "../helpers/isMasterAdmin";
 import { logger } from "../utils/logger";
@@ -92,13 +93,30 @@ export const wireSupportLines = async (
 
   const wiring = await wireSupportLinesForCompany(companyId);
   const reengage = await reengageStuckAiTicketsForCompany(companyId);
+  const audit = wiring.audit || (await auditSupportLinesForCompany(companyId));
 
   return res.status(200).json({
-    ok: wiring.ok || Boolean(wiring.nivel || wiring.fortmax),
-    message: wiring.ok
-      ? "Linhas Fortmax e Nível ligadas ao Nivelton/Webin, filas e bases de conhecimento."
-      : "Ligação parcial — veja erros e tente reconectar WhatsApp/filas ausentes.",
+    ok: wiring.ok && audit.ok,
+    message: wiring.ok && audit.ok
+      ? "Linhas Fortmax e Nível ligadas e auditadas (WhatsApp → fila → agente → domínio → bases)."
+      : "Ligação ou auditoria incompleta — veja wiring/audit e corrija itens com erro.",
     wiring,
+    audit,
     reengage
+  });
+};
+
+export const auditSupportLines = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId } = req.user;
+  await assertMasterAdmin(req.user.id);
+
+  const audit = await auditSupportLinesForCompany(companyId);
+
+  return res.status(200).json({
+    ok: audit.ok,
+    audit
   });
 };

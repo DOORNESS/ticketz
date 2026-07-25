@@ -341,8 +341,10 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - **Um clique:** sem confirmação modal; limpa a UI via socket `wipe` + redirect `/tickets`
 
 ### IA multi-marca (Fortmax vs Nível Cashback)
-- Cadeia: **WhatsApp** → **fila** (`WhatsappQueues`) → **agente** (`AiAgentQueues`) → **bases** (`AiAgentKnowledgeBases` + domínio CMS)
+- Cadeia obrigatória: **WhatsApp** → **fila** (`WhatsappQueues`) → **agente** (`AiAgentQueues`) → **bases** (`AiAgentKnowledgeBases`) → **domínio CMS** (`KnowledgeDomain`)
 - Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔Fortmax e WhatsApp Nível↔Suporte Nível↔Nivelton↔bases do domínio Nível Cashback; **Fortmax e Nível são ligados de forma independente** (falha em uma linha não impede a outra)
+- Auditoria: `AuditSupportLinesService.auditSupportLinesForCompany(companyId)` — valida a cadeia completa por linha; `GET /ai/audit-support-lines` (master); `npm run audit:support-lines`
+- `POST /ai/wire-support-lines` executa wire + auditoria + reengajamento de tickets presos
 - Executado no **startup** (`bootstrapAiPlatform`, aguarda wiring antes do first-responder; env `WIRE_SUPPORT_LINES=0` desliga) e via **`POST /ai/wire-support-lines`** (admin)
 - Após wiring/restart: `ReengageStuckAiTicketsService` reprocessa tickets abertos/pendentes sem `aiAgentId` mas com agente na fila (última mensagem do cliente)
 - Manual ops: `COMPANY_ID=1 npm run wire:support-lines`
