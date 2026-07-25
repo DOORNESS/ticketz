@@ -18,6 +18,7 @@ import {
   getNextVersionNumber
 } from "./KnowledgeAssetVersionService";
 import { enqueueIndexAssetVersion } from "./AiKnowledgeIngestionQueueService";
+import { publishKnowledgeAsset } from "./KnowledgePublishService";
 
 export type ListAssetsFilter = {
   companyId: number;
@@ -347,4 +348,88 @@ export const createNewAssetVersionFromCurrent = async (
 
   await asset.update({ currentVersionId: version.id });
   return version;
+};
+
+export const promoteAndPublishKnowledgeAsset = async (
+  companyId: number,
+  assetId: number,
+  userId?: number
+): Promise<KnowledgeAsset> => {
+  let asset = await getKnowledgeAsset(companyId, assetId);
+
+  if (asset.lifecycleStatus === "draft") {
+    asset = await submitAssetForReview(companyId, assetId);
+  }
+  if (asset.lifecycleStatus === "review") {
+    asset = await approveKnowledgeAsset(companyId, assetId);
+  }
+
+  return publishKnowledgeAsset({
+    companyId,
+    assetId,
+    userId
+  });
+};
+
+export const cloneKnowledgeAssetToBase = async (input: {
+  companyId: number;
+  assetId: number;
+  targetKnowledgeBaseId: number;
+  categoryId?: number;
+  authorUserId?: number;
+  autoPublish?: boolean;
+}): Promise<KnowledgeAsset> => {
+  const source = await getKnowledgeAsset(input.companyId, input.assetId);
+  const version = source.currentVersion;
+
+  if (!version) {
+    throw new AppError("Asset has no version to clone", 409);
+  }
+
+  const targetBase = await KnowledgeBase.findOne({
+    where: { id: input.targetKnowledgeBaseId, companyId: input.companyId }
+  });
+
+  if (!targetBase) {
+    throw new AppError("Target knowledge base not found", 404);
+  }
+
+  let categoryId = input.categoryId;
+  if (!categoryId && source.categoryId) {
+    const fallback = await KnowledgeCategory.findOne({
+      where: {
+        companyId: input.companyId,
+        knowledgeBaseId: input.targetKnowledgeBaseId,
+        active: true
+      },
+      order: [["sortOrder", "ASC"]]
+    });
+    categoryId = fallback?.id;
+  }
+
+  const cloned = await createKnowledgeAsset({
+    companyId: input.companyId,
+    knowledgeBaseId: input.targetKnowledgeBaseId,
+    categoryId,
+    assetType: source.assetType,
+    title: source.title,
+    summary: source.summary,
+    metadata:
+      source.metadata && typeof source.metadata === "object"
+        ? { ...(source.metadata as Record<string, unknown>) }
+        : undefined,
+    storageUrl: version.storageUrl,
+    rawText: version.rawTextPreview || undefined,
+    authorUserId: input.authorUserId
+  });
+
+  if (input.autoPublish) {
+    return promoteAndPublishKnowledgeAsset(
+      input.companyId,
+      cloned.id,
+      input.authorUserId
+    );
+  }
+
+  return cloned;
 };

@@ -1,3 +1,7 @@
+import {
+  extractStorageKeyFromUrl,
+  normalizeStorageReference
+} from "../../../../../helpers/mediaStorage";
 import StorageService from "../../../../StorageService/StorageService";
 import { extractTextFromBuffer } from "../../../DocumentParser";
 import {
@@ -7,10 +11,14 @@ import {
 } from "../BaseAssetHandler";
 
 const resolveStorageKey = (storageUrl: string): string => {
-  if (storageUrl.includes("://")) {
-    return storageUrl.split("/").slice(-3).join("/");
+  if (/^https?:\/\//i.test(storageUrl)) {
+    return (
+      extractStorageKeyFromUrl(storageUrl) ||
+      normalizeStorageReference(storageUrl)
+    );
   }
-  return storageUrl.replace(/^\/public\//, "");
+
+  return normalizeStorageReference(storageUrl);
 };
 
 export class TextAssetHandler extends BaseAssetHandler {

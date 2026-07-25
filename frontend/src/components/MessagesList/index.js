@@ -949,6 +949,18 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
     };
   }, [ticketId, socketManager]);
 
+  useEffect(() => {
+    if (!ticket?.aiAgentId && !ticket?.aiStartedAt) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      refreshMessagesList();
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [ticket?.id, ticket?.aiAgentId, ticket?.aiStartedAt]);
+
   const loadMore = async () => {
     await loadPageMutex.runExclusive(async () => {
       loadData(true);

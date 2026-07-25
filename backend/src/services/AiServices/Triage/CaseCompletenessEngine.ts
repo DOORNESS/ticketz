@@ -154,6 +154,19 @@ const countFilled = (
 export const isPureGreetingMessage = (text: string): boolean =>
   PURE_GREETING_PATTERNS.some(pattern => pattern.test(text.trim()));
 
+const SHORT_HELP_PATTERNS = [
+  /^\s*pode ajudar\??\s*$/i,
+  /^\s*pode me ajudar\??\s*$/i,
+  /^\s*preciso de ajuda\??\s*$/i,
+  /^\s*me ajuda\??\s*$/i,
+  /^\s*ajuda\??\s*$/i,
+  /^\s*cade vc\b/i,
+  /^\s*teste\s*$/i
+];
+
+export const isShortHelpRequest = (text: string): boolean =>
+  SHORT_HELP_PATTERNS.some(pattern => pattern.test(text.trim()));
+
 export const isMetaConversationIntent = (text: string): boolean => {
   const normalized = text.trim();
   if (!normalized) {

@@ -5,6 +5,7 @@ import {
   isInformationalIntent,
   isMetaConversationIntent,
   isPureGreetingMessage,
+  isShortHelpRequest,
   isSubstantiveAiReply,
   shouldSkipSupportInvestigation,
   isVagueCustomerStatement,
@@ -49,6 +50,13 @@ describe("CaseCompletenessEngine", () => {
     expect(buildInvestigationQuestion(snapshot, "Oi")).toBe(
       `${buildTimeBasedGreeting()} Em que posso ajudar?`
     );
+  });
+
+  it("detects short help requests for fast-path replies", () => {
+    expect(isShortHelpRequest("Pode ajudar?")).toBe(true);
+    expect(isShortHelpRequest("teste")).toBe(true);
+    expect(isShortHelpRequest("cade vc robozinho ?")).toBe(true);
+    expect(isShortHelpRequest("Como funciona o Nível?")).toBe(false);
   });
 
   it("blocks automatic handoff until enough investigation rounds", () => {

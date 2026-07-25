@@ -2,10 +2,7 @@ import Queue, { Job } from "bull";
 import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
 import { logger } from "../../utils/logger";
-import {
-  resolveProcessingAgent,
-  canAiEngageTicket
-} from "./AiHelpers";
+import { resolveProcessingAgent, canAiEngageTicket } from "./AiHelpers";
 import ProcessInboundMessageService, {
   InboundMessageItem
 } from "./ProcessInboundMessageService";
@@ -209,6 +206,40 @@ const getLockTtlSeconds = (): number =>
 const getLockRetryMs = (): number =>
   parsePositiveInt(process.env.AI_QUEUE_LOCK_RETRY_MS, 100);
 
+const clearStaleAiLockIfNeeded = async (
+  ticketId: number,
+  redis: ReturnType<typeof getAiInboundQueue>["client"]
+): Promise<boolean> => {
+  const key = lockKey(ticketId);
+  if (!(await redis.exists(key))) {
+    return false;
+  }
+
+  const ticket = await Ticket.findByPk(ticketId);
+  if (!ticket) {
+    await redis.del(key);
+    return true;
+  }
+
+  const stalledMs = Date.now() - new Date(ticket.updatedAt).getTime();
+  const processingState = (ticket as { aiProcessingState?: string })
+    .aiProcessingState;
+
+  if (processingState === "processing" && stalledMs > 90000) {
+    await redis.del(key);
+    await ticket.update({ aiProcessingState: "awaiting_customer" } as never);
+    return true;
+  }
+
+  const ttl = await redis.ttl(key);
+  if (ttl === -1) {
+    await redis.del(key);
+    return true;
+  }
+
+  return false;
+};
+
 const usesImmediateProcessing = (): boolean => getDebounceMs() === 0;
 
 const rescheduleIfBuffered = async (
@@ -256,28 +287,48 @@ export const processBufferedAiInbound = async (
     );
 
     if (lockAcquired !== "OK") {
-      if (job) {
-        await persistAiDecisionLog({
-          companyId,
-          ticketId,
-          action: "job_cancelled",
-          reason: "lock_not_acquired"
-        });
-        await recordAiJobCompleted(job, "cancelled");
+      const clearedStaleLock = await clearStaleAiLockIfNeeded(ticketId, redis);
+      if (clearedStaleLock) {
+        const retryLock = await redis.set(
+          lockKey(ticketId),
+          job ? String(job.id) : "inline",
+          "EX",
+          lockTtlSeconds,
+          "NX"
+        );
+        if (retryLock === "OK") {
+          ownsLock = true;
+        }
       }
 
-      setTimeout(() => {
-        void processBufferedAiInbound(companyId, ticketId).catch(error => {
-          logger.error(
-            { error, ticketId, companyId },
-            "Retry after AI lock contention failed"
-          );
-        });
-      }, getLockRetryMs());
-      return;
+      if (!ownsLock) {
+        if (job) {
+          await persistAiDecisionLog({
+            companyId,
+            ticketId,
+            action: "job_cancelled",
+            reason: "lock_not_acquired"
+          });
+          await recordAiJobCompleted(job, "cancelled");
+        }
+
+        setTimeout(() => {
+          void processBufferedAiInbound(companyId, ticketId).catch(error => {
+            logger.error(
+              { error, ticketId, companyId },
+              "Retry after AI lock contention failed"
+            );
+          });
+        }, getLockRetryMs());
+        return;
+      }
+    } else {
+      ownsLock = true;
     }
 
-    ownsLock = true;
+    if (!ownsLock) {
+      return;
+    }
 
     const revalidated = await revalidateTicketForAi(ticketId, companyId);
     if (!revalidated) {
@@ -355,10 +406,7 @@ export const processBufferedAiInbound = async (
       details: { attemptsMade: job?.attemptsMade || 0, immediate: !job }
     });
 
-    if (
-      !job &&
-      isTransientAiError(error)
-    ) {
+    if (!job && isTransientAiError(error)) {
       setTimeout(() => {
         void processBufferedAiInbound(companyId, ticketId).catch(retryError => {
           logger.error(

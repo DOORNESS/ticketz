@@ -2,14 +2,18 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Box,
   Button,
+  Checkbox,
   Chip,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
   Menu,
   MenuItem,
+  Tab,
+  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -19,9 +23,15 @@ import {
   Typography
 } from "@material-ui/core";
 import {
+  FileCopy,
+  Edit,
   History,
+  Link as LinkIcon,
   MoreVert,
+  Publish,
   Refresh,
+  Save,
+  Visibility,
   CloudUpload,
   NoteAdd
 } from "@material-ui/icons";
@@ -55,6 +65,14 @@ const LIFECYCLE_LABELS = {
   archived: "Arquivado"
 };
 
+const LIFECYCLE_HINTS = {
+  draft: "Recém-criado. Envie para revisão ou use “Publicar agora”.",
+  review: "Aguardando aprovação editorial antes de ir ao ar.",
+  approved: "Aprovado — falta publicar para a IA usar.",
+  published: "Disponível para a IA consultar.",
+  archived: "Removido da busca da IA."
+};
+
 const INGESTION_LABELS = {
   pending: "Pendente",
   processing: "Processando",
@@ -68,10 +86,6 @@ const lifecycleChipColor = status => {
       return "primary";
     case "approved":
       return "secondary";
-    case "review":
-      return "default";
-    case "archived":
-      return "default";
     default:
       return "default";
   }
@@ -94,23 +108,33 @@ const defaultCreateForm = {
   knowledgeBaseId: "",
   categoryId: "",
   title: "",
-  content: ""
+  content: "",
+  url: ""
 };
 
 const AiAssets = () => {
   const classes = useAiPageStyles();
   const [assets, setAssets] = useState([]);
   const [bases, setBases] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [createTab, setCreateTab] = useState(0);
+  const [autoPublish, setAutoPublish] = useState(true);
   const [filters, setFilters] = useState({
     lifecycleStatus: "",
     knowledgeBaseId: ""
   });
   const [createForm, setCreateForm] = useState(defaultCreateForm);
   const [file, setFile] = useState(null);
-  const [openText, setOpenText] = useState(false);
   const [menuAnchor, setMenuAnchor] = useState(null);
   const [menuAsset, setMenuAsset] = useState(null);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewAsset, setViewAsset] = useState(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({ title: "", summary: "" });
+  const [cloneOpen, setCloneOpen] = useState(false);
+  const [cloneBaseId, setCloneBaseId] = useState("");
+  const [cloneAsset, setCloneAsset] = useState(null);
   const [versionsOpen, setVersionsOpen] = useState(false);
   const [versions, setVersions] = useState([]);
   const [versionsAsset, setVersionsAsset] = useState(null);
@@ -137,12 +161,37 @@ const AiAssets = () => {
     return map;
   }, [bases]);
 
+  const categoryOptions = useMemo(
+    () =>
+      categories.map(category => ({
+        value: category.id,
+        label: category.name
+      })),
+    [categories]
+  );
+
   const loadBases = useCallback(async () => {
     try {
       const { data } = await api.get("/ai/knowledge-bases");
       setBases((Array.isArray(data) ? data : []).filter(base => base.active));
     } catch (err) {
       toastError(err);
+    }
+  }, []);
+
+  const loadCategories = useCallback(async baseId => {
+    if (!baseId) {
+      setCategories([]);
+      return;
+    }
+    try {
+      const { data } = await api.get(
+        `/ai/knowledge-bases/${baseId}/categories`
+      );
+      setCategories(Array.isArray(data) ? data : []);
+    } catch (err) {
+      toastError(err);
+      setCategories([]);
     }
   }, []);
 
@@ -174,6 +223,21 @@ const AiAssets = () => {
     loadAssets();
   }, [loadAssets]);
 
+  useEffect(() => {
+    loadCategories(createForm.knowledgeBaseId);
+  }, [createForm.knowledgeBaseId, loadCategories]);
+
+  useEffect(() => {
+    const interval = setInterval(() => loadAssets(), 15000);
+    return () => clearInterval(interval);
+  }, [loadAssets]);
+
+  const resetCreateForm = () => {
+    setCreateForm(defaultCreateForm);
+    setFile(null);
+    setCategories([]);
+  };
+
   const handleSaveText = async () => {
     try {
       await api.post("/ai/assets/text", {
@@ -182,11 +246,38 @@ const AiAssets = () => {
           ? Number(createForm.categoryId)
           : undefined,
         title: createForm.title,
-        content: createForm.content
+        content: createForm.content,
+        autoPublish
       });
-      toast.success("Ativo criado em rascunho");
-      setOpenText(false);
-      setCreateForm(defaultCreateForm);
+      toast.success(
+        autoPublish
+          ? "Documento salvo — publicação após indexação"
+          : "Documento salvo como rascunho"
+      );
+      resetCreateForm();
+      loadAssets();
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  const handleSaveUrl = async () => {
+    try {
+      await api.post("/ai/assets/url", {
+        knowledgeBaseId: Number(createForm.knowledgeBaseId),
+        categoryId: createForm.categoryId
+          ? Number(createForm.categoryId)
+          : undefined,
+        title: createForm.title,
+        url: createForm.url,
+        autoPublish
+      });
+      toast.success(
+        autoPublish
+          ? "Site salvo — a IA poderá usar após indexação"
+          : "Site salvo como rascunho"
+      );
+      resetCreateForm();
       loadAssets();
     } catch (err) {
       toastError(err);
@@ -201,11 +292,15 @@ const AiAssets = () => {
       if (createForm.categoryId) {
         data.append("categoryId", createForm.categoryId);
       }
-      data.append("title", createForm.title || file?.name || "Upload");
+      data.append("title", createForm.title || file?.name || "Documento");
+      data.append("autoPublish", autoPublish ? "true" : "false");
       await api.post("/ai/assets/upload", data);
-      toast.success("Upload realizado — ativo em rascunho");
-      setFile(null);
-      setCreateForm(defaultCreateForm);
+      toast.success(
+        autoPublish
+          ? "Documento salvo — publicação após indexação"
+          : "Documento salvo como rascunho"
+      );
+      resetCreateForm();
       loadAssets();
     } catch (err) {
       toastError(err);
@@ -216,6 +311,68 @@ const AiAssets = () => {
     try {
       await api.post(`/ai/assets/${asset.id}/${action}`, body || {});
       toast.success("Ação executada com sucesso");
+      loadAssets();
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  const handleQuickPublish = async asset => {
+    try {
+      await api.post(`/ai/assets/${asset.id}/quick-publish`);
+      toast.success("Publicação iniciada");
+      loadAssets();
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  const openView = async asset => {
+    try {
+      const { data } = await api.get(`/ai/assets/${asset.id}`);
+      setViewAsset(data);
+      setViewOpen(true);
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  const openEdit = asset => {
+    setMenuAsset(asset);
+    setEditForm({
+      title: asset.title || "",
+      summary: asset.summary || ""
+    });
+    setEditOpen(true);
+  };
+
+  const handleEditSave = async () => {
+    if (!menuAsset) return;
+    try {
+      await api.put(`/ai/assets/${menuAsset.id}`, editForm);
+      toast.success("Ativo atualizado");
+      setEditOpen(false);
+      loadAssets();
+    } catch (err) {
+      toastError(err);
+    }
+  };
+
+  const openCloneDialog = asset => {
+    setCloneAsset(asset);
+    setCloneBaseId("");
+    setCloneOpen(true);
+  };
+
+  const handleClone = async () => {
+    if (!cloneAsset || !cloneBaseId) return;
+    try {
+      await api.post(`/ai/assets/${cloneAsset.id}/clone`, {
+        targetKnowledgeBaseId: Number(cloneBaseId),
+        autoPublish
+      });
+      toast.success("Ativo vinculado à outra base");
+      setCloneOpen(false);
       loadAssets();
     } catch (err) {
       toastError(err);
@@ -235,7 +392,25 @@ const AiAssets = () => {
   const handleMenuAction = async action => {
     const asset = menuAsset;
     closeMenu();
-    if (!asset) {
+    if (!asset) return;
+
+    if (action === "view") {
+      await openView(asset);
+      return;
+    }
+
+    if (action === "edit") {
+      openEdit(asset);
+      return;
+    }
+
+    if (action === "clone") {
+      openCloneDialog(asset);
+      return;
+    }
+
+    if (action === "quick-publish") {
+      await handleQuickPublish(asset);
       return;
     }
 
@@ -280,9 +455,7 @@ const AiAssets = () => {
   };
 
   const handleRollback = async () => {
-    if (!versionsAsset || !rollbackVersionId) {
-      return;
-    }
+    if (!versionsAsset || !rollbackVersionId) return;
     try {
       await api.post(`/ai/assets/${versionsAsset.id}/rollback`, {
         versionId: Number(rollbackVersionId)
@@ -297,8 +470,15 @@ const AiAssets = () => {
 
   const renderLifecycleActions = asset => {
     const status = asset.lifecycleStatus;
-    const actions = [];
+    const actions = [
+      { key: "view", label: "Ver detalhes" },
+      { key: "edit", label: "Editar título/resumo" },
+      { key: "clone", label: "Vincular a outra base" }
+    ];
 
+    if (status !== "published") {
+      actions.push({ key: "quick-publish", label: "Publicar agora" });
+    }
     if (status === "draft") {
       actions.push({ key: "submit-review", label: "Enviar para revisão" });
     }
@@ -331,19 +511,137 @@ const AiAssets = () => {
     return version?.ingestionStatus || "—";
   };
 
+  const getIngestionError = asset =>
+    asset.currentVersion?.errorMessage ||
+    asset.publishedVersion?.errorMessage ||
+    "";
+
+  const renderCreateSection = () => (
+    <>
+      <Tabs
+        value={createTab}
+        onChange={(_, value) => setCreateTab(value)}
+        indicatorColor="primary"
+        textColor="primary"
+      >
+        <Tab icon={<CloudUpload />} label="Arquivo" />
+        <Tab icon={<NoteAdd />} label="Texto" />
+        <Tab icon={<LinkIcon />} label="Site (URL)" />
+      </Tabs>
+
+      <Box mt={2}>
+        <AiFormSelect
+          label="Base de conhecimento"
+          value={createForm.knowledgeBaseId}
+          onChange={e =>
+            setCreateForm({
+              ...createForm,
+              knowledgeBaseId: String(e.target.value),
+              categoryId: ""
+            })
+          }
+          options={baseOptions}
+        />
+        {categoryOptions.length > 0 && (
+          <AiFormSelect
+            label="Categoria (opcional)"
+            value={createForm.categoryId}
+            onChange={e =>
+              setCreateForm({
+                ...createForm,
+                categoryId: String(e.target.value)
+              })
+            }
+            options={categoryOptions}
+            emptyLabel="Sem categoria"
+          />
+        )}
+        <AiFormTextField
+          label="Título (opcional)"
+          value={createForm.title}
+          onChange={e =>
+            setCreateForm({ ...createForm, title: e.target.value })
+          }
+        />
+
+        {createTab === 0 && (
+          <Box mt={1} mb={2}>
+            <input
+              type="file"
+              accept=".pdf,.docx,.txt,.md,.markdown,.html"
+              onChange={e => setFile(e.target.files[0])}
+            />
+            {file && (
+              <Typography variant="body2" color="textSecondary">
+                Arquivo selecionado: {file.name}
+              </Typography>
+            )}
+          </Box>
+        )}
+
+        {createTab === 1 && (
+          <AiFormTextField
+            label="Conteúdo"
+            multiline
+            rows={8}
+            value={createForm.content}
+            onChange={e =>
+              setCreateForm({ ...createForm, content: e.target.value })
+            }
+          />
+        )}
+
+        {createTab === 2 && (
+          <AiFormTextField
+            label="URL do site"
+            placeholder="https://exemplo.com.br/sobre"
+            value={createForm.url}
+            onChange={e =>
+              setCreateForm({ ...createForm, url: e.target.value })
+            }
+          />
+        )}
+
+        <FormControlLabel
+          control={
+            <Checkbox
+              color="primary"
+              checked={autoPublish}
+              onChange={e => setAutoPublish(e.target.checked)}
+            />
+          }
+          label="Publicar automaticamente após indexação (recomendado para a IA usar)"
+        />
+
+        <Box mt={1}>
+          <Button
+            variant="contained"
+            color="primary"
+            startIcon={<Save />}
+            disabled={
+              !createForm.knowledgeBaseId ||
+              (createTab === 0 && !file) ||
+              (createTab === 1 && !createForm.content.trim()) ||
+              (createTab === 2 && !createForm.url.trim())
+            }
+            onClick={() => {
+              if (createTab === 0) handleUpload();
+              else if (createTab === 1) handleSaveText();
+              else handleSaveUrl();
+            }}
+          >
+            Salvar documento
+          </Button>
+        </Box>
+      </Box>
+    </>
+  );
+
   return (
     <MainContainer>
       <MainHeader>
         <Title>IA — Ativos de Conhecimento</Title>
         <Box display="flex" style={{ gap: 8 }}>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<NoteAdd />}
-            onClick={() => setOpenText(true)}
-          >
-            Texto manual
-          </Button>
           <Button
             variant="contained"
             color="primary"
@@ -394,53 +692,15 @@ const AiAssets = () => {
         </AiSectionPaper>
 
         <AiSectionPaper
-          title="Upload de arquivos"
-          subtitle="Envie PDF, DOCX, TXT, MD ou HTML. O ativo inicia em rascunho."
+          title="Novo ativo"
+          subtitle="Salve arquivos, textos ou sites institucionais. O botão “Salvar documento” grava na base escolhida."
         >
-          <AiFormSelect
-            label="Base de conhecimento"
-            value={createForm.knowledgeBaseId}
-            onChange={e =>
-              setCreateForm({
-                ...createForm,
-                knowledgeBaseId: String(e.target.value)
-              })
-            }
-            options={baseOptions}
-          />
-          <AiFormTextField
-            label="Título (opcional)"
-            value={createForm.title}
-            onChange={e =>
-              setCreateForm({ ...createForm, title: e.target.value })
-            }
-          />
-          <Box mt={1} mb={2}>
-            <input
-              type="file"
-              accept=".pdf,.docx,.txt,.md,.markdown,.html"
-              onChange={e => setFile(e.target.files[0])}
-            />
-            {file && (
-              <Typography variant="body2" color="textSecondary">
-                Arquivo selecionado: {file.name}
-              </Typography>
-            )}
-          </Box>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<CloudUpload />}
-            disabled={!file || !createForm.knowledgeBaseId}
-            onClick={handleUpload}
-          >
-            Upload de arquivo
-          </Button>
+          {renderCreateSection()}
         </AiSectionPaper>
 
         <AiSectionPaper
           title="Ativos cadastrados"
-          subtitle="Workflow editorial: rascunho → revisão → aprovado → publicado."
+          subtitle="Workflow: rascunho → revisão → aprovado → publicado. Só conteúdo publicado e indexado entra na busca da IA."
         >
           <Table>
             <TableHead>
@@ -450,13 +710,14 @@ const AiAssets = () => {
                 <TableCell>Base</TableCell>
                 <TableCell>Status editorial</TableCell>
                 <TableCell>Indexação</TableCell>
+                <TableCell>Detalhe</TableCell>
                 <TableCell align="center">Ações</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {assets.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} align="center">
+                  <TableCell colSpan={7} align="center">
                     {loading
                       ? "Carregando..."
                       : "Nenhum ativo encontrado com os filtros atuais."}
@@ -465,6 +726,7 @@ const AiAssets = () => {
               )}
               {assets.map(asset => {
                 const ingestionStatus = getIngestionStatus(asset);
+                const ingestionError = getIngestionError(asset);
                 return (
                   <TableRow key={asset.id}>
                     <TableCell>{asset.title}</TableCell>
@@ -474,35 +736,94 @@ const AiAssets = () => {
                         asset.knowledgeBaseId}
                     </TableCell>
                     <TableCell>
-                      <Chip
-                        size="small"
-                        label={
-                          LIFECYCLE_LABELS[asset.lifecycleStatus] ||
+                      <Tooltip
+                        title={
+                          LIFECYCLE_HINTS[asset.lifecycleStatus] ||
                           asset.lifecycleStatus
                         }
-                        color={lifecycleChipColor(asset.lifecycleStatus)}
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {ingestionStatus !== "—" ? (
+                      >
                         <Chip
                           size="small"
                           label={
-                            INGESTION_LABELS[ingestionStatus] || ingestionStatus
+                            LIFECYCLE_LABELS[asset.lifecycleStatus] ||
+                            asset.lifecycleStatus
                           }
-                          color={ingestionChipColor(ingestionStatus)}
-                          variant={
-                            ingestionStatus === "failed"
-                              ? "default"
-                              : "outlined"
-                          }
+                          color={lifecycleChipColor(asset.lifecycleStatus)}
                         />
+                      </Tooltip>
+                    </TableCell>
+                    <TableCell>
+                      {ingestionStatus !== "—" ? (
+                        <Tooltip
+                          title={
+                            ingestionError ||
+                            (ingestionStatus === "failed"
+                              ? "Falha na extração ou indexação — use Reindexar ou veja Jobs"
+                              : "")
+                          }
+                        >
+                          <Chip
+                            size="small"
+                            label={
+                              INGESTION_LABELS[ingestionStatus] ||
+                              ingestionStatus
+                            }
+                            color={ingestionChipColor(ingestionStatus)}
+                            variant={
+                              ingestionStatus === "failed"
+                                ? "default"
+                                : "outlined"
+                            }
+                          />
+                        </Tooltip>
                       ) : (
                         "—"
                       )}
                     </TableCell>
-                    <TableCell align="center">
-                      <Tooltip title="Ações do ativo">
+                    <TableCell>
+                      <Typography variant="caption" color="textSecondary">
+                        {ingestionError ||
+                          (asset.metadata?.url
+                            ? String(asset.metadata.url).slice(0, 40)
+                            : "—")}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="center" style={{ whiteSpace: "nowrap" }}>
+                      <Tooltip title="Ver">
+                        <IconButton
+                          size="small"
+                          onClick={() => openView(asset)}
+                        >
+                          <Visibility />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Editar">
+                        <IconButton
+                          size="small"
+                          onClick={() => openEdit(asset)}
+                        >
+                          <Edit />
+                        </IconButton>
+                      </Tooltip>
+                      {asset.lifecycleStatus !== "published" && (
+                        <Tooltip title="Publicar agora">
+                          <IconButton
+                            size="small"
+                            onClick={() => handleQuickPublish(asset)}
+                          >
+                            <Publish />
+                          </IconButton>
+                        </Tooltip>
+                      )}
+                      <Tooltip title="Vincular a outra base">
+                        <IconButton
+                          size="small"
+                          onClick={() => openCloneDialog(asset)}
+                        >
+                          <FileCopy />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title="Mais ações">
                         <IconButton
                           size="small"
                           onClick={event => openMenu(event, asset)}
@@ -510,7 +831,7 @@ const AiAssets = () => {
                           <MoreVert />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Histórico de versões">
+                      <Tooltip title="Histórico">
                         <IconButton
                           size="small"
                           onClick={async () => {
@@ -554,46 +875,120 @@ const AiAssets = () => {
           ))}
       </Menu>
 
-      <Dialog open={openText} onClose={() => setOpenText(false)} fullWidth>
-        <DialogTitle>Novo ativo — texto manual</DialogTitle>
+      <Dialog
+        open={viewOpen}
+        onClose={() => setViewOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Detalhes — {viewAsset?.title}</DialogTitle>
         <DialogContent dividers>
-          <AiFormSelect
-            label="Base de conhecimento"
-            value={createForm.knowledgeBaseId}
-            onChange={e =>
-              setCreateForm({
-                ...createForm,
-                knowledgeBaseId: String(e.target.value)
-              })
-            }
-            options={baseOptions}
-          />
+          {viewAsset && (
+            <>
+              <Typography variant="body2">
+                <strong>Tipo:</strong> {viewAsset.assetType}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Base:</strong>{" "}
+                {baseNameById[viewAsset.knowledgeBaseId] ||
+                  viewAsset.knowledgeBaseId}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Status:</strong>{" "}
+                {LIFECYCLE_LABELS[viewAsset.lifecycleStatus] ||
+                  viewAsset.lifecycleStatus}
+              </Typography>
+              {viewAsset.metadata?.url && (
+                <Typography variant="body2">
+                  <strong>URL:</strong> {viewAsset.metadata.url}
+                </Typography>
+              )}
+              {getIngestionError(viewAsset) && (
+                <Typography variant="body2" color="error">
+                  <strong>Erro de indexação:</strong>{" "}
+                  {getIngestionError(viewAsset)}
+                </Typography>
+              )}
+              {viewAsset.currentVersion?.rawTextPreview && (
+                <Box mt={2}>
+                  <Typography variant="subtitle2">
+                    Prévia do conteúdo
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary">
+                    {viewAsset.currentVersion.rawTextPreview}
+                  </Typography>
+                </Box>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setViewOpen(false)}>Fechar</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={editOpen}
+        onClose={() => setEditOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Editar ativo</DialogTitle>
+        <DialogContent dividers>
           <AiFormTextField
             label="Título"
-            value={createForm.title}
-            onChange={e =>
-              setCreateForm({ ...createForm, title: e.target.value })
-            }
+            value={editForm.title}
+            onChange={e => setEditForm({ ...editForm, title: e.target.value })}
           />
           <AiFormTextField
-            label="Conteúdo"
+            label="Resumo"
             multiline
-            rows={8}
-            value={createForm.content}
+            rows={4}
+            value={editForm.summary}
             onChange={e =>
-              setCreateForm({ ...createForm, content: e.target.value })
+              setEditForm({ ...editForm, summary: e.target.value })
             }
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpenText(false)}>Cancelar</Button>
+          <Button onClick={() => setEditOpen(false)}>Cancelar</Button>
+          <Button color="primary" variant="contained" onClick={handleEditSave}>
+            Salvar
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={cloneOpen}
+        onClose={() => setCloneOpen(false)}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Vincular a outra base</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" color="textSecondary" gutterBottom>
+            Cria uma cópia do ativo “{cloneAsset?.title}” em outra base de
+            conhecimento (útil quando o mesmo conteúdo serve a mais de um
+            agente).
+          </Typography>
+          <AiFormSelect
+            label="Base destino"
+            value={cloneBaseId}
+            onChange={e => setCloneBaseId(String(e.target.value))}
+            options={baseOptions.filter(
+              opt => String(opt.value) !== String(cloneAsset?.knowledgeBaseId)
+            )}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCloneOpen(false)}>Cancelar</Button>
           <Button
             color="primary"
             variant="contained"
-            onClick={handleSaveText}
-            disabled={!createForm.knowledgeBaseId || !createForm.content.trim()}
+            disabled={!cloneBaseId}
+            onClick={handleClone}
           >
-            Criar rascunho
+            Vincular cópia
           </Button>
         </DialogActions>
       </Dialog>
@@ -612,8 +1007,8 @@ const AiAssets = () => {
                 <TableCell>#</TableCell>
                 <TableCell>Título</TableCell>
                 <TableCell>Indexação</TableCell>
+                <TableCell>Erro</TableCell>
                 <TableCell>Chunks</TableCell>
-                <TableCell>Resumo</TableCell>
                 <TableCell>Criada em</TableCell>
               </TableRow>
             </TableHead>
@@ -632,8 +1027,8 @@ const AiAssets = () => {
                       color={ingestionChipColor(version.ingestionStatus)}
                     />
                   </TableCell>
+                  <TableCell>{version.errorMessage || "—"}</TableCell>
                   <TableCell>{version.chunkCount ?? "—"}</TableCell>
-                  <TableCell>{version.changeSummary || "—"}</TableCell>
                   <TableCell>
                     {version.createdAt
                       ? new Date(version.createdAt).toLocaleString()

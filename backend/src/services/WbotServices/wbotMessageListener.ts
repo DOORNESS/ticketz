@@ -80,6 +80,7 @@ import {
   tryEngageAiOnInboundMessage,
   shouldAiBypassLegacyBotMessages
 } from "../AiServices/AiReengagementService";
+import { scheduleDeferredAiResponseCheck } from "../AiServices/AiDeferredReengageService";
 import {
   getActiveAgent,
   getActiveAgentForTicket,
@@ -2053,6 +2054,11 @@ const handleMessage = async (
         await newMessage.reload();
         websocketCreateMessage(newMessage);
       }
+
+      scheduleDeferredAiResponseCheck({
+        companyId,
+        ticketId: ticket.id
+      });
       return;
     }
 

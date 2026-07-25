@@ -6,6 +6,21 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.48] — 2026-07-25
+
+### Adicionado
+
+- **CMS Ativos (`/ai/assets`):** UI com abas Arquivo/Texto/Site, botão **Salvar documento**, publicação automática, ver/editar/publicar/copiar para outra base; endpoints `POST /ai/assets/url`, `/clone`, `/quick-publish`.
+- **Tempo real:** polling **2s** na aba IA (lista) e **1s** no chat quando ticket está com IA; ticket recarregado no socket antes de emitir `appMessage`.
+
+### Corrigido
+
+- **Indexação B2/DOCX:** `resolveStorageKey` nos handlers CMS usa `extractStorageKeyFromUrl` (path `companies/{id}/...` completo).
+- **IA silenciosa:** fast path para `Pode ajudar?`/mensagens curtas; reengajamento deferido 8s; limpeza de lock Redis stale.
+- **Prompt IA:** instruções para sites institucionais e conteúdo com imagens descritas no texto extraído.
+
+---
+
 ## [1.5.47] — 2026-07-25
 
 ### Corrigido

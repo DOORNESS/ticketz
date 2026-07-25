@@ -611,6 +611,18 @@ const TicketsListCustom = props => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketsList]);
 
+  useEffect(() => {
+    if (listMode !== "ai") {
+      return undefined;
+    }
+
+    const interval = setInterval(() => {
+      refetchTickets();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [listMode, refetchTickets]);
+
   const loadMore = () => {
     const lastTicket = ticketsList[ticketsList.length - 1];
     if (!lastTicket) return;

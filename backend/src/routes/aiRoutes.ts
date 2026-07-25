@@ -116,10 +116,16 @@ aiRoutes.post(
 );
 aiRoutes.post("/ai/assets/:assetId/reindex", KnowledgeAssetController.reindex);
 aiRoutes.post("/ai/assets/text", KnowledgeAssetController.storeText);
+aiRoutes.post("/ai/assets/url", KnowledgeAssetController.storeUrl);
 aiRoutes.post(
   "/ai/assets/upload",
   upload.single("file"),
   KnowledgeAssetController.storeUpload
+);
+aiRoutes.post("/ai/assets/:assetId/clone", KnowledgeAssetController.cloneToBase);
+aiRoutes.post(
+  "/ai/assets/:assetId/quick-publish",
+  KnowledgeAssetController.quickPublish
 );
 aiRoutes.get(
   "/ai/assets/:assetId/ingestion-jobs",

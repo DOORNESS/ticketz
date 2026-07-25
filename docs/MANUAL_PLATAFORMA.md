@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.43 — auditada contra o código  
+**Versão:** 1.5.48 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -967,6 +967,26 @@ sequenceDiagram
 
 **Formatos suportados** (`DocumentParser.ts`): pdf, docx, txt, md, markdown, html, text.
 
+### CMS — Ativos de conhecimento (`/ai/assets`)
+
+Painel administrativo para bases editoriais (Fase 2 CMS). Diferente de `/ai/documents` (legado), usa `KnowledgeAsset` + workflow draft → review → approved → published.
+
+| Recurso | Endpoint / comportamento |
+|---------|--------------------------|
+| Listar / ver / editar | `GET/PUT /ai/assets`, `GET /ai/assets/:id` |
+| Salvar arquivo | `POST /ai/assets/upload` (PDF, DOCX, TXT, MD, HTML) — botão UI **Salvar documento** |
+| Salvar texto | `POST /ai/assets/text` |
+| Salvar site | `POST /ai/assets/url` (http/https; extração HTML na ingestão) |
+| Publicar em 1 clique | `POST /ai/assets/:id/quick-publish` ou `autoPublish=true` no create |
+| Vincular a outra base | `POST /ai/assets/:id/clone` (`targetKnowledgeBaseId`) — cópia do ativo |
+| Reindexar | `POST /ai/assets/:id/reindex` |
+
+**Indexação:** job Bull grava chunks em `KnowledgeChunks`; só versões **publicadas** e **indexadas** entram na busca (`KnowledgeRetrievalPolicy`). Falhas gravam `errorMessage` na versão (ex.: download B2, texto vazio no DOCX, embedding).
+
+**Storage:** chaves B2 usam `companies/{id}/knowledge/...`; handlers resolvem URL pública via `extractStorageKeyFromUrl` (`mediaStorage.ts`).
+
+**IA e conteúdo:** prompt operacional instrui uso de documentos, sites institucionais indexados e descrições de imagens extraídas do texto.
+
 ---
 
 ## 30. Fluxo handoff IA → humano
@@ -995,6 +1015,9 @@ Componentes em `backend/src/services/AiServices/Triage/`:
 - Se a triagem detectaria repetir a mesma pergunta de investigação, devolve `false` para o fluxo seguir ao LLM.
 - Após resposta substantiva da IA (≥120 caracteres, fora de templates de investigação), `sendInvestigationResponse` não envia nova pergunta de triagem no mesmo turno — evita mensagem duplicada fora de contexto.
 - Saudação pura (`Oi`, `Olá`, `Bom dia`) na **primeira rodada** recebe cumprimento por horário + *Em que posso ajudar?* (`buildTimeBasedGreeting`).
+- Pedidos curtos de ajuda (`Pode ajudar?`, `teste`, `cadê vc`) recebem resposta imediata (`isShortHelpRequest` — fast path sem LLM).
+- **Reengajamento deferido:** 8s após mensagem inbound, se não houver resposta outbound, limpa lock Redis stale e reenfileira (`AiDeferredReengageService`).
+- Lock Redis órfão (>90s em `processing`) é liberado automaticamente na fila (`AiInboundQueueService`).
 - Handoff automático (tool `request_human_handoff`, baixa confiança, sem base) exige **mínimo 2 rodadas de investigação** e caso `caseReadyForHandoff`; pedido explícito de humano ou assunto sensível continuam liberados.
 - Após handoff (`aiHandoff=true`, `status=pending`, sem `userId`), o ticket aparece na aba **Aguardando** — inclusive handoff operacional fora do horário.
 - Em horário comercial, handoff humano usa modo **definitivo** (`aiPaused=true`).

@@ -30,6 +30,7 @@
 - Dimensão vector: 1536 (pgvector)
 - Threshold confiável inbound: similarity ≥ 0.25
 - CMS ON: apenas chunks de versões **publicadas** e **indexadas** (`KnowledgeRetrievalPolicy`)
+- UI admin: `/ai/assets` — upload, texto, URL de site, clone entre bases, publicação rápida (ver §29 manual)
 
 ## Scripts operacionais (pós-migration Fase 2)
 

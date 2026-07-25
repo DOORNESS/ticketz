@@ -33,10 +33,28 @@ interface Request {
   skipWebsocket?: boolean;
 }
 
-export const websocketCreateMessage = (
+export const websocketCreateMessage = async (
   message: Message,
   options?: { forceHumanAlert?: boolean }
 ) => {
+  await message.ticket.reload({
+    include: [
+      {
+        model: Contact,
+        as: "contact",
+        include: ["tags", "extraInfo"]
+      },
+      "queue",
+      "tags",
+      "user",
+      {
+        model: Whatsapp,
+        as: "whatsapp",
+        attributes: ["name", "id"]
+      }
+    ]
+  });
+
   const io = getIO();
   const ticket = message.ticket;
   const suppressHumanAlert =
@@ -149,7 +167,7 @@ const CreateMessageService = async ({
   const io = getIO();
 
   if (!skipWebsocket) {
-    websocketCreateMessage(message);
+    void websocketCreateMessage(message);
   }
 
   io.to(`company-${companyId}-mainchannel`).emit(

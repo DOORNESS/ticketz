@@ -4,11 +4,13 @@ import StorageService from "../services/StorageService/StorageService";
 import {
   approveKnowledgeAsset,
   archiveKnowledgeAsset,
+  cloneKnowledgeAssetToBase,
   createKnowledgeAsset,
   createNewAssetVersionFromCurrent,
   getKnowledgeAsset,
   listAssetIngestionJobs,
   listKnowledgeAssets,
+  promoteAndPublishKnowledgeAsset,
   submitAssetForReview,
   updateKnowledgeAsset
 } from "../services/AiServices/KnowledgeCms/KnowledgeAssetCmsService";
@@ -111,12 +113,28 @@ export const update = async (
   return res.json(asset);
 };
 
+const parseAutoPublish = (value: unknown): boolean =>
+  value === true || value === "true" || value === "1";
+
+const maybeAutoPublish = async (
+  companyId: number,
+  assetId: number,
+  autoPublish: boolean,
+  userId?: number
+): Promise<void> => {
+  if (!autoPublish) {
+    return;
+  }
+
+  await promoteAndPublishKnowledgeAsset(companyId, assetId, userId);
+};
+
 export const storeText = async (
   req: Request,
   res: Response
 ): Promise<Response> => {
   const { companyId, id, profile } = req.user;
-  const { knowledgeBaseId, categoryId, title, content } = req.body;
+  const { knowledgeBaseId, categoryId, title, content, autoPublish } = req.body;
 
   await assertKnowledgePermission(
     "write",
@@ -154,7 +172,14 @@ export const storeText = async (
     });
   }
 
-  return res.status(201).json(asset);
+  await maybeAutoPublish(
+    companyId,
+    asset.id,
+    parseAutoPublish(autoPublish),
+    currentUserId(req)
+  );
+
+  return res.status(201).json(await getKnowledgeAsset(companyId, asset.id));
 };
 
 export const storeUpload = async (
@@ -162,7 +187,7 @@ export const storeUpload = async (
   res: Response
 ): Promise<Response> => {
   const { companyId, id, profile } = req.user;
-  const { knowledgeBaseId, categoryId, title } = req.body;
+  const { knowledgeBaseId, categoryId, title, autoPublish } = req.body;
   const file = req.file;
 
   if (!file) {
@@ -215,7 +240,132 @@ export const storeUpload = async (
     });
   }
 
+  await maybeAutoPublish(
+    companyId,
+    asset.id,
+    parseAutoPublish(autoPublish),
+    currentUserId(req)
+  );
+
+  return res.status(201).json(await getKnowledgeAsset(companyId, asset.id));
+};
+
+export const storeUrl = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId, id, profile } = req.user;
+  const { knowledgeBaseId, categoryId, title, url, autoPublish } = req.body;
+
+  if (!url || typeof url !== "string") {
+    throw new AppError("url is required", 400);
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(url.trim());
+  } catch {
+    throw new AppError("Invalid URL", 400);
+  }
+
+  if (!["http:", "https:"].includes(parsedUrl.protocol)) {
+    throw new AppError("Only http/https URLs are supported", 400);
+  }
+
+  await assertKnowledgePermission(
+    "write",
+    { companyId, resourceType: "base", resourceId: Number(knowledgeBaseId) },
+    { id: Number(id), profile, companyId }
+  );
+
+  const asset = await createKnowledgeAsset({
+    companyId,
+    knowledgeBaseId: Number(knowledgeBaseId),
+    categoryId: categoryId ? Number(categoryId) : undefined,
+    assetType: "url",
+    title: title || parsedUrl.hostname,
+    storageUrl: parsedUrl.toString(),
+    metadata: { url: parsedUrl.toString(), sourceType: "website" },
+    authorUserId: currentUserId(req)
+  });
+
+  if (asset.currentVersionId) {
+    await enqueueIndexAssetVersion({
+      companyId,
+      assetVersionId: asset.currentVersionId
+    });
+  }
+
+  await maybeAutoPublish(
+    companyId,
+    asset.id,
+    parseAutoPublish(autoPublish),
+    currentUserId(req)
+  );
+
+  return res.status(201).json(await getKnowledgeAsset(companyId, asset.id));
+};
+
+export const cloneToBase = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId, id, profile } = req.user;
+  const { assetId } = req.params;
+  const { targetKnowledgeBaseId, categoryId, autoPublish } = req.body;
+
+  if (!targetKnowledgeBaseId) {
+    throw new AppError("targetKnowledgeBaseId is required", 400);
+  }
+
+  await assertKnowledgePermission(
+    "write",
+    { companyId, resourceType: "asset", resourceId: Number(assetId) },
+    { id: Number(id), profile, companyId }
+  );
+
+  await assertKnowledgePermission(
+    "write",
+    {
+      companyId,
+      resourceType: "base",
+      resourceId: Number(targetKnowledgeBaseId)
+    },
+    { id: Number(id), profile, companyId }
+  );
+
+  const asset = await cloneKnowledgeAssetToBase({
+    companyId,
+    assetId: Number(assetId),
+    targetKnowledgeBaseId: Number(targetKnowledgeBaseId),
+    categoryId: categoryId ? Number(categoryId) : undefined,
+    authorUserId: currentUserId(req),
+    autoPublish: parseAutoPublish(autoPublish)
+  });
+
   return res.status(201).json(asset);
+};
+
+export const quickPublish = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId, id, profile } = req.user;
+  const { assetId } = req.params;
+
+  await assertKnowledgePermission(
+    "publish",
+    { companyId, resourceType: "asset", resourceId: Number(assetId) },
+    { id: Number(id), profile, companyId }
+  );
+
+  const asset = await promoteAndPublishKnowledgeAsset(
+    companyId,
+    Number(assetId),
+    currentUserId(req)
+  );
+
+  return res.json(asset);
 };
 
 export const listVersions = async (

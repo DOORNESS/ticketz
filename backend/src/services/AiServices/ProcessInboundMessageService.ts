@@ -23,6 +23,7 @@ import {
 import {
   isVagueCustomerStatement,
   isPureGreetingMessage,
+  isShortHelpRequest,
   buildTimeBasedGreeting,
   isInformationalIntent
 } from "./Triage/CaseCompletenessEngine";
@@ -516,6 +517,32 @@ const ProcessInboundMessageService = async ({
         reason: "pure_greeting_fast_path",
         userMessage: maskSensitiveLog(userText),
         aiResponse: greetingReply
+      });
+      return;
+    }
+
+    if (isShortHelpRequest(userText)) {
+      const helpReply = `${buildTimeBasedGreeting()} Claro! Me conte o que você precisa — posso ajudar com dúvidas sobre produtos, funcionalidades ou suporte.`;
+      await SendWhatsAppMessage({
+        body: formatBody(helpReply, ticket),
+        ticket
+      });
+
+      await finalizeAiResponse(ticket, primaryMessageId);
+
+      await ticket.reload({
+        include: ["contact", "queue", "whatsapp", "user"]
+      });
+      websocketUpdateTicket(ticket);
+
+      await persistAiDecisionLog({
+        companyId,
+        ticketId: ticket.id,
+        messageId: primaryMessageId,
+        action: "respond",
+        reason: "short_help_fast_path",
+        userMessage: maskSensitiveLog(userText),
+        aiResponse: helpReply
       });
       return;
     }
