@@ -37,7 +37,7 @@ const ticketNeedsAiReply = async (ticketId: number): Promise<boolean> => {
 export const scheduleDeferredAiResponseCheck = ({
   companyId,
   ticketId,
-  delayMs = 8000
+  delayMs = 5000
 }: {
   companyId: number;
   ticketId: number;

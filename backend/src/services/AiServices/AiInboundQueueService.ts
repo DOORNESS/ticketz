@@ -201,7 +201,7 @@ const scheduleDebouncedJob = async (
 };
 
 const getLockTtlSeconds = (): number =>
-  parsePositiveInt(process.env.AI_QUEUE_LOCK_TTL_SEC, 300);
+  parsePositiveInt(process.env.AI_QUEUE_LOCK_TTL_SEC, 120);
 
 const getLockRetryMs = (): number =>
   parsePositiveInt(process.env.AI_QUEUE_LOCK_RETRY_MS, 100);
@@ -225,9 +225,14 @@ const clearStaleAiLockIfNeeded = async (
   const processingState = (ticket as { aiProcessingState?: string })
     .aiProcessingState;
 
-  if (processingState === "processing" && stalledMs > 90000) {
+  if (processingState === "processing" && stalledMs > 45000) {
     await redis.del(key);
     await ticket.update({ aiProcessingState: "awaiting_customer" } as never);
+    return true;
+  }
+
+  if (processingState === "processing" && stalledMs > 20000) {
+    await redis.del(key);
     return true;
   }
 

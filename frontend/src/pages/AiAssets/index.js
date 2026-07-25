@@ -118,6 +118,7 @@ const AiAssets = () => {
   const [bases, setBases] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [basesLoading, setBasesLoading] = useState(true);
   const [createTab, setCreateTab] = useState(0);
   const [autoPublish, setAutoPublish] = useState(true);
   const [filters, setFilters] = useState({
@@ -144,14 +145,18 @@ const AiAssets = () => {
   const [rollbackOpen, setRollbackOpen] = useState(false);
   const [rollbackVersionId, setRollbackVersionId] = useState("");
 
-  const baseOptions = useMemo(
-    () =>
-      bases.map(base => ({
-        value: base.id,
-        label: base.name
-      })),
-    [bases]
-  );
+  const baseOptions = useMemo(() => {
+    if (basesLoading) {
+      return [{ value: "", label: "Carregando bases..." }];
+    }
+    if (!bases.length) {
+      return [{ value: "", label: "Nenhuma base encontrada" }];
+    }
+    return bases.map(base => ({
+      value: base.id,
+      label: base.name
+    }));
+  }, [bases, basesLoading]);
 
   const baseNameById = useMemo(() => {
     const map = {};
@@ -171,11 +176,15 @@ const AiAssets = () => {
   );
 
   const loadBases = useCallback(async () => {
+    setBasesLoading(true);
     try {
       const { data } = await api.get("/ai/knowledge-bases");
       setBases((Array.isArray(data) ? data : []).filter(base => base.active));
     } catch (err) {
       toastError(err);
+      setBases([]);
+    } finally {
+      setBasesLoading(false);
     }
   }, []);
 
@@ -719,8 +728,10 @@ const AiAssets = () => {
                 <TableRow>
                   <TableCell colSpan={7} align="center">
                     {loading
-                      ? "Carregando..."
-                      : "Nenhum ativo encontrado com os filtros atuais."}
+                      ? "Carregando ativos..."
+                      : basesLoading
+                        ? "Carregando bases de conhecimento..."
+                        : "Nenhum ativo encontrado com os filtros atuais."}
                   </TableCell>
                 </TableRow>
               )}

@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.52] — 2026-07-25
+
+### Corrigido (crítico)
+
+- **Conversa não carregava:** polling IA fazia `RESET` a cada 1s → spinner infinito; agora faz merge incremental a cada 2s.
+- **Ativos/bases “Carregando…”:** timeout API 90s×3 retries; reduzido para 45s×2; estados separados para bases vs ativos; `safeAiQuery` no list de assets.
+- **IA parava na 2ª mensagem:** lock Redis stale liberado após 20–45s; TTL lock 120s; reengage em 5s; limpeza automática de `aiProcessingState=processing`.
+- **Admin sem ação na mesa:** supervisão estendida a tickets com `aiAgentId` mesmo quando `aiPaused`.
+
+---
+
 ## [1.5.51] — 2026-07-25
 
 ### Corrigido

@@ -269,7 +269,7 @@ const Ticket = () => {
       } catch (_) {
         /* ignore transient poll errors */
       }
-    }, 1000);
+    }, 2000);
 
     return () => clearInterval(interval);
   }, [ticket?.id, ticket?.aiAgentId, ticket?.aiPaused, ticket?.userId]);

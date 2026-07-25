@@ -84,10 +84,21 @@ export const tryEngageAiOnInboundMessage = async ({
   const lockExists = await redis.exists(`ai:lock:${ticket.id}`);
 
   if (processingState === "processing" || lockExists) {
-    logger.debug(
-      { ticketId: ticket.id, companyId, trigger, processingState, lockExists },
-      "AI job in progress — message buffered for follow-up"
-    );
+    const stalledMs = Date.now() - new Date(ticket.updatedAt).getTime();
+    if (stalledMs > 45000) {
+      await redis.del(`ai:lock:${ticket.id}`);
+      await ticket.update({ aiProcessingState: "awaiting_customer" } as never);
+      await ticket.reload();
+      logger.warn(
+        { ticketId: ticket.id, companyId, stalledMs },
+        "Cleared stale AI lock/state before enqueue"
+      );
+    } else {
+      logger.debug(
+        { ticketId: ticket.id, companyId, trigger, processingState, lockExists },
+        "AI job in progress — message buffered for follow-up"
+      );
+    }
   }
 
   const enqueued = await enqueueAiInboundMessage({

@@ -181,6 +181,14 @@ export const isTicketObservationMode = (ticket, user) => {
     return true;
   }
 
+  if (
+    ticket.aiAgentId &&
+    !ticket.userId &&
+    ticket.status !== "closed"
+  ) {
+    return true;
+  }
+
   if (ticket.status === "pending" && !ticket.userId) {
     return true;
   }

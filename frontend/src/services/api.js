@@ -3,8 +3,8 @@ import { getBackendURL } from "../services/config";
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-const API_TIMEOUT_MS = 90000;
-const MAX_API_RETRIES = 3;
+const API_TIMEOUT_MS = 45000;
+const MAX_API_RETRIES = 2;
 
 const attachRetryInterceptor = client => {
   client.interceptors.response.use(

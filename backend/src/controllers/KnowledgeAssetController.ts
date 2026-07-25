@@ -24,6 +24,7 @@ import {
   checkKnowledgePermission
 } from "../services/AiServices/KnowledgeCms/KnowledgePermissionService";
 import { KnowledgeAssetType } from "../models/KnowledgeAsset";
+import { safeAiQuery } from "../helpers/safeAiQuery";
 
 const currentUserId = (req: Request): number | undefined => {
   const parsed = Number(req.user.id);
@@ -41,16 +42,20 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     throw new AppError("ERR_KNOWLEDGE_PERMISSION_DENIED", 403);
   }
 
-  const assets = await listKnowledgeAssets({
-    companyId,
-    knowledgeBaseId: req.query.knowledgeBaseId
-      ? Number(req.query.knowledgeBaseId)
-      : undefined,
-    categoryId: req.query.categoryId ? Number(req.query.categoryId) : undefined,
-    lifecycleStatus: req.query.lifecycleStatus as
-      | import("../models/KnowledgeAsset").KnowledgeLifecycleStatus
-      | undefined
-  });
+  const assets = await safeAiQuery(
+    () =>
+      listKnowledgeAssets({
+        companyId,
+        knowledgeBaseId: req.query.knowledgeBaseId
+          ? Number(req.query.knowledgeBaseId)
+          : undefined,
+        categoryId: req.query.categoryId ? Number(req.query.categoryId) : undefined,
+        lifecycleStatus: req.query.lifecycleStatus as
+          | import("../models/KnowledgeAsset").KnowledgeLifecycleStatus
+          | undefined
+      }),
+    []
+  );
 
   return res.json(assets);
 };

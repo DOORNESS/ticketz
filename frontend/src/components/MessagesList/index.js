@@ -4,7 +4,8 @@ import React, {
   useReducer,
   useRef,
   useContext,
-  useMemo
+  useMemo,
+  useCallback
 } from "react";
 
 import { isSameDay, parseISO, format } from "date-fns";
@@ -789,6 +790,67 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
     loadData();
   }
 
+  const pollNewMessages = useCallback(async () => {
+    if (!ticketId || ticketId === undefined) {
+      return;
+    }
+
+    try {
+      const currentList = messagesListRef.current;
+      const params = { markAsRead };
+
+      if (currentList.length > 0) {
+        const maxUpdatedAt = currentList.reduce(
+          (max, msg) => (msg.updatedAt > max ? msg.updatedAt : max),
+          currentList[0].updatedAt
+        );
+        params.minUpdatedAt = maxUpdatedAt;
+      }
+
+      const { data } = await api.get("/messages/" + ticketId, { params });
+
+      if (Number(currentTicketId.current) !== Number(ticketId)) {
+        return;
+      }
+
+      if (!currentList.length) {
+        dispatch({ type: "LOAD_MESSAGES", payload: data.messages || [] });
+        setHasMore(Boolean(data.hasMore));
+        setNextId(data.nextId || null);
+        setLoading(false);
+        return;
+      }
+
+      if (Array.isArray(data.messages) && data.messages.length > 0) {
+        dispatch({ type: "MERGE_MESSAGES", payload: data.messages });
+
+        const currentIds = new Set(currentList.map(m => m.id));
+        const newMessages = data.messages.filter(m => !currentIds.has(m.id));
+        if (newMessages.length > 0) {
+          const { scrollTop, clientHeight, scrollHeight } = scrollRef.current || {};
+          const isAtBottom =
+            scrollTop + clientHeight >= scrollHeight - clientHeight / 4;
+          const newestMessage = newMessages.reduce((latest, msg) =>
+            new Date(msg.createdAt) > new Date(latest.createdAt) ? msg : latest
+          );
+
+          if (
+            isAtBottom ||
+            newestMessage.fromMe ||
+            scrollRef.current?.scrollHeight === scrollRef.current?.clientHeight
+          ) {
+            if (scrollRef.current) {
+              dispatch({ type: "RESET_STICKY" });
+              scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      /* polling silencioso — socket cobre tempo real */
+    }
+  }, [ticketId, markAsRead]);
+
   useEffect(() => {
     let active = true;
 
@@ -958,11 +1020,11 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
     }
 
     const interval = setInterval(() => {
-      refreshMessagesList();
-    }, 1000);
+      pollNewMessages();
+    }, 2000);
 
     return () => clearInterval(interval);
-  }, [ticket?.id, ticket?.aiAgentId, ticket?.aiStartedAt]);
+  }, [ticket?.id, ticket?.aiAgentId, ticket?.aiStartedAt, pollNewMessages]);
 
   const loadMore = async () => {
     await loadPageMutex.runExclusive(async () => {
@@ -2203,7 +2265,7 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
             </span>
           </div>
         ))}
-      {loading && (
+      {loading && messagesList.length === 0 && (
         <div>
           <CircularProgress className={classes.circleLoading} />
         </div>
