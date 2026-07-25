@@ -189,6 +189,9 @@ const scheduleDebouncedJob = async (
 const getLockTtlSeconds = (): number =>
   parsePositiveInt(process.env.AI_QUEUE_LOCK_TTL_SEC, 300);
 
+const getLockRetryMs = (): number =>
+  parsePositiveInt(process.env.AI_QUEUE_LOCK_RETRY_MS, 100);
+
 const usesImmediateProcessing = (): boolean => getDebounceMs() === 0;
 
 const rescheduleIfBuffered = async (
@@ -252,7 +255,7 @@ export const processBufferedAiInbound = async (
             "Retry after AI lock contention failed"
           );
         });
-      }, 750);
+      }, getLockRetryMs());
       return;
     }
 
@@ -402,7 +405,7 @@ export const enqueueAiInboundMessage = async (
             "Deferred immediate AI processing failed"
           );
         });
-      }, 750);
+      }, getLockRetryMs());
     } else {
       await scheduleDebouncedJob(payload.companyId, payload.ticketId);
     }

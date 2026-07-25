@@ -153,7 +153,7 @@ export const buildKnowledgeContextForQuery = async ({
     );
   }
 
-  if (readyCount > 0 && readyCount <= 4) {
+  if (readyCount > 0 && readyCount <= 12) {
     const usedChunks = await loadAllReadyChunkTexts(
       companyId,
       knowledgeBaseIds

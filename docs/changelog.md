@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.44] — 2026-07-25
+
+### Performance (meta ~5s de resposta IA)
+
+- Lock Redis retry: **100ms** (`AI_QUEUE_LOCK_RETRY_MS`, antes 750ms).
+- Saudações puras (`oi`, `olá`) — fast path sem LLM/RAG.
+- Bases ≤12 documentos — skip embedding, chunks direto do Postgres.
+- Histórico 4 msgs; orquestrador só quando habilitado.
+
+---
+
 ## [1.5.43] — 2026-07-25
 
 ### Corrigido

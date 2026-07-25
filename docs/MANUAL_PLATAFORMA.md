@@ -1274,6 +1274,7 @@ frontend/src/
 | `AI_QUEUE_DEBOUNCE_MS` | **`0`** | `AiInboundQueueService.ts` |
 | `AI_QUEUE_MAX_ATTEMPTS` | `3` | idem |
 | `AI_QUEUE_BACKOFF_MS` | `3000` | idem |
+| `AI_QUEUE_LOCK_RETRY_MS` | **`100`** | `AiInboundQueueService.ts` |
 | `AI_QUEUE_LOCK_TTL_SEC` | `300` | idem |
 | `AI_QUEUE_CONCURRENCY` | `5` | idem |
 | `AI_QUEUE_CONGESTION_THRESHOLD` | `50` | `AiQueueMetricsService.ts` |

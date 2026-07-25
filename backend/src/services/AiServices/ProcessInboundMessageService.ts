@@ -19,7 +19,7 @@ import {
   buildAgentIdentityReply,
   buildHandoffConfirmationQuestion
 } from "./AiHelpers";
-import { isVagueCustomerStatement } from "./Triage/CaseCompletenessEngine";
+import { isVagueCustomerStatement, isPureGreetingMessage, buildTimeBasedGreeting } from "./Triage/CaseCompletenessEngine";
 import {
   buildAiSchedulePromptBlock,
   getAiScheduleContext
@@ -446,8 +446,6 @@ const ProcessInboundMessageService = async ({
       await ticket.update({ aiPriority: priority });
     }
 
-    const conversationText = await buildConversationText(ticket.id, userText);
-
     if (detectAgentIdentityQuestion(userText)) {
       const identityReply = buildAgentIdentityReply(agent);
       await SendWhatsAppMessage({
@@ -468,6 +466,29 @@ const ProcessInboundMessageService = async ({
       });
       return;
     }
+
+    if (isPureGreetingMessage(userText)) {
+      const greetingReply = `${buildTimeBasedGreeting()} Em que posso ajudar?`;
+      await SendWhatsAppMessage({
+        body: formatBody(greetingReply, ticket),
+        ticket
+      });
+
+      await finalizeAiResponse(ticket, primaryMessageId);
+
+      await persistAiDecisionLog({
+        companyId,
+        ticketId: ticket.id,
+        messageId: primaryMessageId,
+        action: "respond",
+        reason: "pure_greeting_fast_path",
+        userMessage: maskSensitiveLog(userText),
+        aiResponse: greetingReply
+      });
+      return;
+    }
+
+    const conversationText = await buildConversationText(ticket.id, userText);
 
     if (
       triageV2Enabled &&
@@ -639,17 +660,19 @@ const ProcessInboundMessageService = async ({
       return;
     }
 
-    const resolved = await resolveSpecialistAgent({
-      companyId,
-      ticket,
-      userText,
-      conversationSummary: conversationText,
-      messageId: primaryMessageId
-    });
-    agent = resolved.agent;
-    routingMeta = resolved.routing;
-
     const orchestratorMode = await isOrchestratorEnabledForCompany(companyId);
+
+    if (orchestratorMode) {
+      const resolved = await resolveSpecialistAgent({
+        companyId,
+        ticket,
+        userText,
+        conversationSummary: conversationText,
+        messageId: primaryMessageId
+      });
+      agent = resolved.agent;
+      routingMeta = resolved.routing;
+    }
 
     const knowledgeBaseIds = await getKnowledgeBaseIdsForAgent(
       companyId,
@@ -673,7 +696,7 @@ const ProcessInboundMessageService = async ({
         userText,
         provider: agent.provider
       }),
-      buildConversationHistory(ticket.id, 6),
+      buildConversationHistory(ticket.id, 4),
       loadVerifiedMemoryForPrompt(companyId, ticket.contactId),
       isContactMemoryEnabledForCompany(companyId),
       isToolsEnabledForCompany(companyId)
