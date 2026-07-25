@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.55 — auditada contra o código  
+**Versão:** 1.5.56 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -1023,6 +1023,7 @@ Componentes em `backend/src/services/AiServices/Triage/`:
 - Handoff automático (tool `request_human_handoff`, baixa confiança, sem base) exige **mínimo 2 rodadas de investigação** e caso `caseReadyForHandoff`; pedido explícito de humano ou assunto sensível continuam liberados.
 - Após handoff (`aiHandoff=true`, `status=pending`, sem `userId`), o ticket aparece na aba **Aguardando** — inclusive handoff operacional fora do horário.
 - Em horário comercial, handoff humano usa modo **definitivo** (`aiPaused=true`).
+- **Horário por fila (`scheduleType=queue`):** se `Queue.schedules` estiver vazio (`{}` ou `[]`), `VerifyCurrentSchedule` trata como **sempre aberto** — evita erro SQL e permite que a IA responda após a saudação inicial.
 - Handoff **operacional** (`aiHandoffMode=operational`, fora do horário): ticket entra na fila, IA pode continuar (`canAiEngageTicket`), sem mensagem legada de fora do horário (`aiSkipLegacyOutOfHoursOnHandoff`).
 - Handoff **definitivo** (`aiHandoffMode=definitive`): IA para (`aiPaused=true`).
 - `aiHandoffOriginalReason` preserva motivo original; assunção humana grava `aiHumanAssumedAt/By` sem sobrescrever motivo original na UI.

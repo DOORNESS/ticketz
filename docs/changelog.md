@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.56] — 2026-07-25
+
+### Corrigido (crítico — IA parava na 2ª mensagem e copilot)
+
+- **Robô respondia só ao “oi”:** fila **Suporte Nível** (`schedules: {}`) quebrava `VerifyCurrentSchedule` (`jsonb_array_elements` em objeto JSON). Perguntas reais falhavam silenciosamente após a saudação. Agora `{}`, `[]` ou horário inválido assumem fila **aberta** (`inActivity: true`).
+- **Sugerir resposta falhava:** tabela `AiCopilotSuggestions` ausente no banco (migration marcada mas tabela não existia). `ApplyAiSchemaService` passa a recriar a tabela no bootstrap; emissão socket do copilot não derruba a sugestão se o Socket.io estiver indisponível.
+
+---
+
 ## [1.5.55] — 2026-07-25
 
 ### Corrigido (supervisão IA e ativos)

@@ -271,6 +271,33 @@ const ensureAiTables = async (schema: string): Promise<void> => {
     CREATE INDEX IF NOT EXISTS message_media_files_company_ticket_idx
     ON ${q(schema, "MessageMediaFiles")} ("companyId", "ticketId");
   `);
+
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS ${q(schema, "AiCopilotSuggestions")} (
+      id SERIAL PRIMARY KEY,
+      "companyId" INTEGER NOT NULL REFERENCES ${q(schema, "Companies")}(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      "ticketId" INTEGER NOT NULL REFERENCES ${q(schema, "Tickets")}(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      "suggestedResponse" TEXT NOT NULL,
+      rationale TEXT,
+      "usedChunks" JSONB,
+      confidence DOUBLE PRECISION,
+      status VARCHAR(16) NOT NULL DEFAULT 'pending',
+      "improvedResponse" TEXT,
+      "relatedDocument" VARCHAR(255),
+      "nextSteps" TEXT,
+      "riskAssessment" VARCHAR(255),
+      "customerSentiment" VARCHAR(64),
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await sequelize.query(`
+    CREATE INDEX IF NOT EXISTS ai_copilot_suggestions_ticket_status_idx
+    ON ${q(schema, "AiCopilotSuggestions")} ("ticketId", status);
+  `);
 };
 
 const ensureAckColumns = async (schema: string): Promise<void> => {

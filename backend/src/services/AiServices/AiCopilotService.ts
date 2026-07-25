@@ -277,14 +277,21 @@ export const generateCopilotSuggestion = async ({
       status: "pending"
     });
 
-    const io = getIO();
-    io.to(ticket.id.toString())
-      .to(`company-${ticket.companyId}-mainchannel`)
-      .emit(`company-${ticket.companyId}-ai-copilot`, {
-        action: "update",
-        ticketId: ticket.id,
-        suggestion
-      });
+    try {
+      const io = getIO();
+      io.to(ticket.id.toString())
+        .to(`company-${ticket.companyId}-mainchannel`)
+        .emit(`company-${ticket.companyId}-ai-copilot`, {
+          action: "update",
+          ticketId: ticket.id,
+          suggestion
+        });
+    } catch (emitError) {
+      logger.warn(
+        { emitError, ticketId: ticket.id },
+        "Failed to emit copilot suggestion update"
+      );
+    }
 
     return suggestion;
   } catch (error) {

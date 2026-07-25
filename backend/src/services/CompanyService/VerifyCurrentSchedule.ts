@@ -8,25 +8,38 @@ export type ScheduleResult = {
   inActivity: boolean;
 };
 
+const DEFAULT_OPEN_SCHEDULE: ScheduleResult = { inActivity: true };
+
+const hasOpenHoursTimezone = (
+  schedule: OpenHoursData | undefined
+): schedule is OpenHoursData => Boolean(schedule?.timezone);
+
+const hasLegacyScheduleEntries = (schedule: unknown): boolean =>
+  Array.isArray(schedule) && schedule.length > 0;
+
 const VerifyCurrentSchedule = async (
   companyId: string | number,
   queueId?: string | number
 ): Promise<ScheduleResult> => {
-  let schedule: OpenHoursData;
+  let schedule: OpenHoursData | undefined;
   if (queueId) {
     const queue = await Queue.findOne({ where: { id: queueId, companyId } });
     if (queue) {
-      schedule = queue.schedules;
+      schedule = queue.schedules as OpenHoursData;
     }
   } else if (companyId) {
     const company = await Company.findOne({ where: { id: companyId } });
     if (company) {
-      schedule = company.schedules;
+      schedule = company.schedules as OpenHoursData;
     }
   }
 
-  if (schedule.timezone) {
+  if (hasOpenHoursTimezone(schedule)) {
     return { inActivity: checkOpenHours(schedule) };
+  }
+
+  if (!hasLegacyScheduleEntries(schedule)) {
+    return DEFAULT_OPEN_SCHEDULE;
   }
 
   if (queueId === null || queueId === undefined) {
@@ -70,13 +83,13 @@ const VerifyCurrentSchedule = async (
       ) s      
     `;
 
-    const result: ScheduleResult = await sequelize.query(sql, {
+    const result = await sequelize.query<ScheduleResult>(sql, {
       replacements: { companyId },
       type: QueryTypes.SELECT,
       plain: true
     });
 
-    return result;
+    return result || DEFAULT_OPEN_SCHEDULE;
   }
   const sql = `
       select
@@ -119,13 +132,13 @@ const VerifyCurrentSchedule = async (
       ) s     
     `;
 
-  const result: ScheduleResult = await sequelize.query(sql, {
+  const result = await sequelize.query<ScheduleResult>(sql, {
     replacements: { companyId, queueId },
     type: QueryTypes.SELECT,
     plain: true
   });
 
-  return result;
+  return result || DEFAULT_OPEN_SCHEDULE;
 };
 
 export default VerifyCurrentSchedule;
