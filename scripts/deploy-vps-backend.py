@@ -31,10 +31,13 @@ PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip()
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 DIST = BACKEND / "dist"
-CHUNK = int(os.environ.get("DEPLOY_B64_CHUNK", "2000"))
+CHUNK = int(os.environ.get("DEPLOY_B64_CHUNK", "1500"))
 UPLOAD_CHUNK_RETRIES = int(os.environ.get("DEPLOY_UPLOAD_CHUNK_RETRIES", "4"))
 UPLOAD_FILE_RETRIES = int(os.environ.get("DEPLOY_UPLOAD_FILE_RETRIES", "3"))
 UPLOAD_VERIFY_PAUSE_SEC = float(os.environ.get("DEPLOY_UPLOAD_VERIFY_PAUSE_SEC", "1.5"))
+ENCODED_COMMAND_THRESHOLD = int(
+    os.environ.get("DEPLOY_ENCODED_COMMAND_THRESHOLD", "3500")
+)
 DEPLOY_LOCK = r"C:\ticketz\deploy-cache\.deploy.lock"
 UPLOAD_STAGING = r"C:\ticketz\dc"
 # Lock file younger than this → another deploy is still running (unless holder PID is gone).
@@ -189,7 +192,14 @@ def session():
 
 
 def run_ps(s, ps):
-    r = s.run_ps(ps)
+    if len(ps) > ENCODED_COMMAND_THRESHOLD:
+        encoded = base64.b64encode(ps.encode("utf-16-le")).decode("ascii")
+        r = s.run_cmd(
+            "powershell.exe",
+            ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+        )
+    else:
+        r = s.run_ps(ps)
     out = (r.std_out or b"").decode("utf-8", errors="replace")
     err = (r.std_err or b"").decode("utf-8", errors="replace")
     return r.status_code, out, err

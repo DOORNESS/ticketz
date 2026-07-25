@@ -10,7 +10,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ### Corrigido (crítico — deploy patch + copilot Nível)
 
-- **Deploy WinRM instável:** `deploy-vps-backend.py` agora usa chunks de 2000 bytes, retry por chunk, verificação de partes faltantes e retry completo do upload — corrige `part count mismatch expected=429 got=387`.
+- **Deploy WinRM instável:** `deploy-vps-backend.py` usa retry por chunk, verificação de partes faltantes, retry completo do upload e `-EncodedCommand` para payloads grandes — corrige `part count mismatch` e `The command line is too long`.
 - **Copilot confundia “Nível” com medida:** copilot agora usa persona do agente (`basePrompt`) + regra explícita de que Nível é a marca Nível Cashback.
 - **Prompt Nivelton:** reforço em `NIVEL_PROMPT` e regras operacionais para nunca tratar “Nível” como nível genérico.
 - **Socket na IA:** `emitTicketStateRefresh` não derruba mais o processamento se Socket.io estiver indisponível.
