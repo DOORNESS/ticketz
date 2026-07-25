@@ -56,13 +56,29 @@ const safeSql = async (
   replacements: Record<string, unknown>,
   transaction: Transaction
 ): Promise<void> => {
+  const savepoint = `reset_${step.replace(/[^a-zA-Z0-9_]/g, "_")}`;
+
   try {
+    await sequelize.query(`SAVEPOINT ${savepoint}`, { transaction });
     await sequelize.query(sql, { replacements, transaction });
+    await sequelize.query(`RELEASE SAVEPOINT ${savepoint}`, { transaction });
   } catch (error) {
     if (isMissingTableError(error)) {
+      await sequelize.query(`ROLLBACK TO SAVEPOINT ${savepoint}`, {
+        transaction
+      });
       logger.warn({ step }, "Reset skipped optional SQL table");
       return;
     }
+
+    try {
+      await sequelize.query(`ROLLBACK TO SAVEPOINT ${savepoint}`, {
+        transaction
+      });
+    } catch (rollbackError) {
+      logger.warn({ step, rollbackError }, "Reset savepoint rollback failed");
+    }
+
     throw error;
   }
 };

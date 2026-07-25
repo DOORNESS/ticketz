@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.42] — 2026-07-25
+
+### Corrigido
+
+- **Zerar base de clientes (definitivo):** deletes em tabelas IA opcionais inexistentes no Supabase (`AiKnowledgeSuggestions`, `AiCopilotSuggestions`, `AiReplayLogs`) abortavam a transação Postgres (42P01) — o código ignorava o erro JS mas a transação já estava morta (25P02). Agora cada SQL usa `SAVEPOINT`/`ROLLBACK TO SAVEPOINT` ao pular tabela ausente.
+
+---
+
 ## [1.5.41] — 2026-07-24
 
 ### Corrigido

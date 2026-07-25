@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.41 — auditada contra o código  
+**Versão:** 1.5.42 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -335,7 +335,7 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Botão no topo da lista de tickets (`TicketsManagerTabs`), **antes** das abas Abertas/Resolvidos
 - Visível para **master admin** (`isMasterAdminUser`: `super`, `profile=admin` ou email em `MASTER_ADMIN_EMAILS`)
 - Endpoint: `POST /ai/wipe-customer-base` (`AiResetController.wipeCustomerBase`)
-- Serviço: `ResetTestEnvironmentService.resetTestEnvironmentForCompany(companyId, { wipeContacts: true })` — transação Sequelize com **deletes SQL sequenciais** (sem `Promise.all` na mesma conexão) e subqueries por `companyId` (evita `IN` gigante); inclui `quotedMsgId`, `TicketNotes`, `OutOfTicketMessages`; remove dependências antes de apagar `Tickets` e `Contacts`; erros não-`AppError` viram `ERR_WIPE_CUSTOMER_BASE_FAILED` com log Postgres (`constraint`, `detail`)
+- Serviço: `ResetTestEnvironmentService.resetTestEnvironmentForCompany(companyId, { wipeContacts: true })` — transação Sequelize com **deletes SQL sequenciais** e subqueries por `companyId`; tabelas IA opcionais ausentes no schema usam `SAVEPOINT` (Postgres aborta transação em 42P01 se não houver rollback); inclui `quotedMsgId`, `TicketNotes`, `OutOfTicketMessages`; remove dependências antes de apagar `Tickets` e `Contacts`; erros não-`AppError` viram `ERR_WIPE_CUSTOMER_BASE_FAILED` com log Postgres (`constraint`, `detail`)
 - **Admin master:** email `fernandofortmax@gmail.com` (env `MASTER_ADMIN_EMAILS`) + `profile=admin` ou `super=true`
 - Apaga tickets, mensagens, logs IA e **todos os contatos** da empresa — próximo WhatsApp entra como cliente novo
 - **Um clique:** sem confirmação modal; limpa a UI via socket `wipe` + redirect `/tickets`
