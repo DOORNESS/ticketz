@@ -140,6 +140,36 @@ describe("CaseCompletenessEngine", () => {
     ).toBeNull();
   });
 
+  it("detects polite explain requests as informational", () => {
+    const userText = "Pode me explicar o nível";
+
+    expect(isInformationalIntent(userText)).toBe(true);
+    expect(
+      buildInvestigationQuestion(
+        evaluateCaseCompleteness({
+          latestMessage: userText,
+          conversationText: `user: ${userText}`
+        }),
+        userText
+      )
+    ).toBeNull();
+  });
+
+  it("detects product purpose questions as informational", () => {
+    const userText = "Para que serve a fidelização?";
+
+    expect(isInformationalIntent(userText)).toBe(true);
+    expect(
+      buildInvestigationQuestion(
+        evaluateCaseCompleteness({
+          latestMessage: userText,
+          conversationText: `user: ${userText}`
+        }),
+        userText
+      )
+    ).toBeNull();
+  });
+
   it("still treats explicit support problems as non-informational", () => {
     const userText =
       "Estou com um problema no login do WebG3, aparece usuário não encontrado.";

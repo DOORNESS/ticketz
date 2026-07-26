@@ -91,11 +91,14 @@ const INFORMATIONAL_INTENT_PATTERNS = [
   /(?:demo|demonstraç)/i,
   /(?:o que [eé]|como funciona)/i,
   /(?:me fale|me conte) sobre/i,
-  /(?:me )?explique/i,
+  /(?:me )?explic(?:ar|a|o|e)/i,
   /(?:fale|conte) (?:sobre|do|da|me)/i,
+  /para que serve/i,
+  /(?:qual [eé]|o que [eé]) (?:a |o )?(?:finalidade|funç(?:ão|ao))/i,
   /(?:d[uú]vida|informaç(?:ão|oes)) (?:sobre|do|da)/i,
   /(?:o que [eé]|qual [eé]) (?:o |a )?n[ií]vel/i,
   /n[ií]vel(?:\s+(?:cashback|empresa|cliente|de|do|da))?/i,
+  /fideliza(?:ç|c)[aã]o/i,
   /ajudar (?:a )?(?:minha|meu)/i,
   /funcionalidades|recursos/i
 ];
