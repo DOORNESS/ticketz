@@ -11,6 +11,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 ### Corrigido (robô continua conversa com a base)
 
 - **Caminho direto informativo:** perguntas “o que é / como funciona / cashback / explique” pulam triagem+tools e respondem com LLM + material da base (`informational_direct_knowledge_path`), mantendo o robô ativo após a saudação.
+- **Serviço + testes:** `InformationalDirectReplyService` isolado com suite Jest (21 testes verdes no caminho informativo + CaseCompleteness).
 
 ---
 

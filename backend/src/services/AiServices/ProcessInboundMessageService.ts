@@ -60,6 +60,7 @@ import { isContactMemoryEnabledForCompany } from "./ContactMemory/AiContactMemor
 import { isToolsEnabledForCompany } from "./tools/AiToolsFeatureFlag";
 import { runToolLoop } from "./tools/ToolLoopService";
 import { chatCompletion } from "./ModelGateway";
+import { tryInformationalDirectReply } from "./InformationalDirectReplyService";
 import "./tools/registerPilotTools";
 import crypto from "crypto";
 import {
@@ -600,90 +601,48 @@ const ProcessInboundMessageService = async ({
     // Caminho estável para dúvidas ("o que é", "como funciona", cashback, etc.):
     // pula triagem/tools e responde direto com a base — evita o robô "morrer" após a saudação.
     if (informationalQuery && !forceHandoff) {
-      try {
-        const knowledgeBaseIds = await getKnowledgeBaseIdsForAgent(
-          companyId,
-          agent.id,
-          ticket.queueId
-        );
-        const knowledgeContext = await buildKnowledgeContextForQuery({
-          companyId,
-          knowledgeBaseIds,
-          userText,
-          provider: agent.provider,
-          loadStrategy: "full"
+      const direct = await tryInformationalDirectReply({
+        companyId,
+        ticket,
+        agent,
+        userText
+      });
+
+      if (direct.replied && direct.body) {
+        await SendWhatsAppMessage({
+          body: formatBody(direct.body, ticket),
+          ticket
         });
-        const history = await buildConversationHistory(ticket.id, 6);
-        const contextBlock =
-          knowledgeContext.contextBlock ||
-          (knowledgeContext.hasReadyDocuments
-            ? "Há conteúdo na base deste canal. Explique o produto com o que souber do material, sem inventar preços ou regras."
-            : "A base deste canal ainda está limitada. Explique de forma geral e cordial o que puder; peça mais detalhes se necessário.");
-
-        const completion = await chatCompletion(companyId, {
-          model: agent.textModel,
-          temperature: Math.min(0.4, agent.temperature ?? 0.3),
-          maxTokens: Math.min(2048, agent.maxTokens || 1024),
-          providerId: agent.provider,
-          messages: [
-            {
-              role: "system",
-              content: [
-                agent.basePrompt?.trim() ||
-                  "Você é o assistente virtual deste canal de atendimento.",
-                "Responda em português, de forma clara e conversacional.",
-                "Use o material da base de conhecimento para explicar o que é, como funciona e benefícios.",
-                "Não invente políticas, valores ou procedimentos que não estejam no material.",
-                "Não transfira para humano nesta resposta — continue a conversa e ofereça ajudar com a próxima dúvida.",
-                `Material da base:\n${contextBlock}`
-              ].join("\n\n")
-            },
-            ...history.map(item => ({
-              role: item.role as "user" | "assistant",
-              content: item.content
-            })),
-            { role: "user", content: userText }
-          ]
+        await finalizeAiResponse(ticket, primaryMessageId);
+        await ticket.reload({
+          include: ["contact", "queue", "whatsapp", "user"]
         });
-
-        const reply = sanitizeAiOutboundText(completion.content?.trim() || "");
-        if (reply.length >= 20) {
-          await SendWhatsAppMessage({
-            body: formatBody(reply, ticket),
-            ticket
-          });
-          await finalizeAiResponse(ticket, primaryMessageId);
-          await ticket.reload({
-            include: ["contact", "queue", "whatsapp", "user"]
-          });
-          websocketUpdateTicket(ticket);
-          await persistAiDecisionLog({
-            companyId,
-            ticketId: ticket.id,
-            messageId: primaryMessageId,
-            action: "respond",
-            reason: "informational_direct_knowledge_path",
-            userMessage: maskSensitiveLog(userText),
-            aiResponse: reply,
-            details: {
-              knowledgeBaseIds,
-              chunks: knowledgeContext.usedChunks.length,
-              hasReadyDocuments: knowledgeContext.hasReadyDocuments
-            }
-          });
-          return;
-        }
-
-        logger.warn(
-          { ticketId: ticket.id, replyLength: reply.length },
-          "Informational direct path returned empty/short reply — falling through"
-        );
-      } catch (informationalError) {
-        logger.warn(
-          { informationalError, ticketId: ticket.id },
-          "Informational direct path failed — falling through to full pipeline"
-        );
+        websocketUpdateTicket(ticket);
+        await persistAiDecisionLog({
+          companyId,
+          ticketId: ticket.id,
+          messageId: primaryMessageId,
+          action: "respond",
+          reason: direct.reason,
+          userMessage: maskSensitiveLog(userText),
+          aiResponse: direct.body,
+          details: {
+            knowledgeBaseIds: direct.knowledgeBaseIds,
+            chunks: direct.chunkCount,
+            hasReadyDocuments: direct.hasReadyDocuments
+          }
+        });
+        return;
       }
+
+      logger.warn(
+        {
+          ticketId: ticket.id,
+          reason: direct.reason,
+          knowledgeBaseIds: direct.knowledgeBaseIds
+        },
+        "Informational direct path did not reply — falling through to full pipeline"
+      );
     }
 
     if (
