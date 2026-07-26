@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.63] — 2026-07-26
+
+### Corrigido (robô continua conversa com a base)
+
+- **Caminho direto informativo:** perguntas “o que é / como funciona / cashback / explique” pulam triagem+tools e respondem com LLM + material da base (`informational_direct_knowledge_path`), mantendo o robô ativo após a saudação.
+
+---
+
 ## [1.5.62] — 2026-07-26
 
 ### Corrigido (crítico — conversa em branco + robô para na saudação)
