@@ -6,6 +6,7 @@ import {
   isMetaConversationIntent,
   isPureGreetingMessage,
   isShortHelpRequest,
+  isWaitingForBotNudge,
   isSubstantiveAiReply,
   shouldSkipSupportInvestigation,
   isVagueCustomerStatement,
@@ -54,9 +55,11 @@ describe("CaseCompletenessEngine", () => {
 
   it("detects short help requests for fast-path replies", () => {
     expect(isShortHelpRequest("Pode ajudar?")).toBe(true);
+    expect(isShortHelpRequest("pode me ajudar ?")).toBe(true);
     expect(isShortHelpRequest("teste")).toBe(true);
-    expect(isShortHelpRequest("cade vc robozinho ?")).toBe(true);
     expect(isShortHelpRequest("Como funciona o Nível?")).toBe(false);
+    expect(isWaitingForBotNudge("cade vc robozinho ?")).toBe(true);
+    expect(isWaitingForBotNudge("por que nao respode ?")).toBe(true);
   });
 
   it("blocks automatic handoff until enough investigation rounds", () => {

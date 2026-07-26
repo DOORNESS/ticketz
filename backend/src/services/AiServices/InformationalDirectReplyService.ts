@@ -15,9 +15,20 @@ export type InformationalDirectReplyResult = {
   hasReadyDocuments: boolean;
   reason:
     | "informational_direct_knowledge_path"
+    | "informational_chunk_fallback"
+    | "informational_brand_fallback"
     | "empty_reply"
     | "provider_error";
 };
+
+const NIVEL_BRAND_FALLBACK =
+  "A Nível Cashback ajuda sua empresa a fidelizar clientes: em cada compra o cliente acumula cashback e volta a gastar com você. Posso te explicar o funcionamento para o lojista, para o cliente final, ou os benefícios principais — o que você prefere?";
+
+const FORTMAX_BRAND_FALLBACK =
+  "Posso te ajudar com os produtos Fortmax (como WebG3 e FortControl): funcionalidades, uso e suporte. Me diga o que sua empresa precisa resolver que eu te oriento com base no nosso material.";
+
+const GENERIC_BRAND_FALLBACK =
+  "Claro — posso te explicar o que nosso produto faz pela sua empresa com base no material deste canal. Me diga se prefere visão geral, benefícios ou como começar.";
 
 const buildConversationHistory = async (
   ticketId: number,
@@ -51,9 +62,43 @@ const buildConversationHistory = async (
     }));
 };
 
+const resolveBrandFallback = (agent: AiAgent): string => {
+  const prompt = `${agent.name || ""} ${agent.basePrompt || ""}`.toLowerCase();
+  if (
+    prompt.includes("nivelton") ||
+    prompt.includes("nível cashback") ||
+    prompt.includes("nivel cashback")
+  ) {
+    return NIVEL_BRAND_FALLBACK;
+  }
+  if (
+    prompt.includes("webin") ||
+    prompt.includes("fortmax") ||
+    prompt.includes("webg3")
+  ) {
+    return FORTMAX_BRAND_FALLBACK;
+  }
+  return GENERIC_BRAND_FALLBACK;
+};
+
+const buildChunkFallback = (
+  contextBlock: string,
+  agent: AiAgent
+): string | null => {
+  const cleaned = contextBlock.replace(/\[Trecho \d+\]\n?/g, "").trim();
+  if (cleaned.length < 40) {
+    return null;
+  }
+
+  const snippet = cleaned.slice(0, 700).trim();
+  return `Com base no nosso material: ${snippet}${
+    snippet.length >= 700 ? "…" : ""
+  }\n\nSe quiser, eu detalho benefícios para a sua empresa ou o passo a passo de uso.`;
+};
+
 /**
- * Caminho estável para dúvidas informativas: base + LLM, sem triagem/tools.
- * Mantém o robô conversando após a saudação.
+ * Caminho estável para dúvidas informativas.
+ * Sempre tenta devolver uma resposta ao cliente (LLM → trechos → fallback da marca).
  */
 export const tryInformationalDirectReply = async ({
   companyId,
@@ -72,6 +117,10 @@ export const tryInformationalDirectReply = async ({
     ticket.queueId
   );
 
+  let chunkCount = 0;
+  let hasReadyDocuments = false;
+  let contextBlock = "";
+
   try {
     const knowledgeContext = await buildKnowledgeContextForQuery({
       companyId,
@@ -81,12 +130,15 @@ export const tryInformationalDirectReply = async ({
       loadStrategy: "full"
     });
 
-    const history = await buildConversationHistory(ticket.id, 6);
-    const contextBlock =
+    chunkCount = knowledgeContext.usedChunks.length;
+    hasReadyDocuments = knowledgeContext.hasReadyDocuments;
+    contextBlock =
       knowledgeContext.contextBlock ||
       (knowledgeContext.hasReadyDocuments
         ? "Há conteúdo na base deste canal. Explique o produto com o que souber do material, sem inventar preços ou regras."
         : "A base deste canal ainda está limitada. Explique de forma geral e cordial o que puder; peça mais detalhes se necessário.");
+
+    const history = await buildConversationHistory(ticket.id, 6);
 
     const completion = await chatCompletion(companyId, {
       model: agent.textModel,
@@ -100,7 +152,7 @@ export const tryInformationalDirectReply = async ({
             agent.basePrompt?.trim() ||
               "Você é o assistente virtual deste canal de atendimento.",
             "Responda em português, de forma clara e conversacional.",
-            "Use o material da base de conhecimento para explicar o que é, como funciona e benefícios.",
+            "Use o material da base de conhecimento para explicar o que é, como funciona e benefícios para a empresa do cliente.",
             "Não invente políticas, valores ou procedimentos que não estejam no material.",
             "Não transfira para humano nesta resposta — continue a conversa e ofereça ajudar com a próxima dúvida.",
             `Material da base:\n${contextBlock}`
@@ -115,35 +167,42 @@ export const tryInformationalDirectReply = async ({
     });
 
     const reply = sanitizeAiOutboundText(completion.content?.trim() || "");
-    if (reply.length < 20) {
+    if (reply.length >= 20) {
       return {
-        replied: false,
+        replied: true,
+        body: reply,
         knowledgeBaseIds,
-        chunkCount: knowledgeContext.usedChunks.length,
-        hasReadyDocuments: knowledgeContext.hasReadyDocuments,
-        reason: "empty_reply"
+        chunkCount,
+        hasReadyDocuments,
+        reason: "informational_direct_knowledge_path"
       };
     }
-
-    return {
-      replied: true,
-      body: reply,
-      knowledgeBaseIds,
-      chunkCount: knowledgeContext.usedChunks.length,
-      hasReadyDocuments: knowledgeContext.hasReadyDocuments,
-      reason: "informational_direct_knowledge_path"
-    };
   } catch (error) {
     logger.warn(
       { error, ticketId: ticket.id, companyId },
-      "Informational direct reply failed"
+      "Informational direct LLM reply failed — using fallback"
     );
+  }
+
+  const chunkFallback = buildChunkFallback(contextBlock, agent);
+  if (chunkFallback) {
     return {
-      replied: false,
+      replied: true,
+      body: sanitizeAiOutboundText(chunkFallback),
       knowledgeBaseIds,
-      chunkCount: 0,
-      hasReadyDocuments: false,
-      reason: "provider_error"
+      chunkCount,
+      hasReadyDocuments,
+      reason: "informational_chunk_fallback"
     };
   }
+
+  const brandFallback = resolveBrandFallback(agent);
+  return {
+    replied: true,
+    body: brandFallback,
+    knowledgeBaseIds,
+    chunkCount,
+    hasReadyDocuments,
+    reason: "informational_brand_fallback"
+  };
 };

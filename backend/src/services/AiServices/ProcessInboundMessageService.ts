@@ -24,6 +24,7 @@ import {
   isVagueCustomerStatement,
   isPureGreetingMessage,
   isShortHelpRequest,
+  isWaitingForBotNudge,
   buildTimeBasedGreeting,
   isInformationalIntent
 } from "./Triage/CaseCompletenessEngine";
@@ -595,11 +596,37 @@ const ProcessInboundMessageService = async ({
       return;
     }
 
+    // "cadê vc / por que não responde" → responde a última pergunta real do cliente
+    if (isWaitingForBotNudge(userText)) {
+      const recent = await Message.findAll({
+        where: { ticketId: ticket.id, fromMe: false },
+        order: [["createdAt", "DESC"]],
+        limit: 8,
+        attributes: ["body"]
+      });
+      const lastRealQuestion = recent
+        .map(item => (item.body || "").trim())
+        .find(
+          body =>
+            body &&
+            !isPureGreetingMessage(body) &&
+            !isShortHelpRequest(body) &&
+            !isWaitingForBotNudge(body)
+        );
+
+      if (lastRealQuestion) {
+        userText = lastRealQuestion;
+        logger.info(
+          { ticketId: ticket.id, lastRealQuestion },
+          "Bot nudge detected — replaying last real customer question"
+        );
+      }
+    }
+
     const conversationText = await buildConversationText(ticket.id, userText);
     const informationalQuery = isInformationalIntent(userText);
 
-    // Caminho estável para dúvidas ("o que é", "como funciona", cashback, etc.):
-    // pula triagem/tools e responde direto com a base — evita o robô "morrer" após a saudação.
+    // Caminho estável para dúvidas: sempre envia resposta (LLM / trechos / fallback marca).
     if (informationalQuery && !forceHandoff) {
       const direct = await tryInformationalDirectReply({
         companyId,
@@ -608,41 +635,34 @@ const ProcessInboundMessageService = async ({
         userText
       });
 
-      if (direct.replied && direct.body) {
-        await SendWhatsAppMessage({
-          body: formatBody(direct.body, ticket),
-          ticket
-        });
-        await finalizeAiResponse(ticket, primaryMessageId);
-        await ticket.reload({
-          include: ["contact", "queue", "whatsapp", "user"]
-        });
-        websocketUpdateTicket(ticket);
-        await persistAiDecisionLog({
-          companyId,
-          ticketId: ticket.id,
-          messageId: primaryMessageId,
-          action: "respond",
-          reason: direct.reason,
-          userMessage: maskSensitiveLog(userText),
-          aiResponse: direct.body,
-          details: {
-            knowledgeBaseIds: direct.knowledgeBaseIds,
-            chunks: direct.chunkCount,
-            hasReadyDocuments: direct.hasReadyDocuments
-          }
-        });
-        return;
-      }
+      const replyBody =
+        direct.body ||
+        "Posso te explicar o que nosso produto faz pela sua empresa. Me diga se prefere visão geral, benefícios ou como começar.";
 
-      logger.warn(
-        {
-          ticketId: ticket.id,
-          reason: direct.reason,
-          knowledgeBaseIds: direct.knowledgeBaseIds
-        },
-        "Informational direct path did not reply — falling through to full pipeline"
-      );
+      await SendWhatsAppMessage({
+        body: formatBody(replyBody, ticket),
+        ticket
+      });
+      await finalizeAiResponse(ticket, primaryMessageId);
+      await ticket.reload({
+        include: ["contact", "queue", "whatsapp", "user"]
+      });
+      websocketUpdateTicket(ticket);
+      await persistAiDecisionLog({
+        companyId,
+        ticketId: ticket.id,
+        messageId: primaryMessageId,
+        action: "respond",
+        reason: direct.reason || "informational_brand_fallback",
+        userMessage: maskSensitiveLog(userText),
+        aiResponse: replyBody,
+        details: {
+          knowledgeBaseIds: direct.knowledgeBaseIds,
+          chunks: direct.chunkCount,
+          hasReadyDocuments: direct.hasReadyDocuments
+        }
+      });
+      return;
     }
 
     if (

@@ -104,18 +104,21 @@ const INFORMATIONAL_INTENT_PATTERNS = [
   /como (?:ele |o sistema |voc[eê]s )?(?:pode|podem|ajuda)/i,
   /(?:demo|demonstraç)/i,
   /(?:o que [eé]|como funciona)/i,
-  /(?:me fale|me conte) sobre/i,
+  /(?:me )?(?:fala|fale|conte)(?:\s+o?\s*que)?/i,
   /(?:me )?explic(?:ar|a|o|e)/i,
   /(?:fale|conte) (?:sobre|do|da|me)/i,
   /para que serve/i,
+  /pode fazer (?:pela|para|por)/i,
+  /faz(?:er)? (?:pela|para) (?:minha|meu|a)?\s*empresa/i,
   /(?:qual [eé]|o que [eé]) (?:a |o )?(?:finalidade|funç(?:ão|ao))/i,
   /(?:d[uú]vida|informaç(?:ão|oes)) (?:sobre|do|da)/i,
   /(?:o que [eé]|qual [eé]) (?:o |a )?n[ií]vel/i,
-  /n[ií]vel(?:\s+(?:cashback|empresa|cliente|de|do|da))?/i,
+  /n[ií]vel/i,
   /cashback/i,
   /fideliza(?:ç|c)[aã]o/i,
   /ajudar (?:a )?(?:minha|meu)/i,
-  /funcionalidades|recursos/i
+  /funcionalidades|recursos/i,
+  /benef[ií]cios/i
 ];
 
 const META_CONVERSATION_PATTERNS = [
@@ -178,17 +181,29 @@ export const isPureGreetingMessage = (text: string): boolean =>
   PURE_GREETING_PATTERNS.some(pattern => pattern.test(text.trim()));
 
 const SHORT_HELP_PATTERNS = [
-  /^\s*pode ajudar\??\s*$/i,
-  /^\s*pode me ajudar\??\s*$/i,
-  /^\s*preciso de ajuda\??\s*$/i,
-  /^\s*me ajuda\??\s*$/i,
-  /^\s*ajuda\??\s*$/i,
-  /^\s*cade vc\b/i,
+  /^\s*pode ajudar\s*\??\s*$/i,
+  /^\s*pode me ajudar\s*\??\s*$/i,
+  /^\s*preciso de ajuda\s*\??\s*$/i,
+  /^\s*me ajuda\s*\??\s*$/i,
+  /^\s*ajuda\s*\??\s*$/i,
   /^\s*teste\s*$/i
+];
+
+const WAITING_FOR_BOT_PATTERNS = [
+  /^\s*cad[eê]\s*(vc|voc[eê])\b.*$/i,
+  /^\s*por\s*que\s+n[aã]o\s+resp(?:onde|ode)\b.*$/i,
+  /^\s*vai\s+me\s+ajudar\b.*$/i,
+  /^\s*n[aã]o\s+vai\s+dizer\s+nada\b.*$/i,
+  /^\s*nada\s*\??\s*$/i,
+  /^\s*aluc?[oó]cin\w*\b.*$/i
 ];
 
 export const isShortHelpRequest = (text: string): boolean =>
   SHORT_HELP_PATTERNS.some(pattern => pattern.test(text.trim()));
+
+/** Cliente cobrando resposta — não é conteúdo novo; reengajar última pergunta real. */
+export const isWaitingForBotNudge = (text: string): boolean =>
+  WAITING_FOR_BOT_PATTERNS.some(pattern => pattern.test(text.trim()));
 
 export const isMetaConversationIntent = (text: string): boolean => {
   const normalized = text.trim();

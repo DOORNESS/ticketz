@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.64] — 2026-07-26
+
+### Corrigido (crítico — robô nunca mais fica em silêncio na FAQ)
+
+- **Sempre responde em dúvida informativa:** LLM → trechos da base → fallback da marca (Nível/Fortmax). Não cai mais no pipeline frágil sem mandar mensagem.
+- **“me fala o que a nível pode fazer…”** reconhecido como informativo (typos inclusos).
+- **“pode me ajudar ?”** (com espaço) volta ao fast-path de ajuda.
+- **“cadê vc / por que não responde”** reengaja a última pergunta real do cliente.
+
 ## [1.5.63] — 2026-07-26
 
 ### Corrigido (robô continua conversa com a base)

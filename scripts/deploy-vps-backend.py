@@ -101,6 +101,7 @@ PATCH_PATHS = [
     "services/AiServices/AudioPipelineLogger.js",
     "services/AiServices/MediaInboundResolver.js",
     "services/AiServices/ProcessInboundMessageService.js",
+    "services/AiServices/InformationalDirectReplyService.js",
     "services/AiServices/AiInboundQueueService.js",
     "services/AiServices/Triage/CaseCompletenessEngine.js",
     "services/AiServices/Triage/HandoffPolicyService.js",

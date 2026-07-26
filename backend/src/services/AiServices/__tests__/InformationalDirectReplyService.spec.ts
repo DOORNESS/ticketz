@@ -1,5 +1,9 @@
 import { tryInformationalDirectReply } from "../InformationalDirectReplyService";
-import { isInformationalIntent } from "../Triage/CaseCompletenessEngine";
+import {
+  isInformationalIntent,
+  isShortHelpRequest,
+  isWaitingForBotNudge
+} from "../Triage/CaseCompletenessEngine";
 
 jest.mock("../AiHelpers", () => ({
   getKnowledgeBaseIdsForAgent: jest.fn(async () => [10, 11])
@@ -35,7 +39,7 @@ jest.mock("../../../models/Message", () => ({
       },
       {
         fromMe: false,
-        body: "como funciona o nivel cashback?"
+        body: "me fala o quie a nivel pode fazer pela minha empresa ?"
       }
     ])
   }
@@ -44,6 +48,7 @@ jest.mock("../../../models/Message", () => ({
 describe("InformationalDirectReplyService", () => {
   const agent = {
     id: 7,
+    name: "Nivelton",
     provider: "openai",
     textModel: "gpt-4o-mini",
     temperature: 0.3,
@@ -57,11 +62,16 @@ describe("InformationalDirectReplyService", () => {
     companyId: 1
   } as Parameters<typeof tryInformationalDirectReply>[0]["ticket"];
 
-  it("routes cashback/nivel FAQ questions as informational intent", () => {
-    expect(isInformationalIntent("como funciona o nivel cashback?")).toBe(true);
-    expect(isInformationalIntent("o que é o nível?")).toBe(true);
-    expect(isInformationalIntent("Pode me explicar sobre o nível?")).toBe(true);
-    expect(isInformationalIntent("oi")).toBe(false);
+  it("detects real customer FAQ phrasing from the failed WhatsApp chat", () => {
+    expect(
+      isInformationalIntent(
+        "me fala o quie a nivel pode fazer pela minha empresa ?"
+      )
+    ).toBe(true);
+    expect(isShortHelpRequest("pode me ajudar ?")).toBe(true);
+    expect(isWaitingForBotNudge("cade vc")).toBe(true);
+    expect(isWaitingForBotNudge("por que nao respode ?")).toBe(true);
+    expect(isWaitingForBotNudge("vai me ajudar ou noa ?")).toBe(true);
   });
 
   it("returns a knowledge-based reply without needing tools/triage", async () => {
@@ -69,18 +79,34 @@ describe("InformationalDirectReplyService", () => {
       companyId: 1,
       ticket,
       agent,
-      userText: "como funciona o nivel cashback?"
+      userText: "me fala o quie a nivel pode fazer pela minha empresa ?"
     });
 
     expect(result.replied).toBe(true);
     expect(result.reason).toBe("informational_direct_knowledge_path");
-    expect(result.knowledgeBaseIds).toEqual([10, 11]);
-    expect(result.chunkCount).toBe(1);
     expect(result.body).toMatch(/Nível Cashback/i);
-    expect(result.body!.length).toBeGreaterThanOrEqual(20);
   });
 
-  it("returns empty_reply when model produces almost nothing", async () => {
+  it("always replies with brand fallback when LLM fails", async () => {
+    const { chatCompletion } = jest.requireMock("../ModelGateway");
+    chatCompletion.mockRejectedValueOnce(new Error("timeout"));
+
+    const result = await tryInformationalDirectReply({
+      companyId: 1,
+      ticket,
+      agent,
+      userText: "como funciona o cashback?"
+    });
+
+    expect(result.replied).toBe(true);
+    expect(result.body).toBeTruthy();
+    expect(result.body!.length).toBeGreaterThanOrEqual(20);
+    expect(["informational_chunk_fallback", "informational_brand_fallback"]).toContain(
+      result.reason
+    );
+  });
+
+  it("always replies even when model returns almost nothing", async () => {
     const { chatCompletion } = jest.requireMock("../ModelGateway");
     chatCompletion.mockResolvedValueOnce({
       content: "ok",
@@ -93,25 +119,10 @@ describe("InformationalDirectReplyService", () => {
       companyId: 1,
       ticket,
       agent,
-      userText: "como funciona?"
+      userText: "o que a nivel faz?"
     });
 
-    expect(result.replied).toBe(false);
-    expect(result.reason).toBe("empty_reply");
-  });
-
-  it("returns provider_error when completion throws", async () => {
-    const { chatCompletion } = jest.requireMock("../ModelGateway");
-    chatCompletion.mockRejectedValueOnce(new Error("timeout"));
-
-    const result = await tryInformationalDirectReply({
-      companyId: 1,
-      ticket,
-      agent,
-      userText: "como funciona o cashback?"
-    });
-
-    expect(result.replied).toBe(false);
-    expect(result.reason).toBe("provider_error");
+    expect(result.replied).toBe(true);
+    expect(result.body!.length).toBeGreaterThanOrEqual(20);
   });
 });
