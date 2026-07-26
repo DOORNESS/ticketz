@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.59] — 2026-07-26
+
+### Corrigido (crítico — OOM produção + fallback duplicado)
+
+- **Backend VPS crashava com heap out of memory (~2 GB)** ao processar IA — Node passa a subir com `--max-old-space-size=4096` (`restart-after-deploy.ps1`, `start-production.cmd`).
+- **Fallback duplicado:** dedupe Redis em `sendAiCustomerFallback` + limite de retries inline na fila.
+- **Tokens informativos:** teto reduzido de 16384 → 4096 para aliviar memória na completion.
+
+---
+
 ## [1.5.58] — 2026-07-25
 
 ### Corrigido (crítico — IA, ativos CMS, aba Atendimentos)

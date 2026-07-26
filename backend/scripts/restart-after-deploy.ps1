@@ -3,6 +3,7 @@ param(
 )
 
 $ErrorActionPreference = "Continue"
+$env:NODE_OPTIONS = "--max-old-space-size=4096"
 $Root = "C:\ticketz"
 $Backend = Join-Path $Root "backend"
 
@@ -94,13 +95,14 @@ $ErrorActionPreference = "Continue"
 $backendCmd = @(
   "$Root\start-backend-watch.cmd",
   "$Root\start-backend.cmd",
-  "$Root\run-backend.cmd"
+  "$Root\run-backend.cmd",
+  "$Backend\scripts\start-production.cmd"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
 if ($backendCmd) {
   Start-Process $backendCmd -WindowStyle Hidden
 } else {
-  Start-Process node -ArgumentList "dist\server.js" -WorkingDirectory $Backend -WindowStyle Hidden
+  Start-Process node -ArgumentList "--max-old-space-size=4096","dist\server.js" -WorkingDirectory $Backend -WindowStyle Hidden
 }
 
 $healthOk = $false

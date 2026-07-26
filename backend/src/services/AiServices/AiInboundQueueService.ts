@@ -463,14 +463,40 @@ export const processBufferedAiInbound = async (
     });
 
     if (!job && isTransientAiError(error)) {
-      setTimeout(() => {
-        void processBufferedAiInbound(companyId, ticketId).catch(retryError => {
+      const retryKey = `ai:inline-retry:${ticketId}`;
+      const retries = await redis.incr(retryKey);
+      await redis.expire(retryKey, 300);
+
+      if (retries < getMaxAttempts()) {
+        setTimeout(() => {
+          void processBufferedAiInbound(companyId, ticketId).catch(retryError => {
+            logger.error(
+              { retryError, ticketId, companyId },
+              "Retry after transient AI processing error failed"
+            );
+          });
+        }, getLockRetryMs());
+      } else {
+        await redis.del(retryKey);
+        try {
+          const revalidated = await revalidateTicketForAi(ticketId, companyId);
+          if (revalidated) {
+            const payloads = await drainBufferedMessages(ticketId);
+            if (payloads.length) {
+              await sendTransientQueueFallback({
+                ticket: revalidated.ticket,
+                companyId,
+                payloads
+              });
+            }
+          }
+        } catch (fallbackError) {
           logger.error(
-            { retryError, ticketId, companyId },
-            "Retry after transient AI processing error failed"
+            { fallbackError, ticketId },
+            "Failed to send transient AI fallback after inline retries"
           );
-        });
-      }, getLockRetryMs());
+        }
+      }
     } else if (isTransientAiError(error)) {
       try {
         const revalidated = await revalidateTicketForAi(ticketId, companyId);

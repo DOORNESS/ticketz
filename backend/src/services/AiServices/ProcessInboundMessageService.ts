@@ -111,7 +111,7 @@ const resolveEffectiveMaxTokens = (
     return configured;
   }
 
-  return Math.max(configured, informationalQuery ? 16384 : configured);
+  return Math.min(4096, Math.max(configured, informationalQuery ? 2048 : configured));
 };
 
 const AUDIO_USER_FALLBACK =
@@ -132,6 +132,21 @@ export const sendAiCustomerFallback = async ({
   userText: string;
   body?: string;
 }): Promise<void> => {
+  try {
+    const { getAiInboundQueue } = await import("./AiInboundQueueService");
+    const redis = getAiInboundQueue().client;
+    const dedupeKey = `ai:fallback:sent:${ticket.id}:${messageId || reason}`;
+    const acquired = await redis.set(dedupeKey, "1", "EX", 180, "NX");
+    if (acquired !== "OK") {
+      return;
+    }
+  } catch (dedupeError) {
+    logger.warn(
+      { dedupeError, ticketId: ticket.id },
+      "Fallback dedupe check failed; sending anyway"
+    );
+  }
+
   await SendWhatsAppMessage({
     body: formatBody(body, ticket),
     ticket

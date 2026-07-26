@@ -576,6 +576,7 @@ def main() -> int:
         verify_script = BACKEND / "scripts" / "verify-runtime-ready.js"
         verify_heavy_script = BACKEND / "scripts" / "verify-heavy-routes-ready.js"
         restart_script = BACKEND / "scripts" / "restart-after-deploy.ps1"
+        start_prod_script = BACKEND / "scripts" / "start-production.cmd"
         for script in (
             reset_script,
             schema_script,
@@ -588,6 +589,7 @@ def main() -> int:
             verify_script,
             verify_heavy_script,
             restart_script,
+            start_prod_script,
         ):
             if script.is_file():
                 extra_scripts.append(script)
