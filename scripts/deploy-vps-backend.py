@@ -32,7 +32,6 @@ ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 DIST = BACKEND / "dist"
 CHUNK = int(os.environ.get("DEPLOY_B64_CHUNK", "1500"))
-CHUNK_BATCH = int(os.environ.get("DEPLOY_CHUNK_BATCH", "3"))
 UPLOAD_CHUNK_RETRIES = int(os.environ.get("DEPLOY_UPLOAD_CHUNK_RETRIES", "4"))
 UPLOAD_FILE_RETRIES = int(os.environ.get("DEPLOY_UPLOAD_FILE_RETRIES", "3"))
 UPLOAD_VERIFY_PAUSE_SEC = float(os.environ.get("DEPLOY_UPLOAD_VERIFY_PAUSE_SEC", "1.5"))
@@ -302,46 +301,27 @@ def upload_chunk(
     chunk: str,
     total_chunks: int,
 ) -> None:
-    upload_chunks_batch(s, b64_dir, [(idx, chunk)], total_chunks)
-
-
-def upload_chunks_batch(
-    s,
-    b64_dir: str,
-    parts: List[tuple],
-    total_chunks: int,
-) -> None:
-    if not parts:
-        return
-
-    ps_lines = [
-        f"New-Item -ItemType Directory -Force -Path '{b64_dir}' | Out-Null"
-    ]
-    for idx, chunk in parts:
-        part_path = rf"{b64_dir}\{idx:04d}.txt"
-        chunk_b64 = base64.b64encode(chunk.encode("ascii")).decode("ascii")
-        ps_lines.append(
+    part_path = rf"{b64_dir}\{idx:04d}.txt"
+    chunk_b64 = base64.b64encode(chunk.encode("ascii")).decode("ascii")
+    last_err = ""
+    for attempt in range(1, UPLOAD_CHUNK_RETRIES + 1):
+        code, _, err = run_ps(
+            s,
             f"""
+New-Item -ItemType Directory -Force -Path '{b64_dir}' | Out-Null
 $p = [Text.Encoding]::ASCII.GetString([Convert]::FromBase64String('{chunk_b64}'))
 [IO.File]::WriteAllText('{part_path}', $p, [Text.UTF8Encoding]::new($false))
 if (-not (Test-Path '{part_path}')) {{ throw "part {idx} missing after write" }}
 if ((Get-Item '{part_path}').Length -ne {len(chunk)}) {{ throw "part {idx} size mismatch" }}
-""".strip()
+""",
         )
-
-    script = "\n".join(ps_lines)
-    first_idx = parts[0][0]
-    last_idx = parts[-1][0]
-    last_err = ""
-    for attempt in range(1, UPLOAD_CHUNK_RETRIES + 1):
-        code, _, err = run_ps(s, script)
         if code == 0:
             return
         last_err = err.strip()
         if attempt < UPLOAD_CHUNK_RETRIES:
             time.sleep(min(2 * attempt, 6))
     raise RuntimeError(
-        f"Chunk batch {first_idx}-{last_idx}/{total_chunks} upload failed after "
+        f"Chunk {idx}/{total_chunks} upload failed after "
         f"{UPLOAD_CHUNK_RETRIES} attempts: {last_err}"
     )
 
@@ -386,27 +366,17 @@ if (-not (Test-Path '{b64_dir}')) {{ throw "failed to create upload dir" }}
     )
 
     total_chunks = (len(b64) + CHUNK - 1) // CHUNK
-    batch_count = (total_chunks + CHUNK_BATCH - 1) // CHUNK_BATCH
     print(
-        f"    zip transfer: {total_chunks} base64 chunk(s) in {batch_count} "
-        f"WinRM batch(es) — still a single ZIP, not per-file upload",
+        f"    transferring 1 ZIP as {total_chunks} base64 chunk(s) over WinRM "
+        "(not one upload per dist file)",
         flush=True,
     )
-    batch_no = 0
-    for batch_start in range(0, total_chunks, CHUNK_BATCH):
-        batch_no += 1
-        parts: List[tuple] = []
-        for idx in range(batch_start + 1, min(batch_start + CHUNK_BATCH, total_chunks) + 1):
-            i = (idx - 1) * CHUNK
-            parts.append((idx, b64[i : i + CHUNK]))
-        upload_chunks_batch(s, b64_dir, parts, total_chunks)
-        if batch_no == 1 or batch_no == batch_count or batch_no % 5 == 0:
-            last_idx = parts[-1][0]
-            print(
-                f"    upload batch {batch_no}/{batch_count} "
-                f"(through chunk {last_idx}/{total_chunks})",
-                flush=True,
-            )
+    for idx in range(1, total_chunks + 1):
+        i = (idx - 1) * CHUNK
+        chunk = b64[i : i + CHUNK]
+        upload_chunk(s, b64_dir, idx, chunk, total_chunks)
+        if idx == 1 or idx == total_chunks or idx % 20 == 0:
+            print(f"    upload {idx}/{total_chunks} chunks", flush=True)
 
     for verify_attempt in range(1, 4):
         missing = list_missing_parts(s, b64_dir, total_chunks)

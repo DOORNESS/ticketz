@@ -12,7 +12,7 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 - **Triagem em casos detalhados:** saldo/carteira/troca de celular não disparam mais “Em qual módulo?” após áudio ou descrição completa.
 - **Fila IA:** erro definitivo não reprocessa mensagem em loop (evita fallback duplicado).
-- **Deploy WinRM:** upload continua **1 ZIP**; chunks base64 agora vão em **lotes** (`DEPLOY_CHUNK_BATCH=8`) — menos round-trips, log deixa claro que não é upload arquivo a arquivo.
+- **Deploy WinRM:** upload continua **1 ZIP**; chunks base64 voltam **um por chamada WinRM** (`DEPLOY_B64_CHUNK=1500`) — lotes (`DEPLOY_CHUNK_BATCH`) estouravam o limite de linha de comando no Windows.
 
 ---
 
