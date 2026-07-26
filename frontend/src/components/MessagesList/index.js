@@ -876,16 +876,6 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
   }, [ticketId]);
 
   useEffect(() => {
-    if (markAsRead !== false || !hasMore || loading) {
-      return;
-    }
-
-    loadPageMutex.runExclusive(async () => {
-      loadData(true);
-    });
-  }, [markAsRead, hasMore, loading, ticketId]);
-
-  useEffect(() => {
     if (!ticket.id) {
       return;
     }

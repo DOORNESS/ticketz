@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.62] — 2026-07-26
+
+### Corrigido (crítico — conversa em branco + robô para na saudação)
+
+- **Conversa em branco ao clicar no ticket:** abrir ticket passa `ticketSnapshot`; fetch não fica preso em skeleton; MessageInput não desconecta mais o Socket.io global; supervisão não encadeia páginas de mensagens automaticamente (travava a UI).
+- **Robô só saudava:** texto puro não depende mais de storage; em erro de processamento faz recovery com LLM+RAG antes do “instabilidade momentânea”; intenções com `cashback` tratadas como informativas.
+
+---
+
 ## [1.5.61] — 2026-07-26
 
 ### Corrigido (crítico — robô + Sugerir resposta)

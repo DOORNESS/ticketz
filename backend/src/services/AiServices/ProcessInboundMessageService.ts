@@ -59,6 +59,7 @@ import { enqueuePersistContactMemory } from "./ContactMemory/AiContactMemoryQueu
 import { isContactMemoryEnabledForCompany } from "./ContactMemory/AiContactMemoryFeatureFlag";
 import { isToolsEnabledForCompany } from "./tools/AiToolsFeatureFlag";
 import { runToolLoop } from "./tools/ToolLoopService";
+import { chatCompletion } from "./ModelGateway";
 import "./tools/registerPilotTools";
 import crypto from "crypto";
 import {
@@ -222,7 +223,25 @@ const resolveInboundText = async ({
   agent: AiAgent;
   messages: InboundMessageItem[];
 }): Promise<string> => {
-  await StorageService.ensureReady(companyId);
+  const needsStorage = messages.some(
+    message =>
+      Boolean(message.mediaUrl) ||
+      (message.mediaType &&
+        !["text", "chat", "extendedTextMessage", "conversation"].includes(
+          message.mediaType
+        ))
+  );
+
+  if (needsStorage) {
+    try {
+      await StorageService.ensureReady(companyId);
+    } catch (storageError) {
+      logger.warn(
+        { storageError, companyId, ticketId: ticket.id },
+        "Storage not ready for inbound media — continuing with text body"
+      );
+    }
+  }
 
   const resolvedParts = await Promise.all(
     messages.map(message =>
@@ -1198,6 +1217,73 @@ const ProcessInboundMessageService = async ({
           conversationText: userText
         });
         return;
+      }
+
+      // Última tentativa: resposta simples sem tools (evita "instabilidade" em perguntas reais).
+      if (userText && isInformationalIntent(userText)) {
+        try {
+          const knowledgeBaseIds = await getKnowledgeBaseIdsForAgent(
+            companyId,
+            agent.id,
+            ticket.queueId
+          );
+          const knowledgeContext = await buildKnowledgeContextForQuery({
+            companyId,
+            knowledgeBaseIds,
+            userText,
+            provider: agent.provider,
+            loadStrategy: "full"
+          });
+          const recovery = await chatCompletion(companyId, {
+            model: agent.textModel,
+            temperature: 0.3,
+            maxTokens: Math.min(2048, agent.maxTokens || 1024),
+            providerId: agent.provider,
+            messages: [
+              {
+                role: "system",
+                content:
+                  (agent.basePrompt ||
+                    "Você é o assistente virtual deste canal.") +
+                  "\nResponda em português, com base no contexto. Não invente."
+              },
+              {
+                role: "user",
+                content: [
+                  `Pergunta do cliente:\n${userText}`,
+                  `Base de conhecimento:\n${
+                    knowledgeContext.contextBlock || "sem contexto"
+                  }`
+                ].join("\n\n")
+              }
+            ]
+          });
+          const recoveryText = sanitizeAiOutboundText(
+            recovery.content?.trim() || ""
+          );
+          if (recoveryText.length >= 20) {
+            await SendWhatsAppMessage({
+              body: formatBody(recoveryText, ticket),
+              ticket
+            });
+            await finalizeAiResponse(ticket, primaryMessageId);
+            await persistAiDecisionLog({
+              companyId,
+              ticketId: ticket.id,
+              messageId: primaryMessageId,
+              action: "respond",
+              reason: "processing_error_recovery_reply",
+              userMessage: maskSensitiveLog(userText),
+              aiResponse: recoveryText
+            });
+            return;
+          }
+        } catch (recoveryError) {
+          logger.warn(
+            { recoveryError, ticketId: ticket.id },
+            "AI recovery reply after processing error also failed"
+          );
+        }
       }
 
       await sendAiCustomerFallback({

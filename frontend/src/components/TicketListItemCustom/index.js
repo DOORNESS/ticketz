@@ -385,8 +385,10 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
     const observing = isTicketObservationMode(selected, user);
 
     setObservationMode(observing);
-    setCurrentTicket({ id, uuid: routeId, code });
-    history.push(`/tickets/${routeId}`);
+    setCurrentTicket({ ...selected, id, uuid: routeId, code });
+    history.push(`/tickets/${routeId}`, {
+      ticketSnapshot: selected
+    });
   };
 
   const openCloseDialog = e => {

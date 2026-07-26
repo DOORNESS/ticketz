@@ -171,45 +171,64 @@ const Ticket = () => {
   };
 
   useEffect(() => {
-    if (authLoading || !user?.id) {
+    if (authLoading || !user?.id || !ticketId) {
       return undefined;
     }
 
-    if (location.state?.ticketSnapshot) {
-      syncTicketView(location.state.ticketSnapshot);
+    let cancelled = false;
+    const snapshot = location.state?.ticketSnapshot;
+    const sameTicketAlreadyLoaded =
+      ticket?.id &&
+      (String(ticket.id) === String(ticketId) || ticket.uuid === ticketId);
+
+    if (snapshot?.id) {
+      setContact(snapshot.contact || {});
+      syncTicketView(snapshot);
       setLoading(false);
       history.replace({
         pathname: location.pathname,
         search: location.search,
         state: {}
       });
-      return undefined;
+    } else if (!sameTicketAlreadyLoaded) {
+      setTicket({});
+      setContact({});
+      setLoading(true);
     }
 
-    setLoading(true);
-    const delayDebounceFn = setTimeout(() => {
-      const fetchTicket = async () => {
-        try {
-          const isUuid =
-            ticketId &&
-            String(ticketId).includes("-") &&
-            !/^\d+$/.test(ticketId);
-          const endpoint = isUuid
-            ? `/tickets/u/${ticketId}`
-            : `/tickets/${ticketId}`;
-          const { data } = await api.get(endpoint);
-          setContact(data.contact);
-          syncTicketView(data);
-          setLoading(false);
-        } catch (err) {
-          setLoading(false);
-          toastError(err);
-        }
-      };
-      fetchTicket();
-    }, 150);
-    return () => clearTimeout(delayDebounceFn);
-  }, [ticketId, user, authLoading, history, setObservationMode]);
+    const delayDebounceFn = setTimeout(
+      () => {
+        const fetchTicket = async () => {
+          try {
+            const isUuid =
+              ticketId &&
+              String(ticketId).includes("-") &&
+              !/^\d+$/.test(ticketId);
+            const endpoint = isUuid
+              ? `/tickets/u/${ticketId}`
+              : `/tickets/${ticketId}`;
+            const { data } = await api.get(endpoint);
+            if (cancelled) return;
+            setContact(data.contact);
+            syncTicketView(data);
+            setLoading(false);
+          } catch (err) {
+            if (cancelled) return;
+            setLoading(false);
+            toastError(err);
+          }
+        };
+        fetchTicket();
+      },
+      snapshot?.id ? 0 : 150
+    );
+
+    return () => {
+      cancelled = true;
+      clearTimeout(delayDebounceFn);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ticketId, user?.id, authLoading]);
 
   useEffect(() => {
     if (!ticket.id) {
@@ -363,6 +382,10 @@ const Ticket = () => {
   };
 
   const renderMessagesList = () => {
+    if (!ticket?.id) {
+      return null;
+    }
+
     return (
       <>
         <MessagesList
@@ -400,7 +423,9 @@ const Ticket = () => {
           })}
           onClick={() => setDrawerOpen(false)}
         ></div>
-        <TicketHeader loading={loading}>{renderTicketInfo()}</TicketHeader>
+        <TicketHeader loading={loading && !ticket?.id}>
+          {renderTicketInfo()}
+        </TicketHeader>
         <ClosedTicketBar ticket={ticket} onReopened={syncTicketView} />
         <TicketConversationToolbar
           ticket={ticket}
@@ -440,7 +465,6 @@ const Ticket = () => {
         onClose={() => setAdminPanelOpen(false)}
         ticket={ticket}
         user={user}
-        observationMode={isObserving}
         observationMode={isObserving}
         onOpenRepository={() => {
           setAdminPanelOpen(false);

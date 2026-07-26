@@ -877,13 +877,11 @@ const MessageInputCustom = forwardRef((props, ref) => {
   }, [ticketId]);
 
   useEffect(() => {
-    const socket = socketManager.GetSocket();
-    if (socket) {
-      setSocket(socket);
+    const nextSocket = socketManager.GetSocket();
+    if (nextSocket) {
+      setSocket(nextSocket);
     }
-    return () => {
-      socket.disconnect();
-    };
+    // Não desconectar o socket global no unmount — ele é compartilhado pelo app.
   }, [socketManager]);
 
   useEffect(() => {
@@ -898,12 +896,12 @@ const MessageInputCustom = forwardRef((props, ref) => {
     }
 
     if (replyingMessage || editingMessage) {
-      inputRef.current.focus();
+      inputRef.current?.focus();
     }
   }, [replyingMessage, editingMessage, signMessage, user.name]);
 
   useEffect(() => {
-    inputRef.current.focus();
+    inputRef.current?.focus();
     return () => {
       setShowEmoji(false);
       setMedias([]);

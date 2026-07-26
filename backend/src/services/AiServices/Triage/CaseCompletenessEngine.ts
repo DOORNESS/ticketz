@@ -112,6 +112,7 @@ const INFORMATIONAL_INTENT_PATTERNS = [
   /(?:d[uú]vida|informaç(?:ão|oes)) (?:sobre|do|da)/i,
   /(?:o que [eé]|qual [eé]) (?:o |a )?n[ií]vel/i,
   /n[ií]vel(?:\s+(?:cashback|empresa|cliente|de|do|da))?/i,
+  /cashback/i,
   /fideliza(?:ç|c)[aã]o/i,
   /ajudar (?:a )?(?:minha|meu)/i,
   /funcionalidades|recursos/i
