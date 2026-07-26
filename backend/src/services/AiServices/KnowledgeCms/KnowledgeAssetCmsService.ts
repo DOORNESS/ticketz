@@ -288,7 +288,12 @@ export const archiveKnowledgeAsset = async (
   assetId: number
 ): Promise<KnowledgeAsset> => {
   const asset = await getKnowledgeAsset(companyId, assetId);
-  assertTransition(asset.lifecycleStatus, ["published", "approved", "draft"]);
+  assertTransition(asset.lifecycleStatus, [
+    "published",
+    "approved",
+    "draft",
+    "review"
+  ]);
   await asset.update({
     lifecycleStatus: "archived",
     archivedAt: new Date(),
@@ -301,6 +306,31 @@ export const archiveKnowledgeAsset = async (
   );
 
   return getKnowledgeAsset(companyId, assetId);
+};
+
+export const deleteKnowledgeAsset = async (
+  companyId: number,
+  assetId: number
+): Promise<void> => {
+  const asset = await getKnowledgeAsset(companyId, assetId);
+
+  if (asset.lifecycleStatus === "published") {
+    throw new AppError(
+      "Published assets must be archived before deletion",
+      409
+    );
+  }
+
+  await KnowledgeChunk.destroy({
+    where: { companyId, knowledgeAssetId: asset.id }
+  });
+  await KnowledgeIngestionJob.destroy({
+    where: { companyId, knowledgeAssetId: asset.id }
+  });
+  await KnowledgeAssetVersion.destroy({
+    where: { companyId, knowledgeAssetId: asset.id }
+  });
+  await asset.destroy();
 };
 
 export const listAssetIngestionJobs = async (

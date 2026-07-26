@@ -37,8 +37,7 @@ const useTickets = ({
 
   useEffect(() => {
     const debounceMs = skipDebounceRef.current ? 0 : 200;
-    const isBackgroundRefetch =
-      skipDebounceRef.current && ticketsRef.current.length > 0;
+    const isBackgroundRefetch = skipDebounceRef.current;
     skipDebounceRef.current = false;
 
     if (!isBackgroundRefetch) {

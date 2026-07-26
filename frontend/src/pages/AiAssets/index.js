@@ -322,7 +322,18 @@ const AiAssets = () => {
 
   const runLifecycleAction = async (asset, action, body) => {
     try {
-      await api.post(`/ai/assets/${asset.id}/${action}`, body || {});
+      if (action === "delete") {
+        if (
+          !window.confirm(
+            `Excluir permanentemente "${asset.title}"? Esta ação não pode ser desfeita.`
+          )
+        ) {
+          return;
+        }
+        await api.delete(`/ai/assets/${asset.id}`);
+      } else {
+        await api.post(`/ai/assets/${asset.id}/${action}`, body || {});
+      }
       toast.success("Ação executada com sucesso");
       loadAssets();
     } catch (err) {
@@ -559,6 +570,13 @@ const AiAssets = () => {
     }
     if (status === "approved") {
       actions.push({ key: "publish", label: "Publicar" });
+      actions.push({ key: "archive", label: "Arquivar" });
+    }
+    if (status === "review") {
+      actions.push({ key: "archive", label: "Arquivar" });
+    }
+    if (status === "draft") {
+      actions.push({ key: "archive", label: "Arquivar" });
     }
     if (status === "published") {
       actions.push({ key: "archive", label: "Arquivar" });
@@ -571,6 +589,10 @@ const AiAssets = () => {
 
     actions.push({ key: "versions", label: "Histórico de versões" });
     actions.push({ key: "jobs", label: "Jobs de ingestão" });
+
+    if (status !== "published") {
+      actions.push({ key: "delete", label: "Excluir ativo" });
+    }
 
     return actions;
   };

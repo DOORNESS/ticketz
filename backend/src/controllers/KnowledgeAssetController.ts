@@ -7,6 +7,7 @@ import {
   cloneKnowledgeAssetToBase,
   createKnowledgeAsset,
   createNewAssetVersionFromCurrent,
+  deleteKnowledgeAsset,
   getKnowledgeAsset,
   listAssetIngestionJobs,
   listKnowledgeAssets,
@@ -499,6 +500,23 @@ export const archive = async (
 
   const asset = await archiveKnowledgeAsset(companyId, Number(assetId));
   return res.json(asset);
+};
+
+export const destroy = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { companyId, id, profile } = req.user;
+  const { assetId } = req.params;
+
+  await assertKnowledgePermission(
+    "publish",
+    { companyId, resourceType: "asset", resourceId: Number(assetId) },
+    { id: Number(id), profile, companyId }
+  );
+
+  await deleteKnowledgeAsset(companyId, Number(assetId));
+  return res.status(204).send();
 };
 
 export const rollback = async (

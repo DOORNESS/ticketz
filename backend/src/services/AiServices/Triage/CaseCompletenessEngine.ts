@@ -91,6 +91,11 @@ const INFORMATIONAL_INTENT_PATTERNS = [
   /(?:demo|demonstraç)/i,
   /(?:o que [eé]|como funciona)/i,
   /(?:me fale|me conte) sobre/i,
+  /(?:me )?explique/i,
+  /(?:fale|conte) (?:sobre|do|da|me)/i,
+  /(?:d[uú]vida|informaç(?:ão|oes)) (?:sobre|do|da)/i,
+  /(?:o que [eé]|qual [eé]) (?:o |a )?n[ií]vel/i,
+  /n[ií]vel(?:\s+(?:cashback|empresa|cliente|de|do|da))?/i,
   /ajudar (?:a )?(?:minha|meu)/i,
   /funcionalidades|recursos/i
 ];
@@ -261,6 +266,10 @@ export const isVagueCustomerStatement = (text: string): boolean => {
   const normalized = text.trim();
   if (!normalized) {
     return true;
+  }
+
+  if (isInformationalIntent(normalized)) {
+    return false;
   }
 
   if (VAGUE_PATTERNS.some(pattern => pattern.test(normalized))) {

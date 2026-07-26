@@ -171,12 +171,17 @@ const ensureAiTables = async (schema: string): Promise<void> => {
       id SERIAL PRIMARY KEY,
       "companyId" INTEGER NOT NULL REFERENCES ${q(schema, "Companies")}(id)
         ON UPDATE CASCADE ON DELETE CASCADE,
-      "knowledgeDocumentId" INTEGER NOT NULL REFERENCES ${q(schema, "KnowledgeDocuments")}(id)
+      "knowledgeDocumentId" INTEGER REFERENCES ${q(schema, "KnowledgeDocuments")}(id)
         ON UPDATE CASCADE ON DELETE CASCADE,
       content TEXT NOT NULL,
       metadata JSONB,
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+  `);
+
+  await sequelize.query(`
+    ALTER TABLE ${q(schema, "KnowledgeChunks")}
+    ALTER COLUMN "knowledgeDocumentId" DROP NOT NULL;
   `);
 
   await sequelize.query(`
@@ -417,6 +422,10 @@ export const applyAiSchema = async (): Promise<void> => {
   await markMigrationExecuted(
     schema,
     "20260723130000-media-lifecycle-b2-private.js"
+  );
+  await markMigrationExecuted(
+    schema,
+    "20260725180000-knowledge-chunks-nullable-document.js"
   );
 
   logger.info({ schema }, "AI + media lifecycle schema ensured");

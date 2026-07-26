@@ -1,4 +1,5 @@
 import { Op } from "sequelize";
+import sequelize from "../../database";
 import KnowledgeDocument from "../../models/KnowledgeDocument";
 import KnowledgeChunk from "../../models/KnowledgeChunk";
 import { createEmbedding } from "./ModelGateway";
@@ -8,6 +9,7 @@ import {
   RetrievedChunk
 } from "./RetrievalEngine";
 import { ingestKnowledgeDocument } from "./IngestKnowledgeDocumentService";
+import { isKbCmsEnabledForCompany } from "./KnowledgeCms/AiKbCmsFeatureFlag";
 import { logger } from "../../utils/logger";
 
 const MAX_CONTEXT_CHARS = 20000;
@@ -58,6 +60,51 @@ const loadAllReadyChunkTexts = async (
     documentTitle?: string;
   }[]
 > => {
+  const cmsEnabled = await isKbCmsEnabledForCompany(companyId);
+
+  if (cmsEnabled) {
+    const [cmsRows] = await sequelize.query(
+      `
+      SELECT
+        kc.id,
+        kc.content,
+        ka.title AS "documentTitle",
+        kc."knowledgeDocumentId"
+      FROM "KnowledgeChunks" kc
+      INNER JOIN "KnowledgeAssets" ka ON ka.id = kc."knowledgeAssetId"
+      WHERE kc."companyId" = :companyId
+        AND kc."knowledgeBaseId" IN (:knowledgeBaseIds)
+        AND kc."lifecycleStatus" = 'published'
+        AND ka."lifecycleStatus" = 'published'
+        AND ka."publishedVersionId" = kc."knowledgeAssetVersionId"
+      ORDER BY kc.id ASC
+      LIMIT :chunkLimit
+      `,
+      {
+        replacements: { companyId, knowledgeBaseIds, chunkLimit }
+      }
+    );
+
+    const cmsChunks = (
+      cmsRows as {
+        id: number;
+        content: string;
+        documentTitle?: string;
+        knowledgeDocumentId?: number;
+      }[]
+    ).map(row => ({
+      id: row.id,
+      content: row.content.slice(0, MAX_CHUNK_SNIPPET),
+      similarity: 0.4,
+      knowledgeDocumentId: row.knowledgeDocumentId,
+      documentTitle: row.documentTitle || ""
+    }));
+
+    if (cmsChunks.length) {
+      return cmsChunks;
+    }
+  }
+
   const rows = await KnowledgeChunk.findAll({
     where: { companyId },
     include: [
@@ -149,9 +196,31 @@ export const buildKnowledgeContextForQuery = async ({
     }
   });
 
+  const cmsEnabled = await isKbCmsEnabledForCompany(companyId);
+  let cmsPublishedChunkCount = 0;
+
+  if (cmsEnabled) {
+    const [cmsCountRows] = await sequelize.query(
+      `
+      SELECT COUNT(*)::int AS count
+      FROM "KnowledgeChunks" kc
+      INNER JOIN "KnowledgeAssets" ka ON ka.id = kc."knowledgeAssetId"
+      WHERE kc."companyId" = :companyId
+        AND kc."knowledgeBaseId" IN (:knowledgeBaseIds)
+        AND kc."lifecycleStatus" = 'published'
+        AND ka."lifecycleStatus" = 'published'
+      `,
+      { replacements: { companyId, knowledgeBaseIds } }
+    );
+    cmsPublishedChunkCount =
+      (cmsCountRows as { count: number }[])[0]?.count || 0;
+  }
+
+  const effectiveReadyCount = readyCount + cmsPublishedChunkCount;
+
   let reingestedDocuments = 0;
 
-  if (readyCount === 0) {
+  if (effectiveReadyCount === 0) {
     reingestedDocuments = await reingestPendingDocuments(
       companyId,
       knowledgeBaseIds
@@ -160,7 +229,8 @@ export const buildKnowledgeContextForQuery = async ({
 
   if (
     loadStrategy === "full" ||
-    (readyCount > 0 && readyCount <= AUTO_FULL_CORPUS_DOC_LIMIT)
+    (effectiveReadyCount > 0 &&
+      effectiveReadyCount <= AUTO_FULL_CORPUS_DOC_LIMIT)
   ) {
     const usedChunks = await loadAllReadyChunkTexts(
       companyId,

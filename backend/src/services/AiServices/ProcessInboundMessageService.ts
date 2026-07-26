@@ -117,7 +117,7 @@ const resolveEffectiveMaxTokens = (
 const AUDIO_USER_FALLBACK =
   "Não consegui compreender este áudio. Poderia reenviá-lo ou escrever sua mensagem?";
 
-const sendAiCustomerFallback = async ({
+export const sendAiCustomerFallback = async ({
   ticket,
   companyId,
   messageId,
@@ -1135,31 +1135,6 @@ const ProcessInboundMessageService = async ({
     }
   } catch (error) {
     if (isTransientAiError(error)) {
-      const canSendTransientFallback =
-        userText &&
-        !isPureGreetingMessage(userText) &&
-        !detectAgentIdentityQuestion(userText);
-
-      if (canSendTransientFallback) {
-        try {
-          await sendAiCustomerFallback({
-            ticket,
-            companyId,
-            messageId: primaryMessageId,
-            reason: "transient_provider_error_fallback",
-            userText,
-            body: isInformationalIntent(userText)
-              ? AI_INFORMATIONAL_FALLBACK
-              : TRANSIENT_ERROR_FALLBACK
-          });
-        } catch (fallbackError) {
-          logger.warn(
-            { fallbackError, ticketId: ticket.id },
-            "Failed to send transient AI fallback message"
-          );
-        }
-      }
-
       throw error;
     }
 

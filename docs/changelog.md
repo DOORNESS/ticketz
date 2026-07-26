@@ -6,6 +6,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.58] — 2026-07-25
+
+### Corrigido (crítico — IA, ativos CMS, aba Atendimentos)
+
+- **Mensagem de instabilidade duplicada:** fallback transitório enviado só após esgotar retries da fila (não a cada tentativa).
+- **“Me explique o nível” ia para triagem:** intenções informativas (`explique`, `nível`, dúvidas sobre produto) passam direto para LLM+RAG.
+- **Indexação CMS falhava:** `knowledgeDocumentId` nullable no bootstrap (`ApplyAiSchemaService`) — corrige insert de chunks CMS sem documento legado.
+- **Ativos CMS:** `DELETE /ai/assets/:id`, arquivar em rascunho/revisão/aprovado, ação **Excluir ativo** no menu.
+- **Aba IA em Atendimentos travada:** polling com lista vazia não mantém mais skeleton infinito (`useTickets`).
+- **Contexto RAG CMS:** `KnowledgeContextService` considera chunks publicados do CMS além de documentos legados.
+
+---
+
 ## [1.5.57] — 2026-07-25
 
 ### Corrigido (crítico — deploy patch + copilot Nível)

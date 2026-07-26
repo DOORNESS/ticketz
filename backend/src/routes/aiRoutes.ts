@@ -116,6 +116,7 @@ aiRoutes.post(
 aiRoutes.post("/ai/assets/:assetId/approve", KnowledgeAssetController.approve);
 aiRoutes.post("/ai/assets/:assetId/publish", KnowledgeAssetController.publish);
 aiRoutes.post("/ai/assets/:assetId/archive", KnowledgeAssetController.archive);
+aiRoutes.delete("/ai/assets/:assetId", KnowledgeAssetController.destroy);
 aiRoutes.post(
   "/ai/assets/:assetId/rollback",
   KnowledgeAssetController.rollback

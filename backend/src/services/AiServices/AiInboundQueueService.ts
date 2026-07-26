@@ -2,12 +2,21 @@ import Queue, { Job } from "bull";
 import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
 import { logger } from "../../utils/logger";
-import { resolveProcessingAgent, canAiEngageTicket } from "./AiHelpers";
+import {
+  resolveProcessingAgent,
+  canAiEngageTicket,
+  detectAgentIdentityQuestion
+} from "./AiHelpers";
 import ProcessInboundMessageService, {
-  InboundMessageItem
+  InboundMessageItem,
+  sendAiCustomerFallback
 } from "./ProcessInboundMessageService";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
 import { isTransientAiError } from "./isTransientAiError";
+import {
+  isInformationalIntent,
+  isPureGreetingMessage
+} from "./Triage/CaseCompletenessEngine";
 import {
   recordAiJobCompleted,
   recordAiJobStarted
@@ -205,6 +214,48 @@ const getLockTtlSeconds = (): number =>
 
 const getLockRetryMs = (): number =>
   parsePositiveInt(process.env.AI_QUEUE_LOCK_RETRY_MS, 100);
+
+const AI_INFORMATIONAL_FALLBACK =
+  "Estou consultando nossa base de conhecimento. Pode repetir sua pergunta em outras palavras?";
+
+const TRANSIENT_ERROR_FALLBACK =
+  "Desculpe, tive uma instabilidade momentânea. Pode repetir sua pergunta?";
+
+const sendTransientQueueFallback = async ({
+  ticket,
+  companyId,
+  payloads
+}: {
+  ticket: Ticket;
+  companyId: number;
+  payloads: AiInboundPayload[];
+}): Promise<void> => {
+  const userText = payloads
+    .map(item => item.messageBody?.trim())
+    .filter(Boolean)
+    .join("\n");
+
+  if (
+    !userText ||
+    isPureGreetingMessage(userText) ||
+    detectAgentIdentityQuestion(userText)
+  ) {
+    return;
+  }
+
+  const messageId = payloads.find(item => item.messageId)?.messageId;
+
+  await sendAiCustomerFallback({
+    ticket,
+    companyId,
+    messageId,
+    reason: "transient_provider_error_fallback",
+    userText,
+    body: isInformationalIntent(userText)
+      ? AI_INFORMATIONAL_FALLBACK
+      : TRANSIENT_ERROR_FALLBACK
+  });
+};
 
 const clearStaleAiLockIfNeeded = async (
   ticketId: number,
@@ -420,6 +471,25 @@ export const processBufferedAiInbound = async (
           );
         });
       }, getLockRetryMs());
+    } else if (isTransientAiError(error)) {
+      try {
+        const revalidated = await revalidateTicketForAi(ticketId, companyId);
+        if (revalidated) {
+          const payloads = await drainBufferedMessages(ticketId);
+          if (payloads.length) {
+            await sendTransientQueueFallback({
+              ticket: revalidated.ticket,
+              companyId,
+              payloads
+            });
+          }
+        }
+      } catch (fallbackError) {
+        logger.error(
+          { fallbackError, ticketId },
+          "Failed to send transient AI fallback after queue exhaustion"
+        );
+      }
     } else {
       try {
         const revalidated = await revalidateTicketForAi(ticketId, companyId);

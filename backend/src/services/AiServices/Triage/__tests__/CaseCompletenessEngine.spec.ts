@@ -124,6 +124,22 @@ describe("CaseCompletenessEngine", () => {
     ).toBeNull();
   });
 
+  it("detects explain requests about Nivel as informational", () => {
+    const userText = "Me explique o nível";
+
+    expect(isInformationalIntent(userText)).toBe(true);
+    expect(isVagueCustomerStatement(userText)).toBe(false);
+    expect(
+      buildInvestigationQuestion(
+        evaluateCaseCompleteness({
+          latestMessage: userText,
+          conversationText: `user: ${userText}`
+        }),
+        userText
+      )
+    ).toBeNull();
+  });
+
   it("still treats explicit support problems as non-informational", () => {
     const userText =
       "Estou com um problema no login do WebG3, aparece usuário não encontrado.";

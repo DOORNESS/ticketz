@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.56 — auditada contra o código  
+**Versão:** 1.5.58 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -982,6 +982,8 @@ Painel administrativo para bases editoriais (Fase 2 CMS). Diferente de `/ai/docu
 | Publicar em 1 clique | `POST /ai/assets/:id/quick-publish` ou `autoPublish=true` no create |
 | Vincular a outra base | `POST /ai/assets/:id/clone` (`targetKnowledgeBaseId`) — cópia do ativo |
 | Reindexar | `POST /ai/assets/:id/reindex` |
+| Arquivar | `POST /ai/assets/:id/archive` — rascunho, revisão, aprovado ou publicado |
+| Excluir | `DELETE /ai/assets/:id` — permanente; publicados devem ser arquivados antes |
 
 **Indexação:** job Bull grava chunks em `KnowledgeChunks` (`knowledgeDocumentId` nullable desde migration `20260725180000` — CMS não exige documento legado); só versões **publicadas** e **indexadas** entram na busca (`KnowledgeRetrievalPolicy`). Falhas gravam `errorMessage` na versão (ex.: download B2 corrompido, texto vazio no DOCX, embedding). Ativos com status **Falhou** devem usar **Substituir arquivo** (reupload) — download de arquivos corrompidos no storage antigo pode falhar.
 
