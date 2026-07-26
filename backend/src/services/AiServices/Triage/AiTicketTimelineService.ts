@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import Ticket from "../../../models/Ticket";
 import AiTicketTimelineEvent from "../../../models/AiTicketTimelineEvent";
+import { logger } from "../../../utils/logger";
 
 export const ensureTicketCorrelationId = async (
   ticket: Ticket
@@ -11,7 +12,14 @@ export const ensureTicketCorrelationId = async (
   }
 
   const correlationId = crypto.randomUUID();
-  await ticket.update({ aiCorrelationId: correlationId } as any);
+  try {
+    await ticket.update({ aiCorrelationId: correlationId } as any);
+  } catch (error) {
+    logger.warn(
+      { error, ticketId: ticket.id },
+      "Failed to persist aiCorrelationId — continuing without correlation"
+    );
+  }
   return correlationId;
 };
 

@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.58 — auditada contra o código  
+**Versão:** 1.5.61 — auditada contra o código  
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -346,6 +346,8 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Auditoria: `AuditSupportLinesService.auditSupportLinesForCompany(companyId)` — valida a cadeia completa por linha; `GET /ai/audit-support-lines` (master); `npm run audit:support-lines`
 - `POST /ai/wire-support-lines` executa wire + auditoria + reengajamento de tickets presos
 - Executado no **startup** (`bootstrapAiPlatform`, aguarda wiring antes do first-responder; env `WIRE_SUPPORT_LINES=0` desliga) e via **`POST /ai/wire-support-lines`** (admin)
+- **Schema IA/triage:** `ApplyAiSchemaService.applyAiSchema()` (script `apply-db-schema.js`) garante tabelas IA, `AiCopilotSuggestions` e colunas triage v2 (`aiCorrelationId`, `aiProcessingState`, `aiAssist*`, `AiTicketTimelineEvents`); validado em `verify-runtime-ready.js` e `validate-triage-v2-schema.js` no deploy VPS
+- Agentes legacy/specialist mantêm `maxTokens=4096` após wiring (evita OOM na completion)
 - Após wiring/restart: `ReengageStuckAiTicketsService` reprocessa tickets abertos/pendentes sem `aiAgentId` mas com agente na fila (última mensagem do cliente)
 - Manual ops: `COMPANY_ID=1 npm run wire:support-lines`
 - `EnsureAiFirstResponderService` **não** liga Webin em filas de marca (`Suporte Nível`, `Suporte Fortmax`, etc.) — só `WireSupportLinesService`

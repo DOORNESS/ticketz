@@ -5,7 +5,8 @@ import { logger } from "../../utils/logger";
 import {
   resolveProcessingAgent,
   canAiEngageTicket,
-  detectAgentIdentityQuestion
+  detectAgentIdentityQuestion,
+  ensureTicketQueueFromWhatsapp
 } from "./AiHelpers";
 import ProcessInboundMessageService, {
   InboundMessageItem,
@@ -138,6 +139,30 @@ const revalidateTicketForAi = async (
   }
 
   return { ticket, agent };
+};
+
+const revalidateTicketForAiWithRepair = async (
+  ticketId: number,
+  companyId: number
+): Promise<{ ticket: Ticket; agent: AiAgent } | null> => {
+  const initial = await revalidateTicketForAi(ticketId, companyId);
+  if (initial) {
+    return initial;
+  }
+
+  const ticket = await Ticket.findOne({
+    where: { id: ticketId, companyId },
+    include: ["contact"]
+  });
+
+  if (!ticket || !canAiEngageTicket(ticket)) {
+    return null;
+  }
+
+  await ensureTicketQueueFromWhatsapp(ticket);
+  await ticket.reload({ include: ["contact"] });
+
+  return revalidateTicketForAi(ticketId, companyId);
 };
 
 const sendOptionalAck = async (
@@ -389,9 +414,20 @@ export const processBufferedAiInbound = async (
       return;
     }
 
-    const revalidated = await revalidateTicketForAi(ticketId, companyId);
+    const revalidated = await revalidateTicketForAiWithRepair(
+      ticketId,
+      companyId
+    );
     if (!revalidated) {
-      await redis.del(bufferKey(ticketId));
+      const pendingCount = await redis.llen(bufferKey(ticketId));
+      if (pendingCount > 0) {
+        logger.warn(
+          { ticketId, companyId, pendingCount },
+          "AI inbound buffer retained — ticket could not be revalidated"
+        );
+      } else {
+        await redis.del(bufferKey(ticketId));
+      }
       if (job) {
         await persistAiDecisionLog({
           companyId,
@@ -472,12 +508,14 @@ export const processBufferedAiInbound = async (
 
       if (retries < getMaxAttempts()) {
         setTimeout(() => {
-          void processBufferedAiInbound(companyId, ticketId).catch(retryError => {
-            logger.error(
-              { retryError, ticketId, companyId },
-              "Retry after transient AI processing error failed"
-            );
-          });
+          void processBufferedAiInbound(companyId, ticketId).catch(
+            retryError => {
+              logger.error(
+                { retryError, ticketId, companyId },
+                "Retry after transient AI processing error failed"
+              );
+            }
+          );
         }, getLockRetryMs());
       } else {
         await redis.del(retryKey);

@@ -111,7 +111,10 @@ const resolveEffectiveMaxTokens = (
     return configured;
   }
 
-  return Math.min(4096, Math.max(configured, informationalQuery ? 2048 : configured));
+  return Math.min(
+    4096,
+    Math.max(configured, informationalQuery ? 2048 : configured)
+  );
 };
 
 const AUDIO_USER_FALLBACK =
@@ -438,8 +441,15 @@ const ProcessInboundMessageService = async ({
 
   try {
     if (triageV2Enabled) {
-      await bootstrapTriageContext(ticket, primaryMessageId);
-      await ticket.update({ aiProcessingState: "processing" } as any);
+      try {
+        await bootstrapTriageContext(ticket, primaryMessageId);
+        await ticket.update({ aiProcessingState: "processing" } as any);
+      } catch (triageBootstrapError) {
+        logger.warn(
+          { triageBootstrapError, ticketId: ticket.id },
+          "Triage bootstrap failed — continuing AI processing without triage state"
+        );
+      }
       const { emitTicketStateRefresh } =
         await import("../TicketServices/TicketOperationalStateService");
       await emitTicketStateRefresh(ticket);

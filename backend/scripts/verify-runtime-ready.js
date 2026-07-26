@@ -70,7 +70,11 @@ const run = async () => {
         (table_name = 'Tickets' AND column_name IN (
           'permanentDeleteRequestedAt',
           'permanentDeleteRequestedBy',
-          'permanentDeletedAt'
+          'permanentDeletedAt',
+          'aiCorrelationId',
+          'aiProcessingState',
+          'aiAssistActive',
+          'aiAssistMode'
         ))
         OR (table_name = 'MessageMediaFiles' AND column_name IN (
           'status',
@@ -91,7 +95,11 @@ const run = async () => {
     "Tickets.permanentDeletedAt",
     "MessageMediaFiles.status",
     "MessageMediaFiles.expiresAt",
-    "MessageMediaFiles.retentionExempt"
+    "MessageMediaFiles.retentionExempt",
+    "Tickets.aiCorrelationId",
+    "Tickets.aiProcessingState",
+    "Tickets.aiAssistActive",
+    "Tickets.aiAssistMode"
   ];
   const missing = required.filter(name => !found.has(name));
 

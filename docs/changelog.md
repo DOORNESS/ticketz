@@ -6,6 +6,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.61] — 2026-07-26
+
+### Corrigido (crítico — robô + Sugerir resposta)
+
+- **Schema triage v2 no bootstrap:** `ApplyAiSchemaService` passa a criar colunas `aiCorrelationId`, `aiProcessingState`, `aiAssist*` e tabela `AiTicketTimelineEvents` — corrige robô que respondia só saudação/copilot que falhava com “Não foi possível gerar sugestão”.
+- **Copilot resiliente:** falha ao gravar `aiAssist*` não aborta mais a sugestão.
+- **Fila IA:** revalidação repara `queueId` via WhatsApp antes de descartar buffer; mensagens não são apagadas silenciosamente.
+- **Wire Fortmax/Nível:** `maxTokens` dos agentes fixado em 4096 (antes 16384 no wiring).
+- **Deploy VPS:** `restart-after-deploy.ps1` valida schema triage v2 e executa `enable-triage-v2-company.js`.
+
+---
+
 ## [1.5.60] — 2026-07-26
 
 ### Corrigido (IA ticket saldo/celular + deploy)

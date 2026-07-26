@@ -28,6 +28,7 @@ import {
 } from "./AiTriageTypes";
 import AiAgent from "../../../models/AiAgent";
 import Message from "../../../models/Message";
+import { logger } from "../../../utils/logger";
 
 export const isTriageV2Active = isTriageV2EnabledForCompany;
 
@@ -55,12 +56,19 @@ export const persistCaseSnapshot = async (
   ticket: Ticket,
   snapshot: CaseCompletenessSnapshot
 ): Promise<void> => {
-  await ticket.update({
-    aiCaseCompleteness: snapshot,
-    aiProcessingState: snapshot.isVagueStatement
-      ? "awaiting_customer"
-      : "processing"
-  } as any);
+  try {
+    await ticket.update({
+      aiCaseCompleteness: snapshot,
+      aiProcessingState: snapshot.isVagueStatement
+        ? "awaiting_customer"
+        : "processing"
+    } as any);
+  } catch (error) {
+    logger.warn(
+      { error, ticketId: ticket.id },
+      "Failed to persist triage case snapshot — continuing"
+    );
+  }
 };
 
 export const sendInvestigationResponse = async ({

@@ -229,7 +229,7 @@ const wireFortmaxLine = async (companyId: number) => {
       ? FORTMAX_PROMPT
       : agent.basePrompt || FORTMAX_PROMPT,
     fallbackQueueId: queue.id,
-    maxTokens: 16384
+    maxTokens: 4096
   });
 
   await syncAgentKnowledgeBases({
@@ -350,7 +350,7 @@ const wireNivelLine = async (companyId: number) => {
     active: true,
     basePrompt: NIVEL_PROMPT,
     fallbackQueueId: queue.id,
-    maxTokens: 16384
+    maxTokens: 4096
   });
 
   await syncAgentKnowledgeBases({

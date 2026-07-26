@@ -159,13 +159,20 @@ export const generateCopilotSuggestion = async ({
 
   try {
     if (requestedByUserId) {
-      await ticket.update({
-        aiAssistActive: true,
-        aiAssistMode: "private",
-        aiAssistRequestedAt: new Date(),
-        aiAssistRequestedBy: requestedByUserId,
-        aiAssistAgentId: activeAgent.id
-      } as any);
+      try {
+        await ticket.update({
+          aiAssistActive: true,
+          aiAssistMode: "private",
+          aiAssistRequestedAt: new Date(),
+          aiAssistRequestedBy: requestedByUserId,
+          aiAssistAgentId: activeAgent.id
+        } as any);
+      } catch (assistError) {
+        logger.warn(
+          { assistError, ticketId: ticket.id },
+          "Failed to persist copilot assist state — continuing with suggestion"
+        );
+      }
     }
 
     const history = await buildHistory(ticket.id);

@@ -305,6 +305,80 @@ const ensureAiTables = async (schema: string): Promise<void> => {
   `);
 };
 
+const ensureTriageV2Schema = async (schema: string): Promise<void> => {
+  const ticketColumns: Array<[string, string]> = [
+    ['"aiHandoffMode"', "VARCHAR(32)"],
+    ['"aiHandoffOriginalReason"', "VARCHAR(64)"],
+    ['"aiCaseCompleteness"', "JSONB"],
+    ['"aiInvestigationRound"', "INTEGER NOT NULL DEFAULT 0"],
+    ['"aiCorrelationId"', "VARCHAR(64)"],
+    ['"aiProcessingState"', "VARCHAR(32)"],
+    ['"aiSkipLegacyOutOfHoursOnHandoff"', "BOOLEAN NOT NULL DEFAULT false"],
+    ['"aiAssistActive"', "BOOLEAN NOT NULL DEFAULT false"],
+    ['"aiAssistMode"', "VARCHAR(32)"],
+    ['"aiAssistRequestedAt"', "TIMESTAMPTZ"],
+    ['"aiAssistRequestedBy"', "INTEGER"],
+    ['"aiAssistAgentId"', "INTEGER"],
+    ['"aiHumanAssumedAt"', "TIMESTAMPTZ"],
+    ['"aiHumanAssumedBy"', "INTEGER"]
+  ];
+
+  for (let i = 0; i < ticketColumns.length; i += 1) {
+    const [name, type] = ticketColumns[i];
+    await sequelize.query(`
+      ALTER TABLE ${q(schema, "Tickets")}
+      ADD COLUMN IF NOT EXISTS ${name} ${type};
+    `);
+  }
+
+  const messageColumns: Array<[string, string]> = [
+    ['"transcriptionStatus"', "VARCHAR(32)"],
+    ['"transcriptionText"', "TEXT"],
+    ['"transcriptionRequestedBy"', "INTEGER"],
+    ['"transcriptionReason"', "VARCHAR(64)"],
+    ['"aiProcessedAt"', "TIMESTAMPTZ"],
+    ['"aiReadAt"', "TIMESTAMPTZ"]
+  ];
+
+  for (let i = 0; i < messageColumns.length; i += 1) {
+    const [name, type] = messageColumns[i];
+    await sequelize.query(`
+      ALTER TABLE ${q(schema, "Messages")}
+      ADD COLUMN IF NOT EXISTS ${name} ${type};
+    `);
+  }
+
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS ${q(schema, "AiTicketTimelineEvents")} (
+      id SERIAL PRIMARY KEY,
+      "companyId" INTEGER NOT NULL REFERENCES ${q(schema, "Companies")}(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      "ticketId" INTEGER NOT NULL REFERENCES ${q(schema, "Tickets")}(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      "eventType" VARCHAR(64) NOT NULL,
+      stage VARCHAR(64),
+      operation VARCHAR(64),
+      "correlationId" VARCHAR(64),
+      "messageId" VARCHAR(255),
+      "agentId" INTEGER,
+      "errorClass" VARCHAR(64),
+      details JSONB,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await sequelize.query(`
+    CREATE INDEX IF NOT EXISTS ai_ticket_timeline_company_ticket_created
+    ON ${q(schema, "AiTicketTimelineEvents")} ("companyId", "ticketId", "createdAt");
+  `);
+
+  await sequelize.query(`
+    CREATE INDEX IF NOT EXISTS ai_ticket_timeline_correlation
+    ON ${q(schema, "AiTicketTimelineEvents")} ("correlationId");
+  `);
+};
+
 const ensureAckColumns = async (schema: string): Promise<void> => {
   await sequelize.query(`
     ALTER TABLE ${q(schema, "AiAgents")}
@@ -399,6 +473,7 @@ export const applyAiSchema = async (): Promise<void> => {
   await ensureTicketAiColumns(schema);
   await ensureOperationalFlowColumns(schema);
   await ensureAiTables(schema);
+  await ensureTriageV2Schema(schema);
   await ensureAckColumns(schema);
   await ensureMediaLifecycleSchema(schema);
 
@@ -426,6 +501,10 @@ export const applyAiSchema = async (): Promise<void> => {
   await markMigrationExecuted(
     schema,
     "20260725180000-knowledge-chunks-nullable-document.js"
+  );
+  await markMigrationExecuted(
+    schema,
+    "20260719100000-ai-triage-v2-professional-flow.js"
   );
 
   logger.info({ schema }, "AI + media lifecycle schema ensured");
@@ -500,7 +579,41 @@ export const isAiSchemaApplied = async (): Promise<boolean> => {
       { replacements: { schema } }
     );
 
-    return (mediaLifecycleColumns as { column_name: string }[]).length >= 2;
+    if ((mediaLifecycleColumns as { column_name: string }[]).length < 2) {
+      return false;
+    }
+
+    const [triageColumns] = await sequelize.query(
+      `
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = :schema
+        AND table_name = 'Tickets'
+        AND column_name IN (
+          'aiCorrelationId',
+          'aiProcessingState',
+          'aiAssistActive',
+          'aiAssistMode'
+        )
+      `,
+      { replacements: { schema } }
+    );
+
+    if ((triageColumns as { column_name: string }[]).length < 4) {
+      return false;
+    }
+
+    const [copilotTable] = await sequelize.query(
+      `
+      SELECT table_name
+      FROM information_schema.tables
+      WHERE table_schema = :schema
+        AND table_name = 'AiCopilotSuggestions'
+      `,
+      { replacements: { schema } }
+    );
+
+    return (copilotTable as { table_name: string }[]).length > 0;
   } catch (error) {
     logger.warn({ error }, "Failed to verify AI schema");
     return false;

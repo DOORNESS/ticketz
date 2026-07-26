@@ -48,6 +48,18 @@ try {
 
   if (Test-Path "scripts\apply-triage-v2-schema.js") {
     node scripts\apply-triage-v2-schema.js 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      throw "apply-triage-v2-schema failed exit=$LASTEXITCODE"
+    }
+  }
+  if (Test-Path "scripts\validate-triage-v2-schema.js") {
+    node scripts\validate-triage-v2-schema.js 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      throw "validate-triage-v2-schema failed exit=$LASTEXITCODE"
+    }
+  }
+  if (Test-Path "scripts\enable-triage-v2-company.js") {
+    node scripts\enable-triage-v2-company.js 2>&1
   }
   if (Test-Path "scripts\ensure-whatsapp-sessions.js") {
     node scripts\ensure-whatsapp-sessions.js 2>&1
