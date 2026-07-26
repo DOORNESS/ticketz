@@ -142,6 +142,10 @@ export const evaluateHandoffPolicy = async (
     context.proposedReason === AI_HANDOFF_REASONS.no_knowledge_found ||
     context.proposedReason === "no_knowledge_found"
   ) {
+    if (snapshot.caseReadyForResolution) {
+      return { action: "none", handoffMode: "none" };
+    }
+
     if (
       snapshot.isVagueStatement ||
       snapshot.investigationRound < config.maxInvestigationRounds
@@ -163,6 +167,10 @@ export const evaluateHandoffPolicy = async (
     context.proposedReason === AI_HANDOFF_REASONS.low_confidence ||
     context.proposedReason === "low_confidence"
   ) {
+    if (snapshot.caseReadyForResolution) {
+      return { action: "none", handoffMode: "none" };
+    }
+
     if (
       isVagueCustomerStatement(context.userText) ||
       snapshot.investigationRound < config.maxInvestigationRounds

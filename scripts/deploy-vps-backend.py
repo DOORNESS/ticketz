@@ -103,6 +103,7 @@ PATCH_PATHS = [
     "services/AiServices/ProcessInboundMessageService.js",
     "services/AiServices/AiInboundQueueService.js",
     "services/AiServices/Triage/CaseCompletenessEngine.js",
+    "services/AiServices/Triage/HandoffPolicyService.js",
     "services/AiServices/KnowledgeCms/KnowledgeAssetCmsService.js",
     "services/AiServices/sanitizeAiOutboundText.js",
     "services/AiServices/AiPromptBuilder.js",

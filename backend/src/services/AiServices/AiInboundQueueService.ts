@@ -218,6 +218,9 @@ const getLockRetryMs = (): number =>
 const AI_INFORMATIONAL_FALLBACK =
   "Estou consultando nossa base de conhecimento. Pode repetir sua pergunta em outras palavras?";
 
+const AI_CUSTOMER_FALLBACK =
+  "Ainda não encontrei uma resposta completa na base. Pode me contar um pouco mais o que você precisa?";
+
 const TRANSIENT_ERROR_FALLBACK =
   "Desculpe, tive uma instabilidade momentânea. Pode repetir sua pergunta?";
 
@@ -522,21 +525,26 @@ export const processBufferedAiInbound = async (
         if (revalidated) {
           const payloads = await drainBufferedMessages(ticketId);
           if (payloads.length) {
-            await ProcessInboundMessageService({
-              ticket: revalidated.ticket,
-              companyId,
-              agent: revalidated.agent,
-              messages: payloads.map(mapPayloadToInboundItem),
-              forceHandoff: false,
-              handoffReason:
-                error instanceof Error ? error.message : "ai_queue_error"
-            });
+            const userText = payloads
+              .map(item => item.messageBody?.trim())
+              .filter(Boolean)
+              .join("\n");
+            if (userText) {
+              await sendAiCustomerFallback({
+                ticket: revalidated.ticket,
+                companyId,
+                messageId: payloads.find(item => item.messageId)?.messageId,
+                reason: "queue_definitive_error_fallback",
+                userText,
+                body: AI_CUSTOMER_FALLBACK
+              });
+            }
           }
         }
-      } catch (handoffError) {
+      } catch (fallbackError) {
         logger.error(
-          { handoffError, ticketId },
-          "Failed to hand off after definitive AI processing error"
+          { fallbackError, ticketId },
+          "Failed to send fallback after definitive AI queue error"
         );
       }
     }

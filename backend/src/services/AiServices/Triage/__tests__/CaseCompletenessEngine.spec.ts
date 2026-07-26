@@ -170,6 +170,20 @@ describe("CaseCompletenessEngine", () => {
     ).toBeNull();
   });
 
+  it("does not investigate detailed balance support cases", () => {
+    const userText =
+      "Eu troquei de celular e os dados não vieram certo no aplicativo. Eu tinha um saldo de uns 73, 80 reais e agora só aparece 1 real. Preciso recuperar meu saldo.";
+
+    const snapshot = evaluateCaseCompleteness({
+      latestMessage: userText,
+      conversationText: `user: ${userText}`,
+      hasMediaEvidence: true
+    });
+
+    expect(snapshot.caseReadyForResolution).toBe(true);
+    expect(buildInvestigationQuestion(snapshot, userText)).toBeNull();
+  });
+
   it("still treats explicit support problems as non-informational", () => {
     const userText =
       "Estou com um problema no login do WebG3, aparece usuário não encontrado.";

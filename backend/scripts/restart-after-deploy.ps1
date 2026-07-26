@@ -93,10 +93,10 @@ Pop-Location
 
 $ErrorActionPreference = "Continue"
 $backendCmd = @(
+  "$Backend\scripts\start-production.cmd",
   "$Root\start-backend-watch.cmd",
   "$Root\start-backend.cmd",
-  "$Root\run-backend.cmd",
-  "$Backend\scripts\start-production.cmd"
+  "$Root\run-backend.cmd"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
 if ($backendCmd) {

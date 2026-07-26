@@ -102,4 +102,19 @@ describe("HandoffPolicyService", () => {
 
     expect(decision.action).toBe("none");
   });
+
+  it("does not investigate detailed balance cases on low confidence", async () => {
+    const userText =
+      "Eu troquei de celular e os dados não vieram certo no aplicativo. Eu tinha um saldo de uns 73, 80 reais e agora só aparece 1 real.";
+
+    const decision = await evaluateHandoffPolicy({
+      ticket: buildTicket(),
+      userText,
+      conversationText: `user: ${userText}`,
+      proposedReason: AI_HANDOFF_REASONS.low_confidence,
+      confidenceScore: 0.1
+    });
+
+    expect(decision.action).toBe("none");
+  });
 });

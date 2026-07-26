@@ -40,7 +40,15 @@ const MODULE_HINTS = [
   "nota",
   "cadastro",
   "usu[aá]rio",
-  "senha"
+  "senha",
+  "saldo",
+  "carteira",
+  "cashback",
+  "fideliza",
+  "pontos",
+  "cr[eé]dito",
+  "extrato",
+  "recarga"
 ];
 
 const ERROR_HINTS = [
@@ -65,7 +73,13 @@ const ACTION_HINTS = [
   "acessei",
   "abri",
   "fiz",
-  "estava tentando"
+  "estava tentando",
+  "troquei",
+  "mudei",
+  "migrei",
+  "atualizei",
+  "instalei",
+  "restaurei"
 ];
 
 const EVIDENCE_HINTS = [
@@ -330,13 +344,13 @@ export const evaluateCaseCompleteness = ({
     if (!productIdentified) {
       missingInformation.push("produto ou sistema envolvido");
     }
-    if (!affectedModule) {
+    if (!affectedModule && !problemDescription) {
       missingInformation.push("módulo, tela ou funcionalidade afetada");
     }
     if (!problemDescription) {
       missingInformation.push("descrição objetiva do problema");
     }
-    if (!attemptedAction) {
+    if (!attemptedAction && !actualBehavior && latest.length < 40) {
       missingInformation.push("ação que o cliente estava tentando realizar");
     }
     if (!actualBehavior && !errorMessage) {
@@ -410,6 +424,10 @@ export const buildInvestigationQuestion = (
   latestMessage = ""
 ): string | null => {
   if (shouldSkipSupportInvestigation(latestMessage)) {
+    return null;
+  }
+
+  if (snapshot.caseReadyForResolution) {
     return null;
   }
 
