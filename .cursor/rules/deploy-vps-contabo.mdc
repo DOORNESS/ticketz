@@ -33,5 +33,5 @@ Script canônico: `scripts/deploy-vps-backend.py`
 
 - **Um ZIP só** — os “chunks” no log são pedaços base64 desse ZIP (limite WinRM), **não** arquivos do `dist/` um a um
 - Chunks base64: `DEPLOY_B64_CHUNK=1500` (limite WinRM)
-- Lotes WinRM: `DEPLOY_CHUNK_BATCH=8` (vários chunks por chamada → deploy ~8× mais rápido)
+- Lotes WinRM: `DEPLOY_CHUNK_BATCH=3` (vários chunks por chamada; não aumentar demais — WinRM limita tamanho)
 - Restart: polling `/health` a cada 5s (sem `Start-Sleep 60` fixo)
