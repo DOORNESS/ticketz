@@ -116,6 +116,7 @@ PATCH_PATHS = [
     "services/AiServices/AiCopilotService.js",
     "services/AiServices/AiScheduleContextService.js",
     "services/AiServices/KnowledgeContextService.js",
+    "services/AiServices/RetrievalEngine.js",
     "services/AiServices/AiManualTranscriptionService.js",
     "services/AiServices/AiDecisionLogger.js",
     "services/AiServices/HandoffToHumanService.js",

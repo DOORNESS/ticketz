@@ -1,8 +1,7 @@
 import sequelize from "../../database";
-import { isKbCmsEnabledForCompany } from "./KnowledgeCms/AiKbCmsFeatureFlag";
 import {
   buildRetrievalSqlParts,
-  resolveRetrievalMode
+  type RetrievalPolicyMode
 } from "./KnowledgeCms/KnowledgeRetrievalPolicy";
 
 export type RetrievedChunk = {
@@ -13,18 +12,31 @@ export type RetrievedChunk = {
   similarity: number;
 };
 
-export const searchKnowledgeChunks = async (
+const mergeRetrievedChunks = (
+  chunks: RetrievedChunk[],
+  limit: number
+): RetrievedChunk[] => {
+  const merged = new Map<number, RetrievedChunk>();
+
+  chunks.forEach(chunk => {
+    const existing = merged.get(chunk.id);
+    if (!existing || chunk.similarity > existing.similarity) {
+      merged.set(chunk.id, chunk);
+    }
+  });
+
+  return [...merged.values()]
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, limit);
+};
+
+const searchKnowledgeChunksWithMode = async (
+  mode: RetrievalPolicyMode,
   companyId: number,
   knowledgeBaseIds: number[],
   queryEmbedding: number[],
   limit = 5
 ): Promise<RetrievedChunk[]> => {
-  if (!knowledgeBaseIds.length) {
-    return [];
-  }
-
-  const cmsEnabled = await isKbCmsEnabledForCompany(companyId);
-  const mode = resolveRetrievalMode(cmsEnabled);
   const policy = buildRetrievalSqlParts(mode);
   const embeddingLiteral = `[${queryEmbedding.join(",")}]`;
 
@@ -57,6 +69,36 @@ export const searchKnowledgeChunks = async (
   return (results as RetrievedChunk[]) || [];
 };
 
+export const searchKnowledgeChunks = async (
+  companyId: number,
+  knowledgeBaseIds: number[],
+  queryEmbedding: number[],
+  limit = 5
+): Promise<RetrievedChunk[]> => {
+  if (!knowledgeBaseIds.length) {
+    return [];
+  }
+
+  const [cmsResults, legacyResults] = await Promise.all([
+    searchKnowledgeChunksWithMode(
+      "cms",
+      companyId,
+      knowledgeBaseIds,
+      queryEmbedding,
+      limit
+    ),
+    searchKnowledgeChunksWithMode(
+      "legacy",
+      companyId,
+      knowledgeBaseIds,
+      queryEmbedding,
+      limit
+    )
+  ]);
+
+  return mergeRetrievedChunks([...cmsResults, ...legacyResults], limit);
+};
+
 export const searchKnowledgeChunksByText = async (
   companyId: number,
   knowledgeBaseIds: number[],
@@ -79,43 +121,51 @@ export const searchKnowledgeChunksByText = async (
     return [];
   }
 
-  const cmsEnabled = await isKbCmsEnabledForCompany(companyId);
-  const mode = resolveRetrievalMode(cmsEnabled);
-  const policy = buildRetrievalSqlParts(mode);
+  const searchByTextWithMode = async (
+    mode: RetrievalPolicyMode
+  ): Promise<RetrievedChunk[]> => {
+    const policy = buildRetrievalSqlParts(mode);
+    const conditions = terms
+      .map((_, index) => `lower(kc.content) LIKE :term${index}`)
+      .join(" OR ");
 
-  const conditions = terms
-    .map((_, index) => `lower(kc.content) LIKE :term${index}`)
-    .join(" OR ");
+    const replacements: Record<string, unknown> = {
+      companyId,
+      knowledgeBaseIds,
+      limit
+    };
 
-  const replacements: Record<string, unknown> = {
-    companyId,
-    knowledgeBaseIds,
-    limit
+    terms.forEach((term, index) => {
+      replacements[`term${index}`] = `%${term}%`;
+    });
+
+    const [results] = await sequelize.query(
+      `
+      SELECT
+        kc.id,
+        kc.content,
+        ${policy.selectDocumentId} AS "knowledgeDocumentId",
+        kc.metadata,
+        0.45 AS similarity
+      FROM "KnowledgeChunks" kc
+      ${policy.joins}
+      WHERE kc."companyId" = :companyId
+        ${policy.where}
+        AND (${conditions})
+      LIMIT :limit
+      `,
+      { replacements }
+    );
+
+    return (results as RetrievedChunk[]) || [];
   };
 
-  terms.forEach((term, index) => {
-    replacements[`term${index}`] = `%${term}%`;
-  });
+  const [cmsResults, legacyResults] = await Promise.all([
+    searchByTextWithMode("cms"),
+    searchByTextWithMode("legacy")
+  ]);
 
-  const [results] = await sequelize.query(
-    `
-    SELECT
-      kc.id,
-      kc.content,
-      ${policy.selectDocumentId} AS "knowledgeDocumentId",
-      kc.metadata,
-      0.45 AS similarity
-    FROM "KnowledgeChunks" kc
-    ${policy.joins}
-    WHERE kc."companyId" = :companyId
-      ${policy.where}
-      AND (${conditions})
-    LIMIT :limit
-    `,
-    { replacements }
-  );
-
-  return (results as RetrievedChunk[]) || [];
+  return mergeRetrievedChunks([...cmsResults, ...legacyResults], limit);
 };
 
 export const retrieveKnowledgeForQuery = async (

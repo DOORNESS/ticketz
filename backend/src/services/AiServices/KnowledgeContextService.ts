@@ -10,13 +10,16 @@ import {
   RetrievedChunk
 } from "./RetrievalEngine";
 import { ingestKnowledgeDocument } from "./IngestKnowledgeDocumentService";
-import { isKbCmsEnabledForCompany } from "./KnowledgeCms/AiKbCmsFeatureFlag";
 import { logger } from "../../utils/logger";
 
 const MAX_CONTEXT_CHARS = 20000;
 const MAX_CHUNK_SNIPPET = 1200;
 const FULL_CORPUS_DOC_LIMIT = 24;
 const AUTO_FULL_CORPUS_DOC_LIMIT = 24;
+const MIN_BASE_DESCRIPTION_CHARS = 120;
+const MAX_DESCRIPTION_SECTIONS = 16;
+
+type ContextChunk = KnowledgeContextResult["usedChunks"][number];
 
 export type KnowledgeContextResult = {
   contextBlock: string;
@@ -88,64 +91,238 @@ const expandKnowledgeBaseIdsByDomain = async (
   ];
 };
 
-const loadAllReadyChunkTexts = async (
+const splitDescriptionSections = (text: string): string[] => {
+  const normalized = text.trim();
+  if (!normalized) {
+    return [];
+  }
+
+  const byHeading = normalized
+    .split(/\n(?=#{1,3}\s)|\n---+\n/)
+    .map(part => part.trim())
+    .filter(part => part.length >= 40);
+
+  if (byHeading.length > 1) {
+    return byHeading;
+  }
+
+  const byParagraph = normalized
+    .split(/\n{2,}/)
+    .map(part => part.trim())
+    .filter(part => part.length >= 40);
+
+  if (byParagraph.length > 1) {
+    return byParagraph;
+  }
+
+  if (normalized.length <= MAX_CHUNK_SNIPPET) {
+    return [normalized];
+  }
+
+  const slices: string[] = [];
+  for (
+    let offset = 0;
+    offset < normalized.length;
+    offset += MAX_CHUNK_SNIPPET
+  ) {
+    slices.push(normalized.slice(offset, offset + MAX_CHUNK_SNIPPET).trim());
+  }
+  return slices.filter(Boolean);
+};
+
+const scoreSectionForQuery = (section: string, query: string): number => {
+  const normalizedQuery = query.toLowerCase();
+  const normalizedSection = section.toLowerCase();
+  let score = 0;
+
+  normalizedQuery
+    .split(/\s+/)
+    .filter(token => token.length >= 3)
+    .forEach(token => {
+      if (normalizedSection.includes(token)) {
+        score += 1;
+      }
+    });
+
+  if (
+    (normalizedQuery.includes("cashback") ||
+      normalizedQuery.includes("nível") ||
+      normalizedQuery.includes("nivel")) &&
+    (normalizedSection.includes("cashback") ||
+      normalizedSection.includes("nível") ||
+      normalizedSection.includes("nivel"))
+  ) {
+    score += 3;
+  }
+
+  return score;
+};
+
+export const loadKnowledgeBaseDescriptionChunks = async (
   companyId: number,
   knowledgeBaseIds: number[],
-  chunkLimit = FULL_CORPUS_DOC_LIMIT
-): Promise<
-  {
-    id: number;
-    content: string;
-    similarity: number;
-    knowledgeDocumentId?: number;
-    documentTitle?: string;
-  }[]
-> => {
-  const cmsEnabled = await isKbCmsEnabledForCompany(companyId);
+  userText = "",
+  limit = MAX_DESCRIPTION_SECTIONS
+): Promise<ContextChunk[]> => {
+  if (!knowledgeBaseIds.length) {
+    return [];
+  }
 
-  if (cmsEnabled) {
-    const [cmsRows] = await sequelize.query(
-      `
-      SELECT
-        kc.id,
-        kc.content,
-        ka.title AS "documentTitle",
-        kc."knowledgeDocumentId"
-      FROM "KnowledgeChunks" kc
-      INNER JOIN "KnowledgeAssets" ka ON ka.id = kc."knowledgeAssetId"
-      WHERE kc."companyId" = :companyId
-        AND kc."knowledgeBaseId" IN (:knowledgeBaseIds)
-        AND kc."lifecycleStatus" = 'published'
-        AND ka."lifecycleStatus" = 'published'
-        AND ka."publishedVersionId" = kc."knowledgeAssetVersionId"
-      ORDER BY kc.id ASC
-      LIMIT :chunkLimit
-      `,
-      {
-        replacements: { companyId, knowledgeBaseIds, chunkLimit }
-      }
-    );
+  const bases = await KnowledgeBase.findAll({
+    where: {
+      companyId,
+      id: { [Op.in]: knowledgeBaseIds },
+      active: true
+    },
+    attributes: ["id", "name", "description"],
+    order: [["id", "ASC"]]
+  });
 
-    const cmsChunks = (
-      cmsRows as {
-        id: number;
-        content: string;
-        documentTitle?: string;
-        knowledgeDocumentId?: number;
-      }[]
-    ).map(row => ({
-      id: row.id,
-      content: row.content.slice(0, MAX_CHUNK_SNIPPET),
-      similarity: 0.4,
-      knowledgeDocumentId: row.knowledgeDocumentId,
-      documentTitle: row.documentTitle || ""
-    }));
+  const sections: ContextChunk[] = [];
 
-    if (cmsChunks.length) {
-      return cmsChunks;
+  bases.forEach(base => {
+    const description = (base.description || "").trim();
+    if (description.length < MIN_BASE_DESCRIPTION_CHARS) {
+      return;
+    }
+
+    splitDescriptionSections(description).forEach((part, index) => {
+      sections.push({
+        id: base.id * 10000 + index,
+        content: part.slice(0, MAX_CHUNK_SNIPPET),
+        similarity: userText ? scoreSectionForQuery(part, userText) : 0.35,
+        documentTitle: base.name
+      });
+    });
+  });
+
+  if (userText.trim()) {
+    const ranked = sections
+      .filter(section => section.similarity > 0)
+      .sort((a, b) => b.similarity - a.similarity);
+
+    if (ranked.length) {
+      return ranked.slice(0, limit).map(section => ({
+        ...section,
+        similarity: Math.max(section.similarity, 0.35)
+      }));
     }
   }
 
+  return sections.slice(0, limit);
+};
+
+const mergeContextChunks = (
+  primary: ContextChunk[],
+  secondary: ContextChunk[],
+  limit = 48
+): ContextChunk[] => {
+  const seen = new Set<string>();
+  const merged: ContextChunk[] = [];
+
+  [...primary, ...secondary].forEach(chunk => {
+    const key = chunk.content.slice(0, 180);
+    if (seen.has(key)) {
+      return;
+    }
+    seen.add(key);
+    merged.push(chunk);
+  });
+
+  return merged.slice(0, limit);
+};
+
+const countBasesWithDescription = async (
+  companyId: number,
+  knowledgeBaseIds: number[]
+): Promise<number> => {
+  const bases = await KnowledgeBase.findAll({
+    where: {
+      companyId,
+      id: { [Op.in]: knowledgeBaseIds },
+      active: true
+    },
+    attributes: ["description"]
+  });
+
+  return bases.filter(
+    base => (base.description || "").trim().length >= MIN_BASE_DESCRIPTION_CHARS
+  ).length;
+};
+
+const loadPublishedCmsChunkTexts = async (
+  companyId: number,
+  knowledgeBaseIds: number[],
+  chunkLimit = FULL_CORPUS_DOC_LIMIT
+): Promise<ContextChunk[]> => {
+  const [cmsRows] = await sequelize.query(
+    `
+    SELECT
+      kc.id,
+      kc.content,
+      ka.title AS "documentTitle",
+      kc."knowledgeDocumentId"
+    FROM "KnowledgeChunks" kc
+    INNER JOIN "KnowledgeAssets" ka ON ka.id = kc."knowledgeAssetId"
+    INNER JOIN "KnowledgeAssetVersions" kav ON kav.id = kc."knowledgeAssetVersionId"
+    WHERE kc."companyId" = :companyId
+      AND kc."knowledgeBaseId" IN (:knowledgeBaseIds)
+      AND kc."lifecycleStatus" = 'published'
+      AND ka."lifecycleStatus" = 'published'
+      AND ka."publishedVersionId" = kc."knowledgeAssetVersionId"
+      AND kav."ingestionStatus" = 'indexed'
+    ORDER BY kc.id ASC
+    LIMIT :chunkLimit
+    `,
+    {
+      replacements: { companyId, knowledgeBaseIds, chunkLimit }
+    }
+  );
+
+  return (
+    cmsRows as {
+      id: number;
+      content: string;
+      documentTitle?: string;
+      knowledgeDocumentId?: number;
+    }[]
+  ).map(row => ({
+    id: row.id,
+    content: String(row.content || "").slice(0, MAX_CHUNK_SNIPPET),
+    similarity: 0.4,
+    knowledgeDocumentId: row.knowledgeDocumentId,
+    documentTitle: row.documentTitle || ""
+  }));
+};
+
+const countPublishedCmsChunks = async (
+  companyId: number,
+  knowledgeBaseIds: number[]
+): Promise<number> => {
+  const [cmsCountRows] = await sequelize.query(
+    `
+    SELECT COUNT(*)::int AS count
+    FROM "KnowledgeChunks" kc
+    INNER JOIN "KnowledgeAssets" ka ON ka.id = kc."knowledgeAssetId"
+    INNER JOIN "KnowledgeAssetVersions" kav ON kav.id = kc."knowledgeAssetVersionId"
+    WHERE kc."companyId" = :companyId
+      AND kc."knowledgeBaseId" IN (:knowledgeBaseIds)
+      AND kc."lifecycleStatus" = 'published'
+      AND ka."lifecycleStatus" = 'published'
+      AND ka."publishedVersionId" = kc."knowledgeAssetVersionId"
+      AND kav."ingestionStatus" = 'indexed'
+    `,
+    { replacements: { companyId, knowledgeBaseIds } }
+  );
+
+  return (cmsCountRows as { count: number }[])[0]?.count || 0;
+};
+
+const loadLegacyDocumentChunkTexts = async (
+  companyId: number,
+  knowledgeBaseIds: number[],
+  chunkLimit = FULL_CORPUS_DOC_LIMIT
+): Promise<ContextChunk[]> => {
   const rows = await KnowledgeChunk.findAll({
     where: { companyId },
     include: [
@@ -174,6 +351,17 @@ const loadAllReadyChunkTexts = async (
         .KnowledgeDocument?.title || ""
   }));
 };
+
+const loadAllReadyChunkTexts = async (
+  companyId: number,
+  knowledgeBaseIds: number[],
+  chunkLimit = FULL_CORPUS_DOC_LIMIT
+): Promise<ContextChunk[]> =>
+  mergeContextChunks(
+    await loadPublishedCmsChunkTexts(companyId, knowledgeBaseIds, chunkLimit),
+    await loadLegacyDocumentChunkTexts(companyId, knowledgeBaseIds, chunkLimit),
+    chunkLimit
+  );
 
 const reingestPendingDocuments = async (
   companyId: number,
@@ -242,49 +430,53 @@ export const buildKnowledgeContextForQuery = async ({
     }
   });
 
-  const cmsEnabled = await isKbCmsEnabledForCompany(companyId);
-  let cmsPublishedChunkCount = 0;
+  const cmsPublishedChunkCount = await countPublishedCmsChunks(
+    companyId,
+    expandedKnowledgeBaseIds
+  );
 
-  if (cmsEnabled) {
-    const [cmsCountRows] = await sequelize.query(
-      `
-      SELECT COUNT(*)::int AS count
-      FROM "KnowledgeChunks" kc
-      INNER JOIN "KnowledgeAssets" ka ON ka.id = kc."knowledgeAssetId"
-      WHERE kc."companyId" = :companyId
-        AND kc."knowledgeBaseId" IN (:knowledgeBaseIds)
-        AND kc."lifecycleStatus" = 'published'
-        AND ka."lifecycleStatus" = 'published'
-      `,
-      {
-        replacements: { companyId, knowledgeBaseIds: expandedKnowledgeBaseIds }
-      }
-    );
-    cmsPublishedChunkCount =
-      (cmsCountRows as { count: number }[])[0]?.count || 0;
-  }
+  const descriptionReadyCount = await countBasesWithDescription(
+    companyId,
+    expandedKnowledgeBaseIds
+  );
 
-  const effectiveReadyCount = readyCount + cmsPublishedChunkCount;
+  const effectiveReadyCount =
+    readyCount + cmsPublishedChunkCount + descriptionReadyCount;
 
   let reingestedDocuments = 0;
 
-  if (effectiveReadyCount === 0) {
+  if (readyCount + cmsPublishedChunkCount === 0) {
     reingestedDocuments = await reingestPendingDocuments(
       companyId,
       expandedKnowledgeBaseIds
     );
   }
 
+  const descriptionLimit =
+    loadStrategy === "full" ? MAX_DESCRIPTION_SECTIONS : 8;
+
   if (
     loadStrategy === "full" ||
     (effectiveReadyCount > 0 &&
       effectiveReadyCount <= AUTO_FULL_CORPUS_DOC_LIMIT)
   ) {
-    const usedChunks = await loadAllReadyChunkTexts(
+    const documentChunks = await loadAllReadyChunkTexts(
       companyId,
       expandedKnowledgeBaseIds,
       loadStrategy === "full" ? 48 : FULL_CORPUS_DOC_LIMIT
     );
+    const descriptionChunks = await loadKnowledgeBaseDescriptionChunks(
+      companyId,
+      expandedKnowledgeBaseIds,
+      userText,
+      descriptionLimit
+    );
+    const usedChunks = mergeContextChunks(
+      documentChunks,
+      descriptionChunks,
+      loadStrategy === "full" ? 48 : FULL_CORPUS_DOC_LIMIT
+    );
+
     return {
       contextBlock: buildContextBlock(usedChunks),
       usedChunks,
@@ -335,8 +527,21 @@ export const buildKnowledgeContextForQuery = async ({
     );
   }
 
+  if (!usedChunks.length || userText.trim()) {
+    const descriptionChunks = await loadKnowledgeBaseDescriptionChunks(
+      companyId,
+      expandedKnowledgeBaseIds,
+      userText,
+      descriptionLimit
+    );
+    usedChunks = mergeContextChunks(usedChunks, descriptionChunks, 48);
+  }
+
   const hasReadyDocuments =
-    readyCount > 0 || reingestedDocuments > 0 || usedChunks.length > 0;
+    readyCount > 0 ||
+    reingestedDocuments > 0 ||
+    usedChunks.length > 0 ||
+    (await countBasesWithDescription(companyId, expandedKnowledgeBaseIds)) > 0;
 
   return {
     contextBlock: buildContextBlock(usedChunks),

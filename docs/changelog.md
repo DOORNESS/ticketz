@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.69] — 2026-07-26
+
+### Corrigido (IA Nível — base + assets CMS)
+
+- **`KnowledgeContextService`:** lê texto longo do campo **descrição** da base quando não há documentos indexados.
+- **RAG CMS sempre ativo na leitura:** assets **Publicado/Indexado** (Word, URL, etc.) entram no contexto mesmo sem `AI_KB_CMS_ENABLED=true`.
+- **`RetrievalEngine`:** busca híbrida CMS + legado em paralelo.
+
 ## [1.5.68] — 2026-07-26
 
 ### Corrigido (IA Nível — base de conhecimento)
