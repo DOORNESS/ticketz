@@ -11,6 +11,7 @@ import {
 } from "./RetrievalEngine";
 import { ingestKnowledgeDocument } from "./IngestKnowledgeDocumentService";
 import { logger } from "../../utils/logger";
+import { isInternalKnowledgeSection } from "./sanitizeAiOutboundText";
 
 const MAX_CONTEXT_CHARS = 20000;
 const MAX_CHUNK_SNIPPET = 1200;
@@ -187,6 +188,10 @@ export const loadKnowledgeBaseDescriptionChunks = async (
     }
 
     splitDescriptionSections(description).forEach((part, index) => {
+      if (isInternalKnowledgeSection(part)) {
+        return;
+      }
+
       sections.push({
         id: base.id * 10000 + index,
         content: part.slice(0, MAX_CHUNK_SNIPPET),

@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.71] — 2026-07-27
+
+### Corrigido (vazamento de instruções internas no WhatsApp)
+
+- **`InformationalDirectReplyService`:** removido fallback que colava trechos crus da base (`Com base no nosso material…`); em falha do LLM usa só resposta segura da marca.
+- **`sanitizeAiOutboundText`:** bloqueia textos com regras internas do agente (`# O que o robô nunca deve fazer`, etc.).
+- **`KnowledgeContextService`:** seções internas da descrição da base não entram mais no contexto RAG.
+
 ## [1.5.70] — 2026-07-27
 
 ### Corrigido (painel Fortmax + resposta IA informativa)

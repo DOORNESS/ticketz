@@ -101,9 +101,37 @@ describe("InformationalDirectReplyService", () => {
     expect(result.replied).toBe(true);
     expect(result.body).toBeTruthy();
     expect(result.body!.length).toBeGreaterThanOrEqual(20);
-    expect(["informational_chunk_fallback", "informational_brand_fallback"]).toContain(
-      result.reason
+    expect(result.reason).toBe("informational_brand_fallback");
+    expect(result.body).toMatch(/Nível Cashback/i);
+    expect(result.body).not.toMatch(/rob[oô]/i);
+  });
+
+  it("never leaks internal agent instructions to the customer", async () => {
+    const { buildKnowledgeContextForQuery } = jest.requireMock(
+      "../KnowledgeContextService"
     );
+    const { chatCompletion } = jest.requireMock("../ModelGateway");
+
+    buildKnowledgeContextForQuery.mockResolvedValueOnce({
+      contextBlock:
+        "[Trecho 1]\n# O que o robô nunca deve fazer\nNunca orientar o cliente a criar outra conta.",
+      usedChunks: [{ id: 1, content: "internal", similarity: 0.8 }],
+      hasReadyDocuments: true,
+      reingestedDocuments: 0
+    });
+    chatCompletion.mockRejectedValueOnce(new Error("timeout"));
+
+    const result = await tryInformationalDirectReply({
+      companyId: 1,
+      ticket,
+      agent,
+      userText: "Pode falar sobre o nível pra mim?"
+    });
+
+    expect(result.replied).toBe(true);
+    expect(result.reason).toBe("informational_brand_fallback");
+    expect(result.body).not.toMatch(/rob[oô]/i);
+    expect(result.body).not.toMatch(/nunca orientar/i);
   });
 
   it("uses brand fallback instead of leaking internal placeholder text", async () => {

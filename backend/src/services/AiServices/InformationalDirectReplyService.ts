@@ -98,25 +98,10 @@ const resolveBrandFallback = (agent: AiAgent, userText = ""): string => {
   return GENERIC_BRAND_FALLBACK;
 };
 
-const buildChunkFallback = (contextBlock: string): string | null => {
-  if (!hasRealKnowledgeContext(contextBlock)) {
-    return null;
-  }
-
-  const cleaned = contextBlock.replace(/\[Trecho \d+\]\n?/g, "").trim();
-  if (cleaned.length < 40 || isInstructionPlaceholder(cleaned)) {
-    return null;
-  }
-
-  const snippet = cleaned.slice(0, 700).trim();
-  return `Com base no nosso material: ${snippet}${
-    snippet.length >= 700 ? "…" : ""
-  }\n\nSe quiser, eu detalho benefícios para a sua empresa ou o passo a passo de uso.`;
-};
-
 /**
  * Caminho estável para dúvidas informativas.
- * Sempre tenta devolver uma resposta ao cliente (LLM → trechos → fallback da marca).
+ * Sempre tenta devolver uma resposta ao cliente (LLM → fallback da marca).
+ * Nunca envia trechos crus da base — evita vazar instruções internas do agente.
  */
 export const tryInformationalDirectReply = async ({
   companyId,
@@ -210,20 +195,8 @@ export const tryInformationalDirectReply = async ({
     } catch (error) {
       logger.warn(
         { error, ticketId: ticket.id, companyId },
-        "Informational direct LLM reply failed — using fallback"
+        "Informational direct LLM reply failed — using brand fallback"
       );
-    }
-
-    const chunkFallback = buildChunkFallback(contextBlock);
-    if (chunkFallback) {
-      return {
-        replied: true,
-        body: sanitizeAiOutboundText(chunkFallback),
-        knowledgeBaseIds,
-        chunkCount,
-        hasReadyDocuments,
-        reason: "informational_chunk_fallback"
-      };
     }
   } catch (error) {
     logger.warn(

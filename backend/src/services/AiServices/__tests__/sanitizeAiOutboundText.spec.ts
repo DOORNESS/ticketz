@@ -1,5 +1,6 @@
 import {
   containsProactiveHandoffLanguage,
+  containsInternalKnowledgeLeak,
   sanitizeAiOutboundText
 } from "../sanitizeAiOutboundText";
 
@@ -23,5 +24,12 @@ describe("sanitizeAiOutboundText", () => {
         "Você pode aguardar o atendimento humano amanhã."
       )
     ).toBe(true);
+  });
+
+  it("blocks internal knowledge leaks from reaching customers", () => {
+    const input =
+      "Com base no nosso material: detalhes.\n# O que o robô nunca deve fazer\nNunca orientar o cliente a criar outra conta.";
+    expect(containsInternalKnowledgeLeak(input)).toBe(true);
+    expect(sanitizeAiOutboundText(input)).toBe("");
   });
 });
