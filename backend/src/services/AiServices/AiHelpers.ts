@@ -530,6 +530,36 @@ export const detectSensitiveTopic = (message: string): boolean => {
   return SENSITIVE_KEYWORDS.some(keyword => lower.includes(keyword));
 };
 
+/** WhatsApp humano Nível — só quando a IA não pode resolver sozinha. */
+export const NIVEL_SUPPORT_WHATSAPP_DISPLAY = "(17) 99165-8811";
+
+const HUMAN_ACCOUNT_ESCALATION_PATTERNS = [
+  /reset(?:ar)?\s+(?:a\s+)?(?:minha\s+)?senha/i,
+  /recuper(?:ar|ação|acao)\s+(?:de\s+)?(?:minha\s+)?(?:senha|conta|acesso)/i,
+  /esqueci\s+(?:minha\s+)?senha/i,
+  /redefinir\s+senha/i,
+  /(?:apagar|excluir|deletar)\s+(?:minha\s+)?conta/i,
+  /recuper(?:ar|ação|acao)\s+(?:do\s+)?saldo/i,
+  /(?:perdi|perdeu)\s+(?:o\s+)?acesso/i,
+  /desbloque(?:ar|io)\s+(?:minha\s+)?conta/i,
+  /(?:mudou|trocou)\s+de\s+(?:celular|telefone|aparelho)/i,
+  /conta\s+(?:bloqueada|suspensa|exclu[ií]da)/i
+];
+
+export const detectRequiresHumanAccountEscalation = (
+  message: string
+): boolean => {
+  const text = message.trim();
+  if (!text) {
+    return false;
+  }
+
+  return HUMAN_ACCOUNT_ESCALATION_PATTERNS.some(pattern => {
+    pattern.lastIndex = 0;
+    return pattern.test(text);
+  });
+};
+
 export const detectLowConfidenceResponse = (response: string): boolean => {
   const lower = response.toLowerCase();
   const markers = [

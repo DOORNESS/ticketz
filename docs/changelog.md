@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.73] — 2026-07-27
+
+### Alterado (IA sempre analisa — sem respostas automáticas de triagem)
+
+- **`ProcessInboundMessageService`:** removidos fast-paths (saudação, ajuda curta, bypass informativo) e perguntas automáticas de triagem; **toda mensagem passa pelo LLM** com base de conhecimento.
+- **`AiPromptBuilder` / `NIVEL_PROMPT`:** "Nível" = marca **Nível Cashback** (nunca nível de pedreiro/medida).
+- **Telefone `(17) 99165-8811`:** só quando a IA detecta que não pode resolver (reset/recuperação de senha, conta, etc.); removido de respostas normais vinda da base.
+- **`prepareCustomerFacingAiText`:** sanitiza telefone e anexa suporte humano só em escalação de conta.
+
 ## [1.5.72] — 2026-07-27
 
 ### Corrigido (triagem em pedidos simples de ajuda)

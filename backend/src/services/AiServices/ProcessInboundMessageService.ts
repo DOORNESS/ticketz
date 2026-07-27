@@ -4,29 +4,22 @@ import AiAgent from "../../models/AiAgent";
 import AiConversationLog from "../../models/AiConversationLog";
 import { resolveInboundMessageText } from "./MediaInboundResolver";
 import {
-  getActiveAgentForTicket,
   resolveProcessingAgent,
   getKnowledgeBaseIdsForAgent,
   getSpecialtyPromptRules,
   resolveSpecialistAgent,
   detectHumanHandoffRequest,
   detectSensitiveTopic,
-  detectLowConfidenceResponse,
   detectCustomerResolution,
   canAiEngageTicket,
-  detectAgentIdentityQuestion,
   detectHandoffConfirmationAccept,
   detectHandoffConfirmationDecline,
-  buildAgentIdentityReply,
   buildHandoffConfirmationQuestion
 } from "./AiHelpers";
 import {
-  isVagueCustomerStatement,
+  isWaitingForBotNudge,
   isPureGreetingMessage,
   isShortHelpRequest,
-  buildShortHelpReply,
-  isWaitingForBotNudge,
-  buildTimeBasedGreeting,
   isInformationalIntent
 } from "./Triage/CaseCompletenessEngine";
 import {
@@ -62,7 +55,6 @@ import { isContactMemoryEnabledForCompany } from "./ContactMemory/AiContactMemor
 import { isToolsEnabledForCompany } from "./tools/AiToolsFeatureFlag";
 import { runToolLoop } from "./tools/ToolLoopService";
 import { chatCompletion } from "./ModelGateway";
-import { tryInformationalDirectReply } from "./InformationalDirectReplyService";
 import "./tools/registerPilotTools";
 import crypto from "crypto";
 import {
@@ -71,12 +63,11 @@ import {
   executeHandoffDecision,
   finalizeAiResponse,
   isTriageV2Active,
-  sendHandoffConfirmationRequest,
-  sendInvestigationResponse
+  sendHandoffConfirmationRequest
 } from "./Triage/TriageOrchestratorService";
 import { HandoffPolicyDecision } from "./Triage/AiTriageTypes";
 import { logAiTicketTimelineEvent } from "./Triage/AiTicketTimelineService";
-import { sanitizeAiOutboundText } from "./sanitizeAiOutboundText";
+import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
 import { responseMimicsHumanHandoff } from "./Triage/detectImpliedHandoffMessage";
 
 export type InboundMessageItem = {
@@ -304,15 +295,7 @@ const applyTriageDecision = async ({
   }
 
   if (decision.action === "investigate") {
-    const handled = await sendInvestigationResponse({
-      ticket,
-      agent,
-      snapshot,
-      messageId,
-      companyId,
-      userText
-    });
-    return handled;
+    return false;
   }
 
   if (decision.action === "confirm_handoff") {
@@ -519,85 +502,7 @@ const ProcessInboundMessageService = async ({
       await ticket.update({ aiPriority: priority });
     }
 
-    if (detectAgentIdentityQuestion(userText)) {
-      const identityReply = buildAgentIdentityReply(agent);
-      await SendWhatsAppMessage({
-        body: formatBody(identityReply, ticket),
-        ticket
-      });
-
-      await finalizeAiResponse(ticket, primaryMessageId);
-
-      await ticket.reload({
-        include: ["contact", "queue", "whatsapp", "user"]
-      });
-      websocketUpdateTicket(ticket);
-
-      await persistAiDecisionLog({
-        companyId,
-        ticketId: ticket.id,
-        messageId: primaryMessageId,
-        action: "respond",
-        reason: "agent_identity_question",
-        userMessage: maskSensitiveLog(userText),
-        aiResponse: identityReply
-      });
-      return;
-    }
-
-    if (isPureGreetingMessage(userText)) {
-      const greetingReply = `${buildTimeBasedGreeting()} Em que posso ajudar?`;
-      await SendWhatsAppMessage({
-        body: formatBody(greetingReply, ticket),
-        ticket
-      });
-
-      await finalizeAiResponse(ticket, primaryMessageId);
-
-      await ticket.reload({
-        include: ["contact", "queue", "whatsapp", "user"]
-      });
-      websocketUpdateTicket(ticket);
-
-      await persistAiDecisionLog({
-        companyId,
-        ticketId: ticket.id,
-        messageId: primaryMessageId,
-        action: "respond",
-        reason: "pure_greeting_fast_path",
-        userMessage: maskSensitiveLog(userText),
-        aiResponse: greetingReply
-      });
-      return;
-    }
-
-    if (isShortHelpRequest(userText)) {
-      const helpReply = buildShortHelpReply();
-      await SendWhatsAppMessage({
-        body: formatBody(helpReply, ticket),
-        ticket
-      });
-
-      await finalizeAiResponse(ticket, primaryMessageId);
-
-      await ticket.reload({
-        include: ["contact", "queue", "whatsapp", "user"]
-      });
-      websocketUpdateTicket(ticket);
-
-      await persistAiDecisionLog({
-        companyId,
-        ticketId: ticket.id,
-        messageId: primaryMessageId,
-        action: "respond",
-        reason: "short_help_fast_path",
-        userMessage: maskSensitiveLog(userText),
-        aiResponse: helpReply
-      });
-      return;
-    }
-
-    // "cadê vc / por que não responde" → responde a última pergunta real do cliente
+    // "cadê vc / por que não responde" → reprocessa a última pergunta real do cliente na IA
     if (isWaitingForBotNudge(userText)) {
       const recent = await Message.findAll({
         where: { ticketId: ticket.id, fromMe: false },
@@ -626,45 +531,6 @@ const ProcessInboundMessageService = async ({
 
     const conversationText = await buildConversationText(ticket.id, userText);
     const informationalQuery = isInformationalIntent(userText);
-
-    // Caminho estável para dúvidas: sempre envia resposta (LLM / trechos / fallback marca).
-    if (informationalQuery && !forceHandoff) {
-      const direct = await tryInformationalDirectReply({
-        companyId,
-        ticket,
-        agent,
-        userText
-      });
-
-      const replyBody =
-        direct.body ||
-        "Posso te explicar o que nosso produto faz pela sua empresa. Me diga se prefere visão geral, benefícios ou como começar.";
-
-      await SendWhatsAppMessage({
-        body: formatBody(replyBody, ticket),
-        ticket
-      });
-      await finalizeAiResponse(ticket, primaryMessageId);
-      await ticket.reload({
-        include: ["contact", "queue", "whatsapp", "user"]
-      });
-      websocketUpdateTicket(ticket);
-      await persistAiDecisionLog({
-        companyId,
-        ticketId: ticket.id,
-        messageId: primaryMessageId,
-        action: "respond",
-        reason: direct.reason || "informational_brand_fallback",
-        userMessage: maskSensitiveLog(userText),
-        aiResponse: replyBody,
-        details: {
-          knowledgeBaseIds: direct.knowledgeBaseIds,
-          chunks: direct.chunkCount,
-          hasReadyDocuments: direct.hasReadyDocuments
-        }
-      });
-      return;
-    }
 
     if (
       triageV2Enabled &&
@@ -759,44 +625,6 @@ const ProcessInboundMessageService = async ({
       return;
     }
 
-    if (triageV2Enabled && !informationalQuery) {
-      const handledByTriage = await runTriageGate({
-        companyId,
-        ticket,
-        agent,
-        userText,
-        conversationText,
-        messageId: primaryMessageId,
-        messages
-      });
-
-      if (handledByTriage) {
-        return;
-      }
-
-      if (
-        !informationalQuery &&
-        isVagueCustomerStatement(userText) &&
-        Number((ticket as any).aiInvestigationRound || 0) < 2
-      ) {
-        const forcedInvestigation = await runTriageGate({
-          companyId,
-          ticket,
-          agent,
-          userText,
-          conversationText,
-          messageId: primaryMessageId,
-          messages,
-          proposedReason: AI_HANDOFF_REASONS.low_confidence,
-          confidenceScore: 0
-        });
-
-        if (forcedInvestigation) {
-          return;
-        }
-      }
-    }
-
     if (detectCustomerResolution(userText)) {
       await SendWhatsAppMessage({
         body: formatBody(
@@ -882,47 +710,10 @@ const ProcessInboundMessageService = async ({
     const usedChunks = knowledgeContext.usedChunks;
     const contextBlock = knowledgeContext.contextBlock;
     const hasReliableContext =
-      informationalQuery && knowledgeContext.hasReadyDocuments
-        ? usedChunks.length > 0
+      knowledgeContext.hasReadyDocuments && usedChunks.length > 0
+        ? informationalQuery || usedChunks[0].similarity >= 0.25
         : usedChunks.length > 0 && usedChunks[0].similarity >= 0.25;
 
-    if (
-      !informationalQuery &&
-      knowledgeContext.hasReadyDocuments &&
-      !hasReliableContext &&
-      userText.length > 20
-    ) {
-      const handledByTriage = await runTriageGate({
-        companyId,
-        ticket,
-        agent,
-        userText,
-        conversationText,
-        messageId: primaryMessageId,
-        messages,
-        proposedReason: AI_HANDOFF_REASONS.no_knowledge_found,
-        hasReliableContext,
-        hasReadyDocuments: knowledgeContext.hasReadyDocuments
-      });
-
-      if (handledByTriage) {
-        return;
-      }
-
-      if (!triageV2Enabled) {
-        await HandoffToHumanService({
-          ticket,
-          agent,
-          userMessage: maskSensitiveLog(userText),
-          messageId: primaryMessageId,
-          handoffReason: AI_HANDOFF_REASONS.no_knowledge_found,
-          reason: "no_knowledge_found",
-          conversationText,
-          usedChunks
-        });
-        return;
-      }
-    }
     const contextHint = contextBlock
       ? contextBlock
       : knowledgeContext.hasReadyDocuments
@@ -997,53 +788,9 @@ const ProcessInboundMessageService = async ({
       model: loopResult.model
     };
 
-    const rejectModelResponse =
-      !aiResponse ||
-      (detectLowConfidenceResponse(aiResponse) &&
-        !(informationalQuery && aiResponse.length >= 40));
+    const rejectModelResponse = !aiResponse || aiResponse.trim().length < 12;
 
     if (rejectModelResponse) {
-      const confidence = computeConfidenceScore({
-        topSimilarity: usedChunks[0]?.similarity || 0,
-        hasReliableContext,
-        responseLength: aiResponse?.length || 0
-      });
-
-      const handledByTriage =
-        !informationalQuery &&
-        (await runTriageGate({
-          companyId,
-          ticket,
-          agent,
-          userText,
-          conversationText,
-          messageId: primaryMessageId,
-          messages,
-          proposedReason: AI_HANDOFF_REASONS.low_confidence,
-          confidenceScore: confidence,
-          hasReliableContext,
-          hasReadyDocuments: knowledgeContext.hasReadyDocuments
-        }));
-
-      if (handledByTriage) {
-        return;
-      }
-
-      if (!triageV2Enabled) {
-        await HandoffToHumanService({
-          ticket,
-          agent,
-          userMessage: maskSensitiveLog(userText),
-          messageId: primaryMessageId,
-          handoffReason: AI_HANDOFF_REASONS.low_confidence,
-          reason: "low_confidence",
-          conversationText,
-          usedChunks,
-          model: completion.model
-        });
-        return;
-      }
-
       await sendAiCustomerFallback({
         ticket,
         companyId,
@@ -1059,7 +806,21 @@ const ProcessInboundMessageService = async ({
       return;
     }
 
-    const outboundText = sanitizeAiOutboundText(aiResponse);
+    const outboundText = prepareCustomerFacingAiText(aiResponse, userText);
+    if (!outboundText) {
+      await sendAiCustomerFallback({
+        ticket,
+        companyId,
+        messageId: primaryMessageId,
+        reason: "empty_sanitized_response",
+        userText,
+        body: informationalQuery
+          ? AI_INFORMATIONAL_FALLBACK
+          : AI_CUSTOMER_FALLBACK
+      });
+      return;
+    }
+
     const confidence = computeConfidenceScore({
       topSimilarity: usedChunks[0]?.similarity || 0,
       hasReliableContext,
@@ -1256,138 +1017,66 @@ const ProcessInboundMessageService = async ({
     const agent =
       (await resolveProcessingAgent(ticket, providedAgent || null)) || null;
 
-    if (agent) {
-      const conversationText =
-        userText || (await buildConversationText(ticket.id, userText));
-
-      if (userText && isInformationalIntent(userText)) {
-        try {
-          const direct = await tryInformationalDirectReply({
-            companyId,
-            ticket,
-            agent,
-            userText
-          });
-
-          if (direct.replied && direct.body) {
-            await SendWhatsAppMessage({
-              body: formatBody(direct.body, ticket),
-              ticket
-            });
-            await finalizeAiResponse(ticket, primaryMessageId);
-            await persistAiDecisionLog({
-              companyId,
-              ticketId: ticket.id,
-              messageId: primaryMessageId,
-              action: "respond",
-              reason:
-                direct.reason || "processing_error_informational_recovery",
-              userMessage: maskSensitiveLog(userText),
-              aiResponse: direct.body
-            });
-            return;
-          }
-        } catch (informationalError) {
-          logger.warn(
-            { informationalError, ticketId: ticket.id },
-            "Informational recovery after processing error failed — falling back to triage"
-          );
-        }
-      }
-
-      const handledByTriage = await runTriageGate({
-        companyId,
-        ticket,
-        agent,
-        userText: userText || "processing_error",
-        conversationText,
-        messageId: primaryMessageId,
-        messages,
-        providerError: error
-      });
-
-      if (handledByTriage) {
-        return;
-      }
-
-      if (!(await isTriageV2Active(companyId))) {
-        await HandoffToHumanService({
-          ticket,
-          agent,
-          userMessage: maskSensitiveLog(userText),
-          messageId: primaryMessageId,
-          handoffReason: AI_HANDOFF_REASONS.provider_error,
-          reason: "provider_error",
-          conversationText: userText
+    if (agent && userText) {
+      try {
+        const knowledgeBaseIds = await getKnowledgeBaseIdsForAgent(
+          companyId,
+          agent.id,
+          ticket.queueId
+        );
+        const knowledgeContext = await buildKnowledgeContextForQuery({
+          companyId,
+          knowledgeBaseIds,
+          userText,
+          provider: agent.provider,
+          loadStrategy: "full"
         });
-        return;
-      }
-
-      // Última tentativa: resposta simples sem tools (evita "instabilidade" em perguntas reais).
-      if (userText && isInformationalIntent(userText)) {
-        try {
-          const knowledgeBaseIds = await getKnowledgeBaseIdsForAgent(
-            companyId,
-            agent.id,
-            ticket.queueId
-          );
-          const knowledgeContext = await buildKnowledgeContextForQuery({
-            companyId,
-            knowledgeBaseIds,
-            userText,
-            provider: agent.provider,
-            loadStrategy: "full"
+        const recovery = await chatCompletion(companyId, {
+          model: agent.textModel,
+          temperature: 0.3,
+          maxTokens: Math.min(2048, agent.maxTokens || 1024),
+          providerId: agent.provider,
+          messages: [
+            {
+              role: "system",
+              content: buildAiSystemPrompt({
+                agent,
+                knowledgeContextBlock:
+                  knowledgeContext.contextBlock || "sem contexto"
+              })
+            },
+            {
+              role: "user",
+              content: userText
+            }
+          ]
+        });
+        const recoveryText = prepareCustomerFacingAiText(
+          recovery.content?.trim() || "",
+          userText
+        );
+        if (recoveryText.length >= 20) {
+          await SendWhatsAppMessage({
+            body: formatBody(recoveryText, ticket),
+            ticket
           });
-          const recovery = await chatCompletion(companyId, {
-            model: agent.textModel,
-            temperature: 0.3,
-            maxTokens: Math.min(2048, agent.maxTokens || 1024),
-            providerId: agent.provider,
-            messages: [
-              {
-                role: "system",
-                content:
-                  (agent.basePrompt ||
-                    "Você é o assistente virtual deste canal.") +
-                  "\nResponda em português, com base no contexto. Não invente."
-              },
-              {
-                role: "user",
-                content: [
-                  `Pergunta do cliente:\n${userText}`,
-                  `Base de conhecimento:\n${
-                    knowledgeContext.contextBlock || "sem contexto"
-                  }`
-                ].join("\n\n")
-              }
-            ]
+          await finalizeAiResponse(ticket, primaryMessageId);
+          await persistAiDecisionLog({
+            companyId,
+            ticketId: ticket.id,
+            messageId: primaryMessageId,
+            action: "respond",
+            reason: "processing_error_recovery_reply",
+            userMessage: maskSensitiveLog(userText),
+            aiResponse: recoveryText
           });
-          const recoveryText = sanitizeAiOutboundText(
-            recovery.content?.trim() || ""
-          );
-          if (recoveryText.length >= 20) {
-            await SendWhatsAppMessage({
-              body: formatBody(recoveryText, ticket),
-              ticket
-            });
-            await finalizeAiResponse(ticket, primaryMessageId);
-            await persistAiDecisionLog({
-              companyId,
-              ticketId: ticket.id,
-              messageId: primaryMessageId,
-              action: "respond",
-              reason: "processing_error_recovery_reply",
-              userMessage: maskSensitiveLog(userText),
-              aiResponse: recoveryText
-            });
-            return;
-          }
-        } catch (recoveryError) {
-          logger.warn(
-            { recoveryError, ticketId: ticket.id },
-            "AI recovery reply after processing error also failed"
-          );
+          return;
         }
+      } catch (recoveryError) {
+        logger.warn(
+          { recoveryError, ticketId: ticket.id },
+          "AI recovery reply after processing error also failed"
+        );
       }
 
       await sendAiCustomerFallback({
@@ -1395,7 +1084,7 @@ const ProcessInboundMessageService = async ({
         companyId,
         messageId: primaryMessageId,
         reason: "processing_error_fallback",
-        userText: userText || "",
+        userText,
         body: TRANSIENT_ERROR_FALLBACK
       });
       return;

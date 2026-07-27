@@ -7,6 +7,11 @@ const PROACTIVE_HANDOFF_PATTERNS = [
   /se\s+precisar\s+de\s+mais\s+ajuda[^.!?]*(?:atendimento\s+humano|aguard(?:ar|e))/gi
 ];
 
+const SUPPORT_PHONE_PATTERNS = [
+  /\(?\s*17\s*\)?\s*99165[\s-]?8811/gi,
+  /WhatsApp\s+(?:do\s+)?suporte/gi
+];
+
 const INTERNAL_KNOWLEDGE_LEAK_PATTERNS = [
   /#\s*O que o rob[oô]/i,
   /rob[oô]\s+nunca\s+deve/i,
@@ -39,15 +44,32 @@ const stripInternalKnowledgeSections = (text: string): string => {
   return safe.join("\n").trim();
 };
 
+const stripSupportPhoneReferences = (text: string): string => {
+  let sanitized = text;
+  SUPPORT_PHONE_PATTERNS.forEach(pattern => {
+    pattern.lastIndex = 0;
+    sanitized = sanitized.replace(pattern, "").trim();
+  });
+
+  return sanitized
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/^\*+\s*$/gm, "")
+    .trim();
+};
+
 export const sanitizeAiOutboundText = (
   text: string,
-  options: { allowHandoffLanguage?: boolean } = {}
+  options: { allowHandoffLanguage?: boolean; allowSupportPhone?: boolean } = {}
 ): string => {
   if (!text?.trim()) {
     return text;
   }
 
   let sanitized = text.trim();
+
+  if (!options.allowSupportPhone) {
+    sanitized = stripSupportPhoneReferences(sanitized);
+  }
 
   if (containsInternalKnowledgeLeak(sanitized)) {
     const stripped = stripInternalKnowledgeSections(sanitized);
