@@ -56,10 +56,28 @@ describe("CaseCompletenessEngine", () => {
   it("detects short help requests for fast-path replies", () => {
     expect(isShortHelpRequest("Pode ajudar?")).toBe(true);
     expect(isShortHelpRequest("pode me ajudar ?")).toBe(true);
+    expect(isShortHelpRequest("pode me ajudar agora ?")).toBe(true);
+    expect(isShortHelpRequest("consegue me ajudar agora?")).toBe(true);
     expect(isShortHelpRequest("teste")).toBe(true);
     expect(isShortHelpRequest("Como funciona o Nível?")).toBe(false);
     expect(isWaitingForBotNudge("cade vc robozinho ?")).toBe(true);
     expect(isWaitingForBotNudge("por que nao respode ?")).toBe(true);
+  });
+
+  it("does not ask which product when customer only asks for help", () => {
+    const userText = "pode me ajudar agora ?";
+    expect(isShortHelpRequest(userText)).toBe(true);
+    expect(shouldSkipSupportInvestigation(userText)).toBe(true);
+
+    const snapshot = evaluateCaseCompleteness({
+      latestMessage: userText,
+      conversationText: `user: Oi\nuser: ${userText}`
+    });
+
+    expect(buildInvestigationQuestion(snapshot, userText)).toMatch(/Claro!/i);
+    expect(buildInvestigationQuestion(snapshot, userText)).not.toMatch(
+      /sistema ou produto/i
+    );
   });
 
   it("blocks automatic handoff until enough investigation rounds", () => {

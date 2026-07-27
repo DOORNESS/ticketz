@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.72] — 2026-07-27
+
+### Corrigido (triagem em pedidos simples de ajuda)
+
+- **`CaseCompletenessEngine`:** reconhece *"pode me ajudar agora?"*, *"consegue me ajudar?"* etc.; não pergunta mais *"Em qual sistema ou produto?"* nesses casos.
+- **Fast-path:** resposta amigável pedindo a dúvida real em vez de triagem genérica.
+
 ## [1.5.71] — 2026-07-27
 
 ### Corrigido (vazamento de instruções internas no WhatsApp)

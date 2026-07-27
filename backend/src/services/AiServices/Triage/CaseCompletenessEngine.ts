@@ -183,11 +183,14 @@ export const isPureGreetingMessage = (text: string): boolean =>
 
 const SHORT_HELP_PATTERNS = [
   /^\s*pode ajudar\s*\??\s*$/i,
-  /^\s*pode me ajudar\s*\??\s*$/i,
-  /^\s*pode me ajj?dar\s*\??\s*$/i,
-  /^\s*preciso de ajuda\s*\??\s*$/i,
-  /^\s*me ajuda\s*\??\s*$/i,
-  /^\s*ajuda\s*\??\s*$/i,
+  /^\s*pode me ajudar(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,
+  /^\s*pode me ajj?dar(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,
+  /^\s*(?:vc|voc[eê])\s+pode me ajudar(?:\s+agora)?\s*\??\s*$/i,
+  /^\s*(?:me\s+)?ajud(?:a|ar|e)(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,
+  /^\s*preciso de ajuda(?:\s+(?:agora|j[aá]))*\s*\??\s*$/i,
+  /^\s*me ajuda(?:\s+(?:agora|j[aá]|por favor))*\s*\??\s*$/i,
+  /^\s*ajuda(?:\s+(?:agora|j[aá]))*\s*\??\s*$/i,
+  /^\s*consegue me ajudar(?:\s+agora)?\s*\??\s*$/i,
   /^\s*teste\s*$/i
 ];
 
@@ -237,7 +240,7 @@ export const isInformationalIntent = (text: string): boolean => {
 };
 
 export const shouldSkipSupportInvestigation = (text: string): boolean =>
-  isInformationalIntent(text);
+  isInformationalIntent(text) || isShortHelpRequest(text);
 
 export const isInvestigationTemplateMessage = (body: string): boolean =>
   INVESTIGATION_TEMPLATE_PATTERNS.some(pattern => pattern.test(body.trim()));
@@ -273,6 +276,11 @@ export const buildTimeBasedGreeting = (
   return "Olá, boa noite!";
 };
 
+export const buildShortHelpReply = (
+  timezone = "America/Sao_Paulo"
+): string =>
+  `${buildTimeBasedGreeting(timezone)} Claro! Me conte o que você precisa — posso ajudar com dúvidas sobre produtos, funcionalidades ou suporte.`;
+
 export const MIN_INVESTIGATION_ROUNDS_BEFORE_HANDOFF = 2;
 
 export const shouldBlockAutomaticHandoff = (
@@ -302,6 +310,10 @@ export const isVagueCustomerStatement = (text: string): boolean => {
   const normalized = text.trim();
   if (!normalized) {
     return true;
+  }
+
+  if (isShortHelpRequest(normalized)) {
+    return false;
   }
 
   if (isInformationalIntent(normalized)) {
@@ -442,6 +454,10 @@ export const buildInvestigationQuestion = (
   snapshot: CaseCompletenessSnapshot,
   latestMessage = ""
 ): string | null => {
+  if (isShortHelpRequest(latestMessage.trim())) {
+    return buildShortHelpReply();
+  }
+
   if (shouldSkipSupportInvestigation(latestMessage)) {
     return null;
   }

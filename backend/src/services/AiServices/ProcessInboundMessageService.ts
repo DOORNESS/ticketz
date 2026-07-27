@@ -24,6 +24,7 @@ import {
   isVagueCustomerStatement,
   isPureGreetingMessage,
   isShortHelpRequest,
+  buildShortHelpReply,
   isWaitingForBotNudge,
   buildTimeBasedGreeting,
   isInformationalIntent
@@ -571,7 +572,7 @@ const ProcessInboundMessageService = async ({
     }
 
     if (isShortHelpRequest(userText)) {
-      const helpReply = `${buildTimeBasedGreeting()} Claro! Me conte o que você precisa — posso ajudar com dúvidas sobre produtos, funcionalidades ou suporte.`;
+      const helpReply = buildShortHelpReply();
       await SendWhatsAppMessage({
         body: formatBody(helpReply, ticket),
         ticket
