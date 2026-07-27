@@ -172,37 +172,42 @@ const useAuth = () => {
   }, [socketManager, refreshSession]);
 
   useEffect(() => {
+    let cancelled = false;
+    const safetyTimer = setTimeout(() => {
+      // Nunca deixar a UI presa no spinner por refresh lento/indisponível.
+      setLoading(false);
+    }, 12000);
+
     const bootstrapAuth = async () => {
       const token = parseStoredToken();
 
       if (!token) {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
         return;
       }
 
       api.defaults.headers.Authorization = `Bearer ${token}`;
 
+      // Hidrata usuário do JWT imediatamente para abrir a tela sem esperar refresh.
+      const tokenUser = buildUserFromToken(token);
+      if (tokenUser?.id && !isAccessTokenExpired(token)) {
+        setIsAuth(true);
+        setUser(tokenUser);
+        setLoading(false);
+      }
+
       try {
         const data = await refreshSession();
-        setUser(data.user || buildUserFromToken(token));
+        if (cancelled) return;
+        setUser(data.user || buildUserFromToken(data.token || token));
+        setIsAuth(true);
       } catch (err) {
-        if (!isAccessTokenExpired(token)) {
+        if (cancelled) return;
+        if (!isAccessTokenExpired(token) && tokenUser?.id) {
           setIsAuth(true);
-          setUser(buildUserFromToken(token));
-          refreshSession()
-            .then(sessionData => {
-              if (sessionData?.user) {
-                setUser(sessionData.user);
-              }
-            })
-            .catch(() => {
-              clearAllCachedSettings();
-              localStorage.removeItem("token");
-              localStorage.removeItem("companyId");
-              api.defaults.headers.Authorization = undefined;
-              setIsAuth(false);
-              setUser({});
-            });
+          setUser(tokenUser);
         } else {
           clearAllCachedSettings();
           localStorage.removeItem("token");
@@ -215,11 +220,17 @@ const useAuth = () => {
           }
         }
       } finally {
-        setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     };
 
     bootstrapAuth();
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimer);
+    };
   }, [refreshSession]);
 
   useEffect(() => {

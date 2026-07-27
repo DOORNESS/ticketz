@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.65] — 2026-07-26
+
+### Corrigido (crítico — tela de tickets travada + WebSocket)
+
+- **Socket em fortmax.com.br:** passa a usar **polling** (sem upgrade WSS) — Cloudflare/IIS quebravam `wss://api.fortmax.com.br/socket.io`.
+- **Spinner infinito:** auth hidrata usuário do JWT na hora; timeout de segurança 12s; rotas privadas não bloqueiam mais por `user.id` ausente.
+
 ## [1.5.64] — 2026-07-26
 
 ### Corrigido (crítico — robô nunca mais fica em silêncio na FAQ)

@@ -402,13 +402,16 @@ const socketManager = {
       const host = window.location.hostname || "";
       const forcePollingOnly =
         window.localStorage.getItem("TICKETZ_FORCE_POLLING") === "1";
+      // Cloudflare/IIS em fortmax.com.br costuma falhar no upgrade WSS.
+      // Preferir polling evita tela travada e console cheio de WebSocket failed.
       const usePollingOnly =
         forcePollingOnly ||
-        (host.includes("ticketz.host") && !host.includes("fortmax.com.br"));
+        host.includes("fortmax.com.br") ||
+        host.includes("ticketz.host");
 
       this.currentSocket = openSocket(getBackendSocketURL(), {
-        transports: usePollingOnly ? ["polling"] : ["websocket", "polling"],
-        upgrade: !usePollingOnly,
+        transports: usePollingOnly ? ["polling"] : ["polling", "websocket"],
+        upgrade: false,
         pingTimeout: 60000,
         pingInterval: 25000,
         reconnection: true,
@@ -468,6 +471,12 @@ const socketManager = {
           message.includes("unauthorized") ||
           message.includes("authentication");
 
+        // Qualquer falha de transporte → polling puro (não depender de WSS).
+        if (this.currentSocket?.io?.opts) {
+          this.currentSocket.io.opts.transports = ["polling"];
+          this.currentSocket.io.opts.upgrade = false;
+        }
+
         if (!isAuthError) {
           return;
         }
@@ -483,7 +492,7 @@ const socketManager = {
 
       this.currentSocket.io.on("upgradeError", () => {
         this.wsUpgradeFailures += 1;
-        if (this.wsUpgradeFailures >= 2 && this.currentSocket?.io?.opts) {
+        if (this.currentSocket?.io?.opts) {
           this.currentSocket.io.opts.transports = ["polling"];
           this.currentSocket.io.opts.upgrade = false;
         }

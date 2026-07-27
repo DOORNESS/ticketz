@@ -5,30 +5,22 @@ import { AuthContext } from "../context/Auth/AuthContext";
 import BackdropLoading from "../components/BackdropLoading";
 
 const Route = ({ component: Component, isPrivate = false, ...rest }) => {
-  const { isAuth, loading, user } = useContext(AuthContext);
-  const authReady = !isPrivate || (isAuth && Boolean(user?.id));
-  const showLoading = loading || (isPrivate && isAuth && !user?.id);
+  const { isAuth, loading } = useContext(AuthContext);
+  // Spinner só durante bootstrap. Não travar a tela se user.id atrasar.
+  const showLoading = loading;
+
+  if (loading) {
+    return <BackdropLoading />;
+  }
 
   if (!isAuth && isPrivate) {
     return (
-      <>
-        {showLoading && <BackdropLoading />}
-        <Redirect to={{ pathname: "/login", state: { from: rest.location } }} />
-      </>
+      <Redirect to={{ pathname: "/login", state: { from: rest.location } }} />
     );
   }
 
   if (isAuth && !isPrivate) {
-    return (
-      <>
-        {showLoading && <BackdropLoading />}
-        <Redirect to={{ pathname: "/", state: { from: rest.location } }} />
-      </>
-    );
-  }
-
-  if (!authReady) {
-    return <BackdropLoading />;
+    return <Redirect to={{ pathname: "/", state: { from: rest.location } }} />;
   }
 
   return (
