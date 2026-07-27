@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.67] — 2026-07-26
+
+### Corrigido (login bloqueado por rate limit)
+
+- **`appFast.ts`:** bloqueio por tentativas excessivas só conta senha errada (`ERR_INVALID_CREDENTIALS`), não Turnstile/sessão; bloqueio reduzido para 3 min; limite 12 tentativas; `LOGIN_RATE_LIMIT_DISABLED=true` para emergência.
+- **Frontend pt:** mensagem amigável para `ERR_TOO_MANY_LOGIN_ATTEMPTS`.
+
 ## [1.5.66] — 2026-07-26
 
 ### Corrigido (crítico — login travado)

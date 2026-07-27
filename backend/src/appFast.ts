@@ -63,9 +63,36 @@ const attachGlobalErrorHandler = (): void => {
   );
 };
 
-const LOGIN_RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000;
-const LOGIN_RATE_LIMIT_BLOCK_MS = 10 * 60 * 1000;
-const LOGIN_RATE_LIMIT_MAX_FAILURES = 8;
+const parsePositiveInt = (
+  value: string | undefined,
+  fallback: number
+): number => {
+  const parsed = Number.parseInt(String(value || ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const LOGIN_RATE_LIMIT_WINDOW_MS = parsePositiveInt(
+  process.env.LOGIN_RATE_LIMIT_WINDOW_MS,
+  5 * 60 * 1000
+);
+const LOGIN_RATE_LIMIT_BLOCK_MS = parsePositiveInt(
+  process.env.LOGIN_RATE_LIMIT_BLOCK_MS,
+  3 * 60 * 1000
+);
+const LOGIN_RATE_LIMIT_MAX_FAILURES = parsePositiveInt(
+  process.env.LOGIN_RATE_LIMIT_MAX_FAILURES,
+  12
+);
+
+const isLoginRateLimitDisabled = (): boolean =>
+  ["true", "1", "yes"].includes(
+    String(process.env.LOGIN_RATE_LIMIT_DISABLED || "")
+      .trim()
+      .toLowerCase()
+  );
+
+const shouldCountLoginFailure = (error: AppError): boolean =>
+  error.statusCode === 401 && error.message === "ERR_INVALID_CREDENTIALS";
 
 type LoginAttempt = {
   count: number;
@@ -167,6 +194,10 @@ const getActiveLoginAttempt = (req: express.Request): LoginAttempt | null => {
 };
 
 const isLoginRateLimited = (req: express.Request): boolean => {
+  if (isLoginRateLimitDisabled()) {
+    return false;
+  }
+
   const attempt = getActiveLoginAttempt(req);
   return Boolean(attempt && attempt.blockedUntil > Date.now());
 };
@@ -274,7 +305,7 @@ app.post("/auth/login", async (req, res) => {
     });
   } catch (error) {
     if (error instanceof AppError) {
-      if (error.statusCode === 401) {
+      if (shouldCountLoginFailure(error)) {
         recordFailedLoginAttempt(req);
       }
 

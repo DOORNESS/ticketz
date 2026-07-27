@@ -1417,6 +1417,8 @@ const messages = {
           "Não foi possível baixar mídia do WhatsApp. Verifique a página de conexões.",
         ERR_INVALID_CREDENTIALS:
           "Erro de autenticação. Por favor, tente novamente.",
+        ERR_TOO_MANY_LOGIN_ATTEMPTS:
+          "Muitas tentativas de login. Aguarde alguns minutos e tente novamente.",
         ERR_SENDING_WAPP_MSG:
           "Erro ao enviar mensagem do WhatsApp. Verifique a página de conexões.",
         ERR_COPILOT_SUGGESTION_FAILED:
