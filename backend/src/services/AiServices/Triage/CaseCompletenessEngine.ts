@@ -97,6 +97,7 @@ const EVIDENCE_HINTS = [
 
 const INFORMATIONAL_INTENT_PATTERNS = [
   /quero saber/i,
+  /queria saber/i,
   /gostaria de saber/i,
   /saber mais/i,
   /conhecer (?:o |melhor )?(?:sistema|produto|software|programa)/i,
@@ -119,7 +120,9 @@ const INFORMATIONAL_INTENT_PATTERNS = [
   /fideliza(?:ç|c)[aã]o/i,
   /ajudar (?:a )?(?:minha|meu)/i,
   /funcionalidades|recursos/i,
-  /benef[ií]cios/i
+  /benef[ií]cios/i,
+  /(?:pode|poderia) ser [uú]til/i,
+  /[uú]til para (?:a )?(?:minha|meu) empresa/i
 ];
 
 const META_CONVERSATION_PATTERNS = [

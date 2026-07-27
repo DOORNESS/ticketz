@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.75] — 2026-07-27
+
+### Corrigido (silêncio após pergunta sobre Nível / empresa)
+
+- **Perguntas informativas** (*"como o nível pode ser útil para minha empresa"*) usam LLM + base **sem tools** (evita travamento/handoff acidental).
+- **`tryInformationalDirectReply`** reativado para dúvidas de produto — resposta garantida com conteúdo da base Nível.
+- **`deliverAiReply`** — nunca perde mensagem por bloqueio anti-duplicata.
+- **Padrões** ampliados: *queria saber*, *útil para minha empresa*.
+- **Fallback informativo** substituído por texto real sobre Nível Cashback (não *"repita sua pergunta"*).
+
 ## [1.5.74] — 2026-07-27
 
 ### Corrigido (respostas repetidas e triagem robótica)

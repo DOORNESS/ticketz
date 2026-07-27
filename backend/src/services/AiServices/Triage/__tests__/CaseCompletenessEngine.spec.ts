@@ -129,6 +129,13 @@ describe("CaseCompletenessEngine", () => {
     expect(buildInvestigationQuestion(snapshot, userText)).toBeNull();
   });
 
+  it("detects how Nivel helps a company as informational", () => {
+    const userText =
+      "Queria saber como o nível pode ser útil para minha empresa?";
+
+    expect(isInformationalIntent(userText)).toBe(true);
+  });
+
   it("detects how-it-works questions as informational", () => {
     const userText = "quero saber como funciona a nivel ?";
 

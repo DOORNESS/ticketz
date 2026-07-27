@@ -41,3 +41,20 @@ export const sendAiWhatsAppReply = async ({
 
   return true;
 };
+
+/** Envia resposta ao cliente; repete com skip de duplicata se necessário. */
+export const deliverAiReply = async (
+  ticket: Ticket,
+  body: string
+): Promise<boolean> => {
+  const sent = await sendAiWhatsAppReply({ ticket, body });
+  if (sent) {
+    return true;
+  }
+
+  return sendAiWhatsAppReply({
+    ticket,
+    body,
+    skipDuplicateCheck: true
+  });
+};

@@ -27,7 +27,7 @@ import {
 } from "./AiScheduleContextService";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
 import HandoffToHumanService from "./HandoffToHumanService";
-import { sendAiWhatsAppReply } from "./sendAiWhatsAppReply";
+import { deliverAiReply, sendAiWhatsAppReply } from "./sendAiWhatsAppReply";
 import StorageService from "../StorageService/StorageService";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
 import { isOrchestratorEnabledForCompany } from "./AiOrchestratorFeatureFlag";
@@ -53,6 +53,7 @@ import { isContactMemoryEnabledForCompany } from "./ContactMemory/AiContactMemor
 import { isToolsEnabledForCompany } from "./tools/AiToolsFeatureFlag";
 import { runToolLoop } from "./tools/ToolLoopService";
 import { chatCompletion } from "./ModelGateway";
+import { tryInformationalDirectReply } from "./InformationalDirectReplyService";
 import "./tools/registerPilotTools";
 import crypto from "crypto";
 import {
@@ -93,7 +94,7 @@ const AI_CUSTOMER_FALLBACK =
   "Ainda não encontrei uma resposta completa na base. Pode me contar um pouco mais o que você precisa?";
 
 const AI_INFORMATIONAL_FALLBACK =
-  "Estou consultando nossa base de conhecimento. Pode repetir sua pergunta em outras palavras?";
+  "A Nível Cashback ajuda sua empresa a fidelizar clientes com cashback em cada compra — o cliente acumula saldo e volta a gastar com você. Posso detalhar benefícios para lojistas, como funciona para o cliente final, ou como começar.";
 
 const resolveEffectiveMaxTokens = (
   agent: AiAgent,
@@ -143,7 +144,7 @@ export const sendAiCustomerFallback = async ({
     );
   }
 
-  await sendAiWhatsAppReply({ ticket, body });
+  await deliverAiReply(ticket, body);
   await finalizeAiResponse(ticket, messageId);
   await persistAiDecisionLog({
     companyId,
@@ -527,6 +528,52 @@ const ProcessInboundMessageService = async ({
     const conversationText = await buildConversationText(ticket.id, userText);
     const informationalQuery = isInformationalIntent(userText);
 
+    // Dúvidas sobre produto/Nível: LLM + base de conhecimento (sem tools lentas).
+    if (informationalQuery && !forceHandoff) {
+      try {
+        const direct = await tryInformationalDirectReply({
+          companyId,
+          ticket,
+          agent,
+          userText
+        });
+
+        const replyBody =
+          prepareCustomerFacingAiText(direct.body || "", userText) ||
+          direct.body ||
+          "";
+
+        if (replyBody.length >= 20) {
+          await deliverAiReply(ticket, replyBody);
+          await finalizeAiResponse(ticket, primaryMessageId);
+          await ticket.reload({
+            include: ["contact", "queue", "whatsapp", "user"]
+          });
+          websocketUpdateTicket(ticket);
+          await persistAiDecisionLog({
+            companyId,
+            ticketId: ticket.id,
+            messageId: primaryMessageId,
+            action: "respond",
+            reason: direct.reason || "informational_knowledge_reply",
+            userMessage: maskSensitiveLog(userText),
+            aiResponse: replyBody,
+            details: {
+              knowledgeBaseIds: direct.knowledgeBaseIds,
+              chunks: direct.chunkCount,
+              hasReadyDocuments: direct.hasReadyDocuments
+            }
+          });
+          return;
+        }
+      } catch (informationalError) {
+        logger.warn(
+          { informationalError, ticketId: ticket.id },
+          "Informational knowledge reply failed — falling back to main LLM"
+        );
+      }
+    }
+
     if (
       triageV2Enabled &&
       (ticket as any).aiProcessingState === "awaiting_handoff_confirmation"
@@ -731,6 +778,7 @@ const ProcessInboundMessageService = async ({
     const loopResult = await runToolLoop({
       companyId,
       agent: agentForCompletion,
+      disableTools: informationalQuery,
       messages: [
         { role: "system", content: systemPrompt },
         ...history.map(h => ({ role: h.role, content: h.content })),
@@ -759,6 +807,7 @@ const ProcessInboundMessageService = async ({
         reason: "tool_handoff",
         userMessage: maskSensitiveLog(userText)
       });
+      await finalizeAiResponse(ticket, primaryMessageId);
       return;
     }
 
@@ -832,7 +881,7 @@ const ProcessInboundMessageService = async ({
         skipCustomerMessage: true
       });
 
-      await sendAiWhatsAppReply({ ticket, body: outboundText });
+      await deliverAiReply(ticket, outboundText);
 
       return;
     }
@@ -843,7 +892,7 @@ const ProcessInboundMessageService = async ({
       completion.tokensOutput || 0
     );
 
-    await sendAiWhatsAppReply({ ticket, body: outboundText });
+    await deliverAiReply(ticket, outboundText);
 
     await finalizeAiResponse(ticket, primaryMessageId);
 

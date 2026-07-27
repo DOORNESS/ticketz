@@ -42,7 +42,28 @@ export const runToolLoop = async (input: {
   messages: ChatMessage[];
   tools?: ToolDefinition[];
   context: ToolExecutionContext;
+  disableTools?: boolean;
 }): Promise<ToolLoopResult> => {
+  if (input.disableTools) {
+    const completion = await chatCompletion(input.companyId, {
+      model: input.agent.textModel,
+      temperature: input.agent.temperature,
+      maxTokens: input.agent.maxTokens,
+      providerId: input.agent.provider,
+      messages: input.messages
+    });
+
+    return {
+      content: completion.content,
+      tokensInput: completion.tokensInput,
+      tokensOutput: completion.tokensOutput,
+      model: completion.model,
+      toolCallsExecuted: 0,
+      handoffTriggered: false,
+      messages: input.messages
+    };
+  }
+
   const toolsEnabled = await isToolsEnabledForCompany(input.companyId);
 
   if (

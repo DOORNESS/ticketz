@@ -4,6 +4,7 @@ import { chatCompletion } from "./ModelGateway";
 import { getKnowledgeBaseIdsForAgent } from "./AiHelpers";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
 import { sanitizeAiOutboundText } from "./sanitizeAiOutboundText";
+import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
 import { logger } from "../../utils/logger";
 import Message from "../../models/Message";
 
@@ -181,7 +182,10 @@ export const tryInformationalDirectReply = async ({
         ]
       });
 
-      const reply = sanitizeAiOutboundText(completion.content?.trim() || "");
+      const reply = prepareCustomerFacingAiText(
+        sanitizeAiOutboundText(completion.content?.trim() || ""),
+        userText
+      );
       if (reply.length >= 20) {
         return {
           replied: true,
@@ -208,7 +212,7 @@ export const tryInformationalDirectReply = async ({
   const brandFallback = resolveBrandFallback(agent, userText);
   return {
     replied: true,
-    body: brandFallback,
+    body: prepareCustomerFacingAiText(brandFallback, userText) || brandFallback,
     knowledgeBaseIds,
     chunkCount,
     hasReadyDocuments,

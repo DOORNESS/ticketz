@@ -6,7 +6,9 @@ import {
 } from "../Triage/CaseCompletenessEngine";
 
 jest.mock("../AiHelpers", () => ({
-  getKnowledgeBaseIdsForAgent: jest.fn(async () => [10, 11])
+  getKnowledgeBaseIdsForAgent: jest.fn(async () => [10, 11]),
+  detectRequiresHumanAccountEscalation: jest.fn(() => false),
+  NIVEL_SUPPORT_WHATSAPP_DISPLAY: "(17) 99165-8811"
 }));
 
 jest.mock("../KnowledgeContextService", () => ({
