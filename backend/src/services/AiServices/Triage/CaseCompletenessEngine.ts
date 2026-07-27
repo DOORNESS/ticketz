@@ -104,6 +104,7 @@ const INFORMATIONAL_INTENT_PATTERNS = [
   /como (?:ele |o sistema |voc[eê]s )?(?:pode|podem|ajuda)/i,
   /(?:demo|demonstraç)/i,
   /(?:o que [eé]|como funciona)/i,
+  /como funcinona/i,
   /(?:me )?(?:fala|fale|conte)(?:\s+o?\s*que)?/i,
   /(?:me )?explic(?:ar|a|o|e)/i,
   /(?:fale|conte) (?:sobre|do|da|me)/i,
@@ -183,6 +184,7 @@ export const isPureGreetingMessage = (text: string): boolean =>
 const SHORT_HELP_PATTERNS = [
   /^\s*pode ajudar\s*\??\s*$/i,
   /^\s*pode me ajudar\s*\??\s*$/i,
+  /^\s*pode me ajj?dar\s*\??\s*$/i,
   /^\s*preciso de ajuda\s*\??\s*$/i,
   /^\s*me ajuda\s*\??\s*$/i,
   /^\s*ajuda\s*\??\s*$/i,
@@ -190,6 +192,7 @@ const SHORT_HELP_PATTERNS = [
 ];
 
 const WAITING_FOR_BOT_PATTERNS = [
+  /^\s*\?\s*$/,
   /^\s*cad[eê]\s*(vc|voc[eê])\b.*$/i,
   /^\s*por\s*que\s+n[aã]o\s+resp(?:onde|ode)\b.*$/i,
   /^\s*vai\s+me\s+ajudar\b.*$/i,

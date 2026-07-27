@@ -1259,6 +1259,41 @@ const ProcessInboundMessageService = async ({
       const conversationText =
         userText || (await buildConversationText(ticket.id, userText));
 
+      if (userText && isInformationalIntent(userText)) {
+        try {
+          const direct = await tryInformationalDirectReply({
+            companyId,
+            ticket,
+            agent,
+            userText
+          });
+
+          if (direct.replied && direct.body) {
+            await SendWhatsAppMessage({
+              body: formatBody(direct.body, ticket),
+              ticket
+            });
+            await finalizeAiResponse(ticket, primaryMessageId);
+            await persistAiDecisionLog({
+              companyId,
+              ticketId: ticket.id,
+              messageId: primaryMessageId,
+              action: "respond",
+              reason:
+                direct.reason || "processing_error_informational_recovery",
+              userMessage: maskSensitiveLog(userText),
+              aiResponse: direct.body
+            });
+            return;
+          }
+        } catch (informationalError) {
+          logger.warn(
+            { informationalError, ticketId: ticket.id },
+            "Informational recovery after processing error failed — falling back to triage"
+          );
+        }
+      }
+
       const handledByTriage = await runTriageGate({
         companyId,
         ticket,

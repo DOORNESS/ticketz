@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.70] — 2026-07-27
+
+### Corrigido (painel Fortmax + resposta IA informativa)
+
+- **`corsOrigin`:** sempre permite `https://suporte.fortmax.com.br` (e localhost); callback dinâmico evita bloqueio CORS no socket.io e APIs — painel deixava de atualizar em tempo real.
+- **`ProcessInboundMessageService`:** em erro de processamento, tenta resposta informativa da base **antes** da triagem genérica.
+- **`InformationalDirectReplyService`:** resposta mais rápida (contexto limitado + fallback por trechos sem esperar LLM longo).
+- **`CaseCompletenessEngine`:** reconhece `?`, typos de ajuda e perguntas sobre “como funciona” como intent informativo.
+- **Deploy patch:** inclui `helpers/corsOrigin.js`.
+
 ## [1.5.69] — 2026-07-26
 
 ### Corrigido (IA Nível — base + assets CMS)

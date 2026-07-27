@@ -91,6 +91,7 @@ PATCH_PATHS = [
     "services/TicketServices/ReopenTicketFromCustomerMessageService.js",
     "services/TicketServices/ReopenClosedTicketManuallyService.js",
     "helpers/CheckContactOpenTickets.js",
+    "helpers/corsOrigin.js",
     "services/WbotServices/wbotMessageListener.js",
     "services/WbotServices/SendWhatsAppMessage.js",
     "services/WbotServices/SendWhatsAppMedia.js",
