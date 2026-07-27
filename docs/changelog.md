@@ -6,6 +6,13 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.66] — 2026-07-26
+
+### Corrigido (crítico — login travado)
+
+- **`Route.js`:** spinner de bootstrap só em rotas privadas; `/login` e `/signup` renderizam imediatamente.
+- **`useAuth`:** token expirado libera a tela na hora (refresh em background); timeout de segurança 3s.
+
 ## [1.5.65] — 2026-07-26
 
 ### Corrigido (crítico — tela de tickets travada + WebSocket)

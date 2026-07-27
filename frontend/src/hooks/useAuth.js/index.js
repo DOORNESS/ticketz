@@ -176,7 +176,7 @@ const useAuth = () => {
     const safetyTimer = setTimeout(() => {
       // Nunca deixar a UI presa no spinner por refresh lento/indisponível.
       setLoading(false);
-    }, 12000);
+    }, 3000);
 
     const bootstrapAuth = async () => {
       const token = parseStoredToken();
@@ -190,11 +190,16 @@ const useAuth = () => {
 
       api.defaults.headers.Authorization = `Bearer ${token}`;
 
-      // Hidrata usuário do JWT imediatamente para abrir a tela sem esperar refresh.
       const tokenUser = buildUserFromToken(token);
-      if (tokenUser?.id && !isAccessTokenExpired(token)) {
+      const expired = isAccessTokenExpired(token);
+
+      // Hidrata usuário do JWT imediatamente para abrir a tela sem esperar refresh.
+      if (tokenUser?.id && !expired) {
         setIsAuth(true);
         setUser(tokenUser);
+        setLoading(false);
+      } else if (expired) {
+        // Token expirado: liberar /login imediatamente; refresh roda em background.
         setLoading(false);
       }
 
