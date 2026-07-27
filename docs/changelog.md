@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.74] — 2026-07-27
+
+### Corrigido (respostas repetidas e triagem robótica)
+
+- **Deploy pendente anterior (`e4b50e4`)** incluído neste pacote: toda mensagem passa pelo LLM.
+- **CPF/CNPJ/senha** não disparam mais transferência automática para humano.
+- **Triagem automática desativada** — fim das perguntas script *"Em qual sistema ou produto?"*.
+- **Debounce padrão 3s** — agrupa *"Olá"* + *"Boa tarde"* em uma só análise da IA.
+- **`sendAiWhatsAppReply`** — bloqueia envio duplicado da mesma resposta em 2 minutos.
+- **Base RAG** sempre em modo `full` para respostas mais inteligentes.
+
 ## [1.5.73] — 2026-07-27
 
 ### Alterado (IA sempre analisa — sem respostas automáticas de triagem)

@@ -9,7 +9,6 @@ import {
   getSpecialtyPromptRules,
   resolveSpecialistAgent,
   detectHumanHandoffRequest,
-  detectSensitiveTopic,
   detectCustomerResolution,
   canAiEngageTicket,
   detectHandoffConfirmationAccept,
@@ -28,8 +27,7 @@ import {
 } from "./AiScheduleContextService";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
 import HandoffToHumanService from "./HandoffToHumanService";
-import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
-import formatBody from "../../helpers/Mustache";
+import { sendAiWhatsAppReply } from "./sendAiWhatsAppReply";
 import StorageService from "../StorageService/StorageService";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
 import { isOrchestratorEnabledForCompany } from "./AiOrchestratorFeatureFlag";
@@ -145,10 +143,7 @@ export const sendAiCustomerFallback = async ({
     );
   }
 
-  await SendWhatsAppMessage({
-    body: formatBody(body, ticket),
-    ticket
-  });
+  await sendAiWhatsAppReply({ ticket, body });
   await finalizeAiResponse(ticket, messageId);
   await persistAiDecisionLog({
     companyId,
@@ -468,9 +463,9 @@ const ProcessInboundMessageService = async ({
     });
 
     if (!userText || userText === "__AUDIO_TRANSCRIPTION_FAILED__") {
-      await SendWhatsAppMessage({
-        body: formatBody(AUDIO_USER_FALLBACK, ticket),
-        ticket
+      await sendAiWhatsAppReply({
+        ticket,
+        body: AUDIO_USER_FALLBACK
       });
 
       if (triageV2Enabled) {
@@ -567,30 +562,24 @@ const ProcessInboundMessageService = async ({
           aiHandoffOriginalReason: null,
           aiInvestigationRound: 0
         } as any);
-        await SendWhatsAppMessage({
-          body: formatBody(
-            "Sem problemas! Me conte com mais detalhes o que você precisa que eu te ajudo da melhor forma possível.",
-            ticket
-          ),
-          ticket
+        await sendAiWhatsAppReply({
+          ticket,
+          body:
+            "Sem problemas! Me conte com mais detalhes o que você precisa que eu te ajudo da melhor forma possível."
         });
         await finalizeAiResponse(ticket, primaryMessageId);
         return;
       }
 
-      await SendWhatsAppMessage({
-        body: formatBody(buildHandoffConfirmationQuestion(), ticket),
-        ticket
+      await sendAiWhatsAppReply({
+        ticket,
+        body: buildHandoffConfirmationQuestion()
       });
       await finalizeAiResponse(ticket, primaryMessageId);
       return;
     }
 
-    if (
-      forceHandoff ||
-      detectHumanHandoffRequest(userText) ||
-      detectSensitiveTopic(userText)
-    ) {
+    if (forceHandoff || detectHumanHandoffRequest(userText)) {
       const handledByTriage = await runTriageGate({
         companyId,
         ticket,
@@ -606,12 +595,10 @@ const ProcessInboundMessageService = async ({
         return;
       }
 
-      const resolvedHandoffReason = detectSensitiveTopic(userText)
-        ? AI_HANDOFF_REASONS.sensitive_subject
-        : detectHumanHandoffRequest(userText)
-          ? AI_HANDOFF_REASONS.customer_requested_human
-          : (handoffReason as any) ||
-            AI_HANDOFF_REASONS.customer_requested_human;
+      const resolvedHandoffReason = detectHumanHandoffRequest(userText)
+        ? AI_HANDOFF_REASONS.customer_requested_human
+        : (handoffReason as any) ||
+          AI_HANDOFF_REASONS.customer_requested_human;
 
       await HandoffToHumanService({
         ticket,
@@ -626,12 +613,9 @@ const ProcessInboundMessageService = async ({
     }
 
     if (detectCustomerResolution(userText)) {
-      await SendWhatsAppMessage({
-        body: formatBody(
-          "Fico feliz em ter ajudado! Se precisar de algo mais, é só chamar.",
-          ticket
-        ),
-        ticket
+      await sendAiWhatsAppReply({
+        ticket,
+        body: "Fico feliz em ter ajudado! Se precisar de algo mais, é só chamar."
       });
 
       await UpdateTicketService({
@@ -699,7 +683,7 @@ const ProcessInboundMessageService = async ({
         knowledgeBaseIds,
         userText,
         provider: agent.provider,
-        loadStrategy: informationalQuery ? "full" : "auto"
+        loadStrategy: "full"
       }),
       buildConversationHistory(ticket.id, 4),
       loadVerifiedMemoryForPrompt(companyId, ticket.contactId),
@@ -719,8 +703,8 @@ const ProcessInboundMessageService = async ({
       : knowledgeContext.hasReadyDocuments
         ? informationalQuery
           ? "Documentos existem na base. Responda com o máximo de detalhes úteis da base sobre como a Nível funciona, planos, benefícios e uso. Não invente fatos."
-          : "Documentos existem na base, mas nenhum trecho relevante foi recuperado para esta pergunta. Não invente fatos. Faça perguntas objetivas para entender o caso ou use a ferramenta de handoff se o cliente pedir humano."
-        : "A base de conhecimento ainda não tem documentos publicados para este tema. Não invente políticas, preços ou procedimentos. Seja cordial, peça detalhes específicos e não afirme transferência para humano sem acionar handoff.";
+          : "Documentos existem na base, mas nenhum trecho relevante foi recuperado para esta pergunta. Não invente fatos. Continue a conversa com empatia e use a base; faça no máximo uma pergunta objetiva se faltar um detalhe essencial."
+        : "A base de conhecimento ainda não tem documentos publicados para este tema. Não invente políticas, preços ou procedimentos. Seja cordial, responda com o que souber da Nível Cashback e peça um detalhe se necessário.";
 
     const effectiveMaxTokens = resolveEffectiveMaxTokens(
       agent,
@@ -848,10 +832,7 @@ const ProcessInboundMessageService = async ({
         skipCustomerMessage: true
       });
 
-      await SendWhatsAppMessage({
-        body: formatBody(outboundText, ticket),
-        ticket
-      });
+      await sendAiWhatsAppReply({ ticket, body: outboundText });
 
       return;
     }
@@ -862,10 +843,7 @@ const ProcessInboundMessageService = async ({
       completion.tokensOutput || 0
     );
 
-    await SendWhatsAppMessage({
-      body: formatBody(outboundText, ticket),
-      ticket
-    });
+    await sendAiWhatsAppReply({ ticket, body: outboundText });
 
     await finalizeAiResponse(ticket, primaryMessageId);
 
@@ -1056,10 +1034,7 @@ const ProcessInboundMessageService = async ({
           userText
         );
         if (recoveryText.length >= 20) {
-          await SendWhatsAppMessage({
-            body: formatBody(recoveryText, ticket),
-            ticket
-          });
+          await sendAiWhatsAppReply({ ticket, body: recoveryText });
           await finalizeAiResponse(ticket, primaryMessageId);
           await persistAiDecisionLog({
             companyId,
@@ -1090,10 +1065,7 @@ const ProcessInboundMessageService = async ({
       return;
     }
 
-    await SendWhatsAppMessage({
-      body: formatBody(TRANSIENT_ERROR_FALLBACK, ticket),
-      ticket
-    });
+    await sendAiWhatsAppReply({ ticket, body: TRANSIENT_ERROR_FALLBACK });
 
     await persistAiDecisionLog({
       companyId,

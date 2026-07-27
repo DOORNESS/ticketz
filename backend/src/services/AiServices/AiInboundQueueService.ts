@@ -54,7 +54,7 @@ const parsePositiveInt = (
     : fallback;
 
 const getDebounceMs = (): number =>
-  parsePositiveInt(process.env.AI_QUEUE_DEBOUNCE_MS, 0);
+  parsePositiveInt(process.env.AI_QUEUE_DEBOUNCE_MS, 3000);
 
 const getMaxAttempts = (): number =>
   parsePositiveInt(process.env.AI_QUEUE_MAX_ATTEMPTS, 3);

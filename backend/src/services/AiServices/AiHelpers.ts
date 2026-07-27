@@ -33,16 +33,14 @@ const HANDOFF_KEYWORDS = [
 ];
 
 const SENSITIVE_KEYWORDS = [
-  "cancelamento",
-  "cancelar",
-  "contrato",
-  "cobrança",
-  "cobranca",
+  "cancelamento de contrato",
+  "cancelar contrato",
+  "cancelar assinatura",
   "reembolso",
-  "cpf",
-  "cnpj",
-  "senha",
-  "dados pessoais"
+  "estorno",
+  "processo judicial",
+  "procon",
+  "advogado"
 ];
 
 export const canAiEngageTicket = (ticket: Ticket): boolean => {
