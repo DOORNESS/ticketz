@@ -106,6 +106,30 @@ describe("InformationalDirectReplyService", () => {
     );
   });
 
+  it("uses brand fallback instead of leaking internal placeholder text", async () => {
+    const { buildKnowledgeContextForQuery } = jest.requireMock(
+      "../KnowledgeContextService"
+    );
+    buildKnowledgeContextForQuery.mockResolvedValueOnce({
+      contextBlock: "",
+      usedChunks: [],
+      hasReadyDocuments: false,
+      reingestedDocuments: 0
+    });
+
+    const result = await tryInformationalDirectReply({
+      companyId: 1,
+      ticket,
+      agent,
+      userText: "Sabe o que é nível cashback?"
+    });
+
+    expect(result.replied).toBe(true);
+    expect(result.reason).toBe("informational_brand_fallback");
+    expect(result.body).toMatch(/Nível Cashback/i);
+    expect(result.body).not.toMatch(/base deste canal ainda está limitada/i);
+  });
+
   it("always replies even when model returns almost nothing", async () => {
     const { chatCompletion } = jest.requireMock("../ModelGateway");
     chatCompletion.mockResolvedValueOnce({

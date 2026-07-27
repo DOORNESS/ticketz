@@ -1,6 +1,8 @@
 import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
 import AiAgentQueue from "../../models/AiAgentQueue";
+import KnowledgeBase from "../../models/KnowledgeBase";
+import KnowledgeDomain from "../../models/KnowledgeDomain";
 import Whatsapp from "../../models/Whatsapp";
 import Queue from "../../models/Queue";
 import { Op } from "sequelize";
@@ -239,19 +241,129 @@ const getLegacyKnowledgeBaseIdsForAgent = async (
   return [];
 };
 
+type AgentBrandHint = {
+  name?: string | null;
+  basePrompt?: string | null;
+};
+
+const detectAgentBrand = (
+  agent: AgentBrandHint
+): "nivel" | "fortmax" | null => {
+  const text = `${agent.name || ""} ${agent.basePrompt || ""}`.toLowerCase();
+  if (
+    text.includes("nivelton") ||
+    text.includes("nível cashback") ||
+    text.includes("nivel cashback")
+  ) {
+    return "nivel";
+  }
+  if (
+    text.includes("webin") ||
+    text.includes("fortmax") ||
+    text.includes("webg3")
+  ) {
+    return "fortmax";
+  }
+  return null;
+};
+
+export const resolveBrandKnowledgeBaseIds = async (
+  companyId: number,
+  agent: AgentBrandHint
+): Promise<number[]> => {
+  const brand = detectAgentBrand(agent);
+  if (!brand) {
+    return [];
+  }
+
+  const domainHints =
+    brand === "nivel"
+      ? ["nivel cashback", "nível cashback", "nivel"]
+      : ["fortmax", "webg3"];
+
+  const domains = await KnowledgeDomain.findAll({
+    where: {
+      companyId,
+      active: true,
+      name: {
+        [Op.or]: domainHints.map(hint => ({ [Op.iLike]: `%${hint}%` }))
+      }
+    },
+    attributes: ["id"]
+  });
+
+  const domainIds = domains.map(domain => domain.id);
+  if (domainIds.length) {
+    const bases = await KnowledgeBase.findAll({
+      where: {
+        companyId,
+        active: true,
+        knowledgeDomainId: { [Op.in]: domainIds }
+      },
+      attributes: ["id"],
+      order: [["id", "ASC"]]
+    });
+
+    if (bases.length) {
+      return bases.map(base => base.id);
+    }
+  }
+
+  const baseHints =
+    brand === "nivel"
+      ? ["nivel site", "nível site", "nivel empresa", "nível empresa"]
+      : ["fortmax", "webg3", "fortcontrol"];
+
+  const bases = await Promise.all(
+    baseHints.map(hint =>
+      KnowledgeBase.findOne({
+        where: {
+          companyId,
+          active: true,
+          name: { [Op.iLike]: `%${hint}%` }
+        },
+        attributes: ["id"],
+        order: [["id", "ASC"]]
+      })
+    )
+  );
+
+  return [
+    ...new Set(
+      bases
+        .filter((base): base is KnowledgeBase => Boolean(base))
+        .map(base => base.id)
+    )
+  ];
+};
+
+const mergeKnowledgeBaseIds = (
+  primary: number[],
+  secondary: number[]
+): number[] => [...new Set([...primary, ...secondary])];
+
 export const getKnowledgeBaseIdsForAgent = async (
   companyId: number,
   agentId: number,
   queueId?: number,
-  options?: { orchestratorMode?: boolean }
+  _options?: { orchestratorMode?: boolean }
 ): Promise<number[]> => {
-  const orchestratorMode =
-    options?.orchestratorMode ??
-    (await isOrchestratorEnabledForCompany(companyId));
+  const agent = await AiAgent.findOne({
+    where: { id: agentId, companyId },
+    attributes: ["id", "name", "basePrompt"]
+  });
+
+  const enrichWithBrandBases = async (ids: number[]): Promise<number[]> => {
+    if (!agent) {
+      return ids;
+    }
+    const brandIds = await resolveBrandKnowledgeBaseIds(companyId, agent);
+    return mergeKnowledgeBaseIds(ids, brandIds);
+  };
 
   const directLinks = await listAgentKnowledgeBaseIds(companyId, agentId);
   if (directLinks.length) {
-    return directLinks;
+    return enrichWithBrandBases(directLinks);
   }
 
   const where: { companyId: number; aiAgentId: number; queueId?: number } = {
@@ -269,22 +381,23 @@ export const getKnowledgeBaseIdsForAgent = async (
     .filter((id): id is number => !!id);
 
   if (queueIds.length) {
-    return [...new Set(queueIds)];
+    return enrichWithBrandBases([...new Set(queueIds)]);
   }
 
-  if (orchestratorMode) {
-    const legacyIds = await getLegacyKnowledgeBaseIdsForAgent(
-      companyId,
-      agentId,
-      queueId
-    );
-    if (legacyIds.length) {
-      return legacyIds;
-    }
+  const legacyIds = await getLegacyKnowledgeBaseIdsForAgent(
+    companyId,
+    agentId,
+    queueId
+  );
+  if (legacyIds.length) {
+    return enrichWithBrandBases(legacyIds);
+  }
+
+  if (!agent) {
     return [];
   }
 
-  return getLegacyKnowledgeBaseIdsForAgent(companyId, agentId, queueId);
+  return resolveBrandKnowledgeBaseIds(companyId, agent);
 };
 
 export const shouldRerouteSpecialist = async (

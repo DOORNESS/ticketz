@@ -30,6 +30,19 @@ const FORTMAX_BRAND_FALLBACK =
 const GENERIC_BRAND_FALLBACK =
   "Claro — posso te explicar o que nosso produto faz pela sua empresa com base no material deste canal. Me diga se prefere visão geral, benefícios ou como começar.";
 
+const INSTRUCTION_PLACEHOLDER_MARKERS = [
+  "A base deste canal ainda está limitada",
+  "Há conteúdo na base deste canal. Explique o produto"
+];
+
+const isInstructionPlaceholder = (text: string): boolean =>
+  INSTRUCTION_PLACEHOLDER_MARKERS.some(marker => text.includes(marker));
+
+const hasRealKnowledgeContext = (contextBlock: string): boolean =>
+  Boolean(contextBlock.trim()) &&
+  !isInstructionPlaceholder(contextBlock) &&
+  (contextBlock.includes("[Trecho") || contextBlock.length >= 80);
+
 const buildConversationHistory = async (
   ticketId: number,
   limit = 6
@@ -62,31 +75,36 @@ const buildConversationHistory = async (
     }));
 };
 
-const resolveBrandFallback = (agent: AiAgent): string => {
-  const prompt = `${agent.name || ""} ${agent.basePrompt || ""}`.toLowerCase();
+const resolveBrandFallback = (agent: AiAgent, userText = ""): string => {
+  const combined =
+    `${agent.name || ""} ${agent.basePrompt || ""} ${userText}`.toLowerCase();
   if (
-    prompt.includes("nivelton") ||
-    prompt.includes("nível cashback") ||
-    prompt.includes("nivel cashback")
+    combined.includes("nivelton") ||
+    combined.includes("nível cashback") ||
+    combined.includes("nivel cashback") ||
+    combined.includes("nível") ||
+    combined.includes("nivel") ||
+    combined.includes("cashback")
   ) {
     return NIVEL_BRAND_FALLBACK;
   }
   if (
-    prompt.includes("webin") ||
-    prompt.includes("fortmax") ||
-    prompt.includes("webg3")
+    combined.includes("webin") ||
+    combined.includes("fortmax") ||
+    combined.includes("webg3")
   ) {
     return FORTMAX_BRAND_FALLBACK;
   }
   return GENERIC_BRAND_FALLBACK;
 };
 
-const buildChunkFallback = (
-  contextBlock: string,
-  agent: AiAgent
-): string | null => {
+const buildChunkFallback = (contextBlock: string): string | null => {
+  if (!hasRealKnowledgeContext(contextBlock)) {
+    return null;
+  }
+
   const cleaned = contextBlock.replace(/\[Trecho \d+\]\n?/g, "").trim();
-  if (cleaned.length < 40) {
+  if (cleaned.length < 40 || isInstructionPlaceholder(cleaned)) {
     return null;
   }
 
@@ -138,6 +156,18 @@ export const tryInformationalDirectReply = async ({
         ? "Há conteúdo na base deste canal. Explique o produto com o que souber do material, sem inventar preços ou regras."
         : "A base deste canal ainda está limitada. Explique de forma geral e cordial o que puder; peça mais detalhes se necessário.");
 
+    if (!hasRealKnowledgeContext(contextBlock)) {
+      const brandFallback = resolveBrandFallback(agent, userText);
+      return {
+        replied: true,
+        body: brandFallback,
+        knowledgeBaseIds,
+        chunkCount,
+        hasReadyDocuments,
+        reason: "informational_brand_fallback"
+      };
+    }
+
     const history = await buildConversationHistory(ticket.id, 6);
 
     const completion = await chatCompletion(companyId, {
@@ -184,7 +214,7 @@ export const tryInformationalDirectReply = async ({
     );
   }
 
-  const chunkFallback = buildChunkFallback(contextBlock, agent);
+  const chunkFallback = buildChunkFallback(contextBlock);
   if (chunkFallback) {
     return {
       replied: true,
@@ -196,7 +226,7 @@ export const tryInformationalDirectReply = async ({
     };
   }
 
-  const brandFallback = resolveBrandFallback(agent);
+  const brandFallback = resolveBrandFallback(agent, userText);
   return {
     replied: true,
     body: brandFallback,

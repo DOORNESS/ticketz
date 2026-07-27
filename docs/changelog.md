@@ -6,6 +6,14 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.68] — 2026-07-26
+
+### Corrigido (IA Nível — base de conhecimento)
+
+- **`getKnowledgeBaseIdsForAgent`:** fallback por marca (Nivelton → bases do domínio Nível Cashback); mescla bases clientes + empresas.
+- **`KnowledgeContextService`:** expande busca para todas as bases do mesmo domínio CMS.
+- **`InformationalDirectReplyService`:** não vaza texto interno “base limitada”; usa fallback da Nível Cashback quando RAG vazio.
+
 ## [1.5.67] — 2026-07-26
 
 ### Corrigido (login bloqueado por rate limit)

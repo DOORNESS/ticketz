@@ -2,6 +2,7 @@ import { Op } from "sequelize";
 import sequelize from "../../database";
 import KnowledgeDocument from "../../models/KnowledgeDocument";
 import KnowledgeChunk from "../../models/KnowledgeChunk";
+import KnowledgeBase from "../../models/KnowledgeBase";
 import { createEmbedding } from "./ModelGateway";
 import {
   retrieveKnowledgeForQuery,
@@ -46,6 +47,46 @@ const buildContextBlock = (
     .map((chunk, idx) => `[Trecho ${idx + 1}]\n${chunk.content}`)
     .join("\n\n")
     .slice(0, MAX_CONTEXT_CHARS);
+
+const expandKnowledgeBaseIdsByDomain = async (
+  companyId: number,
+  knowledgeBaseIds: number[]
+): Promise<number[]> => {
+  if (!knowledgeBaseIds.length) {
+    return knowledgeBaseIds;
+  }
+
+  const linkedBases = await KnowledgeBase.findAll({
+    where: { companyId, id: { [Op.in]: knowledgeBaseIds } },
+    attributes: ["id", "knowledgeDomainId"]
+  });
+
+  const domainIds = [
+    ...new Set(
+      linkedBases
+        .map(base => base.knowledgeDomainId)
+        .filter((id): id is number => Boolean(id))
+    )
+  ];
+
+  if (!domainIds.length) {
+    return knowledgeBaseIds;
+  }
+
+  const siblingBases = await KnowledgeBase.findAll({
+    where: {
+      companyId,
+      active: true,
+      knowledgeDomainId: { [Op.in]: domainIds }
+    },
+    attributes: ["id"],
+    order: [["id", "ASC"]]
+  });
+
+  return [
+    ...new Set([...knowledgeBaseIds, ...siblingBases.map(base => base.id)])
+  ];
+};
 
 const loadAllReadyChunkTexts = async (
   companyId: number,
@@ -179,7 +220,12 @@ export const buildKnowledgeContextForQuery = async ({
   provider?: string;
   loadStrategy?: "auto" | "full";
 }): Promise<KnowledgeContextResult> => {
-  if (!knowledgeBaseIds.length) {
+  const expandedKnowledgeBaseIds = await expandKnowledgeBaseIdsByDomain(
+    companyId,
+    knowledgeBaseIds
+  );
+
+  if (!expandedKnowledgeBaseIds.length) {
     return {
       contextBlock: "",
       usedChunks: [],
@@ -191,7 +237,7 @@ export const buildKnowledgeContextForQuery = async ({
   const readyCount = await KnowledgeDocument.count({
     where: {
       companyId,
-      knowledgeBaseId: { [Op.in]: knowledgeBaseIds },
+      knowledgeBaseId: { [Op.in]: expandedKnowledgeBaseIds },
       status: "ready"
     }
   });
@@ -210,7 +256,9 @@ export const buildKnowledgeContextForQuery = async ({
         AND kc."lifecycleStatus" = 'published'
         AND ka."lifecycleStatus" = 'published'
       `,
-      { replacements: { companyId, knowledgeBaseIds } }
+      {
+        replacements: { companyId, knowledgeBaseIds: expandedKnowledgeBaseIds }
+      }
     );
     cmsPublishedChunkCount =
       (cmsCountRows as { count: number }[])[0]?.count || 0;
@@ -223,7 +271,7 @@ export const buildKnowledgeContextForQuery = async ({
   if (effectiveReadyCount === 0) {
     reingestedDocuments = await reingestPendingDocuments(
       companyId,
-      knowledgeBaseIds
+      expandedKnowledgeBaseIds
     );
   }
 
@@ -234,7 +282,7 @@ export const buildKnowledgeContextForQuery = async ({
   ) {
     const usedChunks = await loadAllReadyChunkTexts(
       companyId,
-      knowledgeBaseIds,
+      expandedKnowledgeBaseIds,
       loadStrategy === "full" ? 48 : FULL_CORPUS_DOC_LIMIT
     );
     return {
@@ -251,7 +299,7 @@ export const buildKnowledgeContextForQuery = async ({
     const queryEmbedding = await createEmbedding(companyId, userText, provider);
     merged = await retrieveKnowledgeForQuery(
       companyId,
-      knowledgeBaseIds,
+      expandedKnowledgeBaseIds,
       userText,
       queryEmbedding,
       8
@@ -263,7 +311,7 @@ export const buildKnowledgeContextForQuery = async ({
     );
     merged = await searchKnowledgeChunksByText(
       companyId,
-      knowledgeBaseIds,
+      expandedKnowledgeBaseIds,
       userText,
       8
     );
@@ -272,7 +320,7 @@ export const buildKnowledgeContextForQuery = async ({
   if (!merged.length && userText.trim().length >= 3) {
     merged = await searchKnowledgeChunksByText(
       companyId,
-      knowledgeBaseIds,
+      expandedKnowledgeBaseIds,
       userText,
       8
     );
@@ -281,7 +329,10 @@ export const buildKnowledgeContextForQuery = async ({
   let usedChunks: KnowledgeContextResult["usedChunks"] = mapChunks(merged);
 
   if (!usedChunks.length) {
-    usedChunks = await loadAllReadyChunkTexts(companyId, knowledgeBaseIds);
+    usedChunks = await loadAllReadyChunkTexts(
+      companyId,
+      expandedKnowledgeBaseIds
+    );
   }
 
   const hasReadyDocuments =
