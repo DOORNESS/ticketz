@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.76] — 2026-07-27
+
+### Corrigido (lentidão, silêncio e saudação repetida — Nivelton)
+
+- **Saudação instantânea** — *"Oi"* responde em template local (<1s), sem chamar LLM.
+- **Anti-repetição** — segundo *"Oi"* não repete *"Me chamo Nivelton..."*; pergunta a dúvida.
+- **`pickPrimaryCustomerText`** — quando chegam *"Oi"* + pergunta no mesmo lote, processa a pergunta real.
+- **Debounce 800ms** (antes 3s) — agrupa mensagens rápidas sem atraso perceptível.
+- **Guarda obrigatória** — se nenhuma resposta foi enviada, fallback informativo no `finally` (fim do silêncio).
+- **Handoff por tool** sem mensagem ao cliente agora recebe fallback explícito.
+
 ## [1.5.75] — 2026-07-27
 
 ### Corrigido (silêncio após pergunta sobre Nível / empresa)

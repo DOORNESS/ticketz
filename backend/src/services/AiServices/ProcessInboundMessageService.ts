@@ -19,6 +19,8 @@ import {
   isWaitingForBotNudge,
   isPureGreetingMessage,
   isShortHelpRequest,
+  pickPrimaryCustomerText,
+  buildTimeBasedGreeting,
   isInformationalIntent
 } from "./Triage/CaseCompletenessEngine";
 import {
@@ -57,7 +59,6 @@ import { tryInformationalDirectReply } from "./InformationalDirectReplyService";
 import "./tools/registerPilotTools";
 import crypto from "crypto";
 import {
-  bootstrapTriageContext,
   evaluateTriageHandoff,
   executeHandoffDecision,
   finalizeAiResponse,
@@ -120,7 +121,8 @@ export const sendAiCustomerFallback = async ({
   messageId,
   reason,
   userText,
-  body = AI_CUSTOMER_FALLBACK
+  body = AI_CUSTOMER_FALLBACK,
+  markSent
 }: {
   ticket: Ticket;
   companyId: number;
@@ -128,6 +130,7 @@ export const sendAiCustomerFallback = async ({
   reason: string;
   userText: string;
   body?: string;
+  markSent?: () => void;
 }): Promise<void> => {
   try {
     const { getAiInboundQueue } = await import("./AiInboundQueueService");
@@ -145,6 +148,7 @@ export const sendAiCustomerFallback = async ({
   }
 
   await deliverAiReply(ticket, body);
+  markSent?.();
   await finalizeAiResponse(ticket, messageId);
   await persistAiDecisionLog({
     companyId,
@@ -244,6 +248,33 @@ const resolveInboundText = async ({
   }
 
   return resolvedParts.filter(Boolean).join("\n\n");
+};
+
+const alreadyBotGreeted = async (ticketId: number): Promise<boolean> => {
+  const lastOutbound = await Message.findOne({
+    where: { ticketId, fromMe: true },
+    order: [["createdAt", "DESC"]],
+    attributes: ["body"]
+  });
+
+  const body = (lastOutbound?.body || "").toLowerCase();
+  return (
+    body.includes("nivelton") ||
+    body.includes("como posso ajudar") ||
+    body.includes("nível cashback") ||
+    body.includes("nivel cashback")
+  );
+};
+
+const buildFastGreetingReply = async (ticketId: number): Promise<string> => {
+  const greeted = await alreadyBotGreeted(ticketId);
+  const salutation = buildTimeBasedGreeting();
+
+  if (greeted) {
+    return `${salutation} Qual é sua dúvida? Posso explicar como a Nível Cashback funciona para sua empresa.`;
+  }
+
+  return `Me chamo Nivelton, assistente da Nível Cashback. ${salutation} Como posso ajudar você hoje?`;
 };
 
 const buildConversationText = async (
@@ -439,21 +470,22 @@ const ProcessInboundMessageService = async ({
   let userText = "";
   const triageV2Enabled = await isTriageV2Active(companyId);
   let shouldFinalizeAiState = true;
+  let customerReplySent = false;
+
+  const markCustomerReply = (): void => {
+    customerReplySent = true;
+  };
 
   try {
     if (triageV2Enabled) {
       try {
-        await bootstrapTriageContext(ticket, primaryMessageId);
         await ticket.update({ aiProcessingState: "processing" } as any);
       } catch (triageBootstrapError) {
         logger.warn(
           { triageBootstrapError, ticketId: ticket.id },
-          "Triage bootstrap failed — continuing AI processing without triage state"
+          "Failed to set AI processing state — continuing"
         );
       }
-      const { emitTicketStateRefresh } =
-        await import("../TicketServices/TicketOperationalStateService");
-      await emitTicketStateRefresh(ticket);
     }
 
     userText = await resolveInboundText({
@@ -468,6 +500,7 @@ const ProcessInboundMessageService = async ({
         ticket,
         body: AUDIO_USER_FALLBACK
       });
+      markCustomerReply();
 
       if (triageV2Enabled) {
         await logAiTicketTimelineEvent({
@@ -491,6 +524,14 @@ const ProcessInboundMessageService = async ({
         aiResponse: AUDIO_USER_FALLBACK
       });
       return;
+    }
+
+    const textParts = userText
+      .split(/\n\n+/)
+      .map(part => part.trim())
+      .filter(Boolean);
+    if (textParts.length > 1) {
+      userText = pickPrimaryCustomerText(textParts);
     }
 
     const priority = classifyTicketPriority(userText);
@@ -526,7 +567,34 @@ const ProcessInboundMessageService = async ({
     }
 
     const conversationText = await buildConversationText(ticket.id, userText);
-    const informationalQuery = isInformationalIntent(userText);
+    let informationalQuery = isInformationalIntent(userText);
+
+    if (
+      !informationalQuery &&
+      isPureGreetingMessage(userText.trim()) &&
+      messages.length === 1
+    ) {
+      const greetingReply = await buildFastGreetingReply(ticket.id);
+      await deliverAiReply(ticket, greetingReply);
+      markCustomerReply();
+      await finalizeAiResponse(ticket, primaryMessageId);
+      await ticket.reload({
+        include: ["contact", "queue", "whatsapp", "user"]
+      });
+      websocketUpdateTicket(ticket);
+      await persistAiDecisionLog({
+        companyId,
+        ticketId: ticket.id,
+        messageId: primaryMessageId,
+        action: "respond",
+        reason: "fast_greeting_reply",
+        userMessage: maskSensitiveLog(userText),
+        aiResponse: greetingReply
+      });
+      return;
+    }
+
+    informationalQuery = isInformationalIntent(userText);
 
     // Dúvidas sobre produto/Nível: LLM + base de conhecimento (sem tools lentas).
     if (informationalQuery && !forceHandoff) {
@@ -545,6 +613,7 @@ const ProcessInboundMessageService = async ({
 
         if (replyBody.length >= 20) {
           await deliverAiReply(ticket, replyBody);
+          markCustomerReply();
           await finalizeAiResponse(ticket, primaryMessageId);
           await ticket.reload({
             include: ["contact", "queue", "whatsapp", "user"]
@@ -600,6 +669,7 @@ const ProcessInboundMessageService = async ({
           messageId: primaryMessageId,
           conversationText
         });
+        markCustomerReply();
         return;
       }
 
@@ -611,9 +681,9 @@ const ProcessInboundMessageService = async ({
         } as any);
         await sendAiWhatsAppReply({
           ticket,
-          body:
-            "Sem problemas! Me conte com mais detalhes o que você precisa que eu te ajudo da melhor forma possível."
+          body: "Sem problemas! Me conte com mais detalhes o que você precisa que eu te ajudo da melhor forma possível."
         });
+        markCustomerReply();
         await finalizeAiResponse(ticket, primaryMessageId);
         return;
       }
@@ -622,6 +692,7 @@ const ProcessInboundMessageService = async ({
         ticket,
         body: buildHandoffConfirmationQuestion()
       });
+      markCustomerReply();
       await finalizeAiResponse(ticket, primaryMessageId);
       return;
     }
@@ -639,13 +710,13 @@ const ProcessInboundMessageService = async ({
       });
 
       if (handledByTriage) {
+        markCustomerReply();
         return;
       }
 
       const resolvedHandoffReason = detectHumanHandoffRequest(userText)
         ? AI_HANDOFF_REASONS.customer_requested_human
-        : (handoffReason as any) ||
-          AI_HANDOFF_REASONS.customer_requested_human;
+        : (handoffReason as any) || AI_HANDOFF_REASONS.customer_requested_human;
 
       await HandoffToHumanService({
         ticket,
@@ -656,6 +727,7 @@ const ProcessInboundMessageService = async ({
         handoffReason: resolvedHandoffReason,
         conversationText
       });
+      markCustomerReply();
       return;
     }
 
@@ -664,6 +736,7 @@ const ProcessInboundMessageService = async ({
         ticket,
         body: "Fico feliz em ter ajudado! Se precisar de algo mais, é só chamar."
       });
+      markCustomerReply();
 
       await UpdateTicketService({
         ticketId: ticket.id,
@@ -807,7 +880,19 @@ const ProcessInboundMessageService = async ({
         reason: "tool_handoff",
         userMessage: maskSensitiveLog(userText)
       });
-      await finalizeAiResponse(ticket, primaryMessageId);
+      if (!customerReplySent) {
+        await sendAiCustomerFallback({
+          ticket,
+          companyId,
+          messageId: primaryMessageId,
+          reason: "tool_handoff_without_reply",
+          userText,
+          body: AI_CUSTOMER_FALLBACK,
+          markSent: markCustomerReply
+        });
+      } else {
+        await finalizeAiResponse(ticket, primaryMessageId);
+      }
       return;
     }
 
@@ -834,7 +919,8 @@ const ProcessInboundMessageService = async ({
         userText,
         body: informationalQuery
           ? AI_INFORMATIONAL_FALLBACK
-          : AI_CUSTOMER_FALLBACK
+          : AI_CUSTOMER_FALLBACK,
+        markSent: markCustomerReply
       });
       return;
     }
@@ -849,7 +935,8 @@ const ProcessInboundMessageService = async ({
         userText,
         body: informationalQuery
           ? AI_INFORMATIONAL_FALLBACK
-          : AI_CUSTOMER_FALLBACK
+          : AI_CUSTOMER_FALLBACK,
+        markSent: markCustomerReply
       });
       return;
     }
@@ -882,6 +969,7 @@ const ProcessInboundMessageService = async ({
       });
 
       await deliverAiReply(ticket, outboundText);
+      markCustomerReply();
 
       return;
     }
@@ -893,6 +981,7 @@ const ProcessInboundMessageService = async ({
     );
 
     await deliverAiReply(ticket, outboundText);
+    markCustomerReply();
 
     await finalizeAiResponse(ticket, primaryMessageId);
 
@@ -1083,7 +1172,8 @@ const ProcessInboundMessageService = async ({
           userText
         );
         if (recoveryText.length >= 20) {
-          await sendAiWhatsAppReply({ ticket, body: recoveryText });
+          await deliverAiReply(ticket, recoveryText);
+          markCustomerReply();
           await finalizeAiResponse(ticket, primaryMessageId);
           await persistAiDecisionLog({
             companyId,
@@ -1109,12 +1199,14 @@ const ProcessInboundMessageService = async ({
         messageId: primaryMessageId,
         reason: "processing_error_fallback",
         userText,
-        body: TRANSIENT_ERROR_FALLBACK
+        body: TRANSIENT_ERROR_FALLBACK,
+        markSent: markCustomerReply
       });
       return;
     }
 
-    await sendAiWhatsAppReply({ ticket, body: TRANSIENT_ERROR_FALLBACK });
+    await deliverAiReply(ticket, TRANSIENT_ERROR_FALLBACK);
+    markCustomerReply();
 
     await persistAiDecisionLog({
       companyId,
@@ -1130,6 +1222,26 @@ const ProcessInboundMessageService = async ({
       aiResponse: TRANSIENT_ERROR_FALLBACK
     });
   } finally {
+    if (!customerReplySent && userText?.trim()) {
+      try {
+        await sendAiCustomerFallback({
+          ticket,
+          companyId,
+          messageId: primaryMessageId,
+          reason: "mandatory_reply_guard",
+          userText,
+          body: isInformationalIntent(userText)
+            ? AI_INFORMATIONAL_FALLBACK
+            : AI_CUSTOMER_FALLBACK
+        });
+      } catch (guardError) {
+        logger.error(
+          { guardError, ticketId: ticket.id },
+          "Mandatory reply guard failed — customer may see silence"
+        );
+      }
+    }
+
     if (shouldFinalizeAiState) {
       try {
         await ticket.reload();

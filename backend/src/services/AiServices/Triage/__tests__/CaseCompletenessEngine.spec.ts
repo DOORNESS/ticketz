@@ -7,6 +7,7 @@ import {
   isPureGreetingMessage,
   isShortHelpRequest,
   isWaitingForBotNudge,
+  pickPrimaryCustomerText,
   isSubstantiveAiReply,
   shouldSkipSupportInvestigation,
   isVagueCustomerStatement,
@@ -134,6 +135,17 @@ describe("CaseCompletenessEngine", () => {
       "Queria saber como o nível pode ser útil para minha empresa?";
 
     expect(isInformationalIntent(userText)).toBe(true);
+  });
+
+  it("prefers real question over greeting when batching inbound messages", () => {
+    const parts = [
+      "Oi",
+      "Queria saber como o nível pode ser útil para minha empresa?"
+    ];
+
+    expect(pickPrimaryCustomerText(parts)).toBe(
+      "Queria saber como o nível pode ser útil para minha empresa?"
+    );
   });
 
   it("detects how-it-works questions as informational", () => {

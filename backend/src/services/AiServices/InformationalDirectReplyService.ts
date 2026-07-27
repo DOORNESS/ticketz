@@ -160,7 +160,7 @@ export const tryInformationalDirectReply = async ({
       const completion = await chatCompletion(companyId, {
         model: agent.textModel,
         temperature: Math.min(0.4, agent.temperature ?? 0.3),
-        maxTokens: Math.min(768, agent.maxTokens || 1024),
+        maxTokens: Math.min(640, agent.maxTokens || 1024),
         providerId: agent.provider,
         messages: [
           {

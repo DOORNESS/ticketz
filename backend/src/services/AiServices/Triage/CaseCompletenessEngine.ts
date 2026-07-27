@@ -181,6 +181,30 @@ const countFilled = (
   return Object.values(snapshot).filter(Boolean).length;
 };
 
+export const pickPrimaryCustomerText = (parts: string[]): string => {
+  const trimmed = parts.map(part => part.trim()).filter(Boolean);
+  if (!trimmed.length) {
+    return "";
+  }
+
+  const informational = trimmed.find(part => isInformationalIntent(part));
+  if (informational) {
+    return informational;
+  }
+
+  const substantive = trimmed.find(
+    part =>
+      !isPureGreetingMessage(part) &&
+      !isShortHelpRequest(part) &&
+      !isWaitingForBotNudge(part)
+  );
+  if (substantive) {
+    return substantive;
+  }
+
+  return trimmed[trimmed.length - 1];
+};
+
 export const isPureGreetingMessage = (text: string): boolean =>
   PURE_GREETING_PATTERNS.some(pattern => pattern.test(text.trim()));
 
@@ -279,9 +303,7 @@ export const buildTimeBasedGreeting = (
   return "Olá, boa noite!";
 };
 
-export const buildShortHelpReply = (
-  timezone = "America/Sao_Paulo"
-): string =>
+export const buildShortHelpReply = (timezone = "America/Sao_Paulo"): string =>
   `${buildTimeBasedGreeting(timezone)} Claro! Me conte o que você precisa — posso ajudar com dúvidas sobre produtos, funcionalidades ou suporte.`;
 
 export const MIN_INVESTIGATION_ROUNDS_BEFORE_HANDOFF = 2;
