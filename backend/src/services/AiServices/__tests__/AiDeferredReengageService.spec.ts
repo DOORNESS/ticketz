@@ -41,27 +41,31 @@ import { scheduleDeferredAiResponseCheck } from "../AiDeferredReengageService";
 describe("AiDeferredReengageService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    (Message.findOne as jest.Mock).mockReset();
+    (Ticket.findByPk as jest.Mock).mockReset();
+    mockExists.mockReset();
+    mockDel.mockReset();
+    mockTryEngage.mockReset();
     mockExists.mockResolvedValue(1);
     mockDel.mockResolvedValue(1);
     mockTryEngage.mockResolvedValue(true);
   });
 
-  it("re-enqueues when inbound has no outbound reply after delay", async () => {
-    const ticket = {
-      id: 23,
-      companyId: 1,
-      aiHandoff: false,
-      aiPaused: false,
-      userId: null,
-      status: "pending",
-      isGroup: false,
-      contact: { disableBot: false },
-      aiProcessingState: "processing",
-      reload: jest.fn().mockResolvedValue(undefined),
-      update: jest.fn().mockResolvedValue(undefined)
-    };
+  const buildTicket = () => ({
+    id: 23,
+    companyId: 1,
+    aiHandoff: false,
+    aiPaused: false,
+    userId: null,
+    status: "pending",
+    isGroup: false,
+    contact: { disableBot: false },
+    aiProcessingState: "processing",
+    reload: jest.fn().mockResolvedValue(undefined),
+    update: jest.fn().mockResolvedValue(undefined)
+  });
 
-    (Ticket.findByPk as jest.Mock).mockResolvedValue(ticket);
+  const mockConversation = () => {
     (Message.findOne as jest.Mock)
       .mockResolvedValueOnce({
         id: "in-1",
@@ -78,12 +82,32 @@ describe("AiDeferredReengageService", () => {
         mediaType: "text",
         getDataValue: () => undefined
       });
+  };
+
+  it("does not delete an active processing lock or duplicate the message", async () => {
+    const ticket = buildTicket();
+    (Ticket.findByPk as jest.Mock).mockResolvedValue(ticket);
+    mockConversation();
 
     scheduleDeferredAiResponseCheck({ companyId: 1, ticketId: 23, delayMs: 0 });
 
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    expect(mockDel).toHaveBeenCalled();
+    expect(mockDel).not.toHaveBeenCalled();
+    expect(mockTryEngage).not.toHaveBeenCalled();
+  });
+
+  it("re-enqueues when inbound has no reply and no processing is active", async () => {
+    mockExists.mockResolvedValue(0);
+    const ticket = buildTicket();
+    (Ticket.findByPk as jest.Mock).mockResolvedValue(ticket);
+    mockConversation();
+
+    scheduleDeferredAiResponseCheck({ companyId: 1, ticketId: 23, delayMs: 0 });
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    expect(mockDel).not.toHaveBeenCalled();
     expect(mockTryEngage).toHaveBeenCalledWith(
       ticket,
       expect.objectContaining({ messageBody: "Pode ajudar?" }),

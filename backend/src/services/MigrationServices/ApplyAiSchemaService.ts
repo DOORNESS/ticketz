@@ -303,6 +303,39 @@ const ensureAiTables = async (schema: string): Promise<void> => {
     CREATE INDEX IF NOT EXISTS ai_copilot_suggestions_ticket_status_idx
     ON ${q(schema, "AiCopilotSuggestions")} ("ticketId", status);
   `);
+
+  await sequelize.query(`
+    CREATE TABLE IF NOT EXISTS ${q(schema, "AiReplayLogs")} (
+      id SERIAL PRIMARY KEY,
+      "companyId" INTEGER NOT NULL REFERENCES ${q(schema, "Companies")}(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      "ticketId" INTEGER NOT NULL REFERENCES ${q(schema, "Tickets")}(id)
+        ON UPDATE CASCADE ON DELETE CASCADE,
+      "messageId" VARCHAR(128),
+      "userQuestion" TEXT,
+      "conversationHistory" JSONB,
+      "systemPrompt" TEXT,
+      "usedChunks" JSONB,
+      "aiResponse" TEXT,
+      confidence DOUBLE PRECISION,
+      explainability JSONB,
+      "tokensInput" INTEGER,
+      "tokensOutput" INTEGER,
+      "latencyMs" INTEGER,
+      "costUsd" DECIMAL(12,6),
+      model VARCHAR(128),
+      "mediaType" VARCHAR(32),
+      "visionSummary" TEXT,
+      "ocrText" TEXT,
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `);
+
+  await sequelize.query(`
+    CREATE INDEX IF NOT EXISTS ai_replay_logs_ticket_created_idx
+    ON ${q(schema, "AiReplayLogs")} ("ticketId", "createdAt");
+  `);
 };
 
 const ensureTriageV2Schema = async (schema: string): Promise<void> => {

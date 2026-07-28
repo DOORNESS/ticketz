@@ -70,17 +70,11 @@ export const scheduleDeferredAiResponseCheck = ({
         const redis = getAiInboundQueue().client;
         const lockKey = `ai:lock:${ticketId}`;
         if (await redis.exists(lockKey)) {
-          await redis.del(lockKey);
-        }
-
-        if (
-          (ticket as { aiProcessingState?: string }).aiProcessingState ===
-          "processing"
-        ) {
-          await ticket.update({
-            aiProcessingState: "awaiting_customer"
-          } as never);
-          await ticket.reload();
+          logger.debug(
+            { ticketId, companyId, lockKey },
+            "Deferred AI re-engage skipped because processing is active"
+          );
+          return;
         }
 
         const lastMessage = await Message.findOne({

@@ -201,11 +201,12 @@ const sendOptionalAck = async (
 
 const scheduleDebouncedJob = async (
   companyId: number,
-  ticketId: number
+  ticketId: number,
+  forceNewJob = false
 ): Promise<void> => {
   const queue = getAiInboundQueue();
-  const jobId = debounceJobId(ticketId);
-  const existingJob = await queue.getJob(jobId);
+  const jobId = forceNewJob ? undefined : debounceJobId(ticketId);
+  const existingJob = jobId ? await queue.getJob(jobId) : null;
 
   if (existingJob) {
     const state = await existingJob.getState();
@@ -222,7 +223,7 @@ const scheduleDebouncedJob = async (
     "ProcessTicket",
     { companyId, ticketId },
     {
-      jobId,
+      ...(jobId ? { jobId } : {}),
       delay: getDebounceMs(),
       removeOnComplete: 100,
       removeOnFail: 50,
@@ -325,7 +326,8 @@ const usesImmediateProcessing = (): boolean => getDebounceMs() === 0;
 
 const rescheduleIfBuffered = async (
   companyId: number,
-  ticketId: number
+  ticketId: number,
+  currentJob?: Job<AiInboundJobData>
 ): Promise<void> => {
   const redis = getAiInboundQueue().client;
   const pending = await redis.llen(bufferKey(ticketId));
@@ -340,7 +342,7 @@ const rescheduleIfBuffered = async (
       return;
     }
 
-    await scheduleDebouncedJob(companyId, ticketId);
+    await scheduleDebouncedJob(companyId, ticketId, Boolean(currentJob));
   }
 };
 
@@ -603,7 +605,7 @@ export const processBufferedAiInbound = async (
       await redis.del(lockKey(ticketId));
     }
 
-    await rescheduleIfBuffered(companyId, ticketId);
+    await rescheduleIfBuffered(companyId, ticketId, job);
   }
 };
 

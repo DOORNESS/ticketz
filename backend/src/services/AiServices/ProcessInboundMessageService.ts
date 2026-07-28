@@ -1053,6 +1053,20 @@ const ProcessInboundMessageService = async ({
       await touchMemoryLastUsed(companyId, ticket.contactId);
     }
   } catch (error) {
+    if (customerReplySent) {
+      logger.error(
+        {
+          error,
+          ticketId: ticket.id,
+          companyId,
+          messageId: primaryMessageId,
+          step: "post_delivery"
+        },
+        "AI post-delivery processing failed; duplicate recovery suppressed"
+      );
+      return;
+    }
+
     if (isTransientAiError(error)) {
       throw error;
     }
