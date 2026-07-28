@@ -19,10 +19,14 @@ import {
   isWaitingForBotNudge,
   isPureGreetingMessage,
   isShortHelpRequest,
-  pickPrimaryCustomerText,
-  buildTimeBasedGreeting,
   isInformationalIntent
 } from "./Triage/CaseCompletenessEngine";
+import {
+  resolveCustomerTurnText
+} from "./WhatsAppCustomerTurnResolver";
+import {
+  runWhatsAppAiTurn
+} from "./WhatsAppAiTurnService";
 import {
   buildAiSchedulePromptBlock,
   getAiScheduleContext
@@ -55,7 +59,6 @@ import { isContactMemoryEnabledForCompany } from "./ContactMemory/AiContactMemor
 import { isToolsEnabledForCompany } from "./tools/AiToolsFeatureFlag";
 import { runToolLoop } from "./tools/ToolLoopService";
 import { chatCompletion } from "./ModelGateway";
-import { tryInformationalDirectReply } from "./InformationalDirectReplyService";
 import "./tools/registerPilotTools";
 import crypto from "crypto";
 import {
@@ -122,7 +125,8 @@ export const sendAiCustomerFallback = async ({
   reason,
   userText,
   body = AI_CUSTOMER_FALLBACK,
-  markSent
+  markSent,
+  skipDedupe = false
 }: {
   ticket: Ticket;
   companyId: number;
@@ -131,20 +135,23 @@ export const sendAiCustomerFallback = async ({
   userText: string;
   body?: string;
   markSent?: () => void;
+  skipDedupe?: boolean;
 }): Promise<void> => {
-  try {
-    const { getAiInboundQueue } = await import("./AiInboundQueueService");
-    const redis = getAiInboundQueue().client;
-    const dedupeKey = `ai:fallback:sent:${ticket.id}:${messageId || reason}`;
-    const acquired = await redis.set(dedupeKey, "1", "EX", 180, "NX");
-    if (acquired !== "OK") {
-      return;
+  if (!skipDedupe) {
+    try {
+      const { getAiInboundQueue } = await import("./AiInboundQueueService");
+      const redis = getAiInboundQueue().client;
+      const dedupeKey = `ai:fallback:sent:${ticket.id}:${messageId || reason}`;
+      const acquired = await redis.set(dedupeKey, "1", "EX", 180, "NX");
+      if (acquired !== "OK") {
+        return;
+      }
+    } catch (dedupeError) {
+      logger.warn(
+        { dedupeError, ticketId: ticket.id },
+        "Fallback dedupe check failed; sending anyway"
+      );
     }
-  } catch (dedupeError) {
-    logger.warn(
-      { dedupeError, ticketId: ticket.id },
-      "Fallback dedupe check failed; sending anyway"
-    );
   }
 
   await deliverAiReply(ticket, body);
@@ -248,33 +255,6 @@ const resolveInboundText = async ({
   }
 
   return resolvedParts.filter(Boolean).join("\n\n");
-};
-
-const alreadyBotGreeted = async (ticketId: number): Promise<boolean> => {
-  const lastOutbound = await Message.findOne({
-    where: { ticketId, fromMe: true },
-    order: [["createdAt", "DESC"]],
-    attributes: ["body"]
-  });
-
-  const body = (lastOutbound?.body || "").toLowerCase();
-  return (
-    body.includes("nivelton") ||
-    body.includes("como posso ajudar") ||
-    body.includes("nível cashback") ||
-    body.includes("nivel cashback")
-  );
-};
-
-const buildFastGreetingReply = async (ticketId: number): Promise<string> => {
-  const greeted = await alreadyBotGreeted(ticketId);
-  const salutation = buildTimeBasedGreeting();
-
-  if (greeted) {
-    return `${salutation} Qual é sua dúvida? Posso explicar como a Nível Cashback funciona para sua empresa.`;
-  }
-
-  return `Me chamo Nivelton, assistente da Nível Cashback. ${salutation} Como posso ajudar você hoje?`;
 };
 
 const buildConversationText = async (
@@ -530,118 +510,20 @@ const ProcessInboundMessageService = async ({
       .split(/\n\n+/)
       .map(part => part.trim())
       .filter(Boolean);
-    if (textParts.length > 1) {
-      userText = pickPrimaryCustomerText(textParts);
-    }
+
+    userText = await resolveCustomerTurnText({
+      ticketId: ticket.id,
+      rawUserText: userText,
+      messageParts: textParts
+    });
 
     const priority = classifyTicketPriority(userText);
     if (!ticket.aiPriority) {
       await ticket.update({ aiPriority: priority });
     }
 
-    // "cadê vc / por que não responde" → reprocessa a última pergunta real do cliente na IA
-    if (isWaitingForBotNudge(userText)) {
-      const recent = await Message.findAll({
-        where: { ticketId: ticket.id, fromMe: false },
-        order: [["createdAt", "DESC"]],
-        limit: 8,
-        attributes: ["body"]
-      });
-      const lastRealQuestion = recent
-        .map(item => (item.body || "").trim())
-        .find(
-          body =>
-            body &&
-            !isPureGreetingMessage(body) &&
-            !isShortHelpRequest(body) &&
-            !isWaitingForBotNudge(body)
-        );
-
-      if (lastRealQuestion) {
-        userText = lastRealQuestion;
-        logger.info(
-          { ticketId: ticket.id, lastRealQuestion },
-          "Bot nudge detected — replaying last real customer question"
-        );
-      }
-    }
-
     const conversationText = await buildConversationText(ticket.id, userText);
-    let informationalQuery = isInformationalIntent(userText);
-
-    if (
-      !informationalQuery &&
-      isPureGreetingMessage(userText.trim()) &&
-      messages.length === 1
-    ) {
-      const greetingReply = await buildFastGreetingReply(ticket.id);
-      await deliverAiReply(ticket, greetingReply);
-      markCustomerReply();
-      await finalizeAiResponse(ticket, primaryMessageId);
-      await ticket.reload({
-        include: ["contact", "queue", "whatsapp", "user"]
-      });
-      websocketUpdateTicket(ticket);
-      await persistAiDecisionLog({
-        companyId,
-        ticketId: ticket.id,
-        messageId: primaryMessageId,
-        action: "respond",
-        reason: "fast_greeting_reply",
-        userMessage: maskSensitiveLog(userText),
-        aiResponse: greetingReply
-      });
-      return;
-    }
-
-    informationalQuery = isInformationalIntent(userText);
-
-    // Dúvidas sobre produto/Nível: LLM + base de conhecimento (sem tools lentas).
-    if (informationalQuery && !forceHandoff) {
-      try {
-        const direct = await tryInformationalDirectReply({
-          companyId,
-          ticket,
-          agent,
-          userText
-        });
-
-        const replyBody =
-          prepareCustomerFacingAiText(direct.body || "", userText) ||
-          direct.body ||
-          "";
-
-        if (replyBody.length >= 20) {
-          await deliverAiReply(ticket, replyBody);
-          markCustomerReply();
-          await finalizeAiResponse(ticket, primaryMessageId);
-          await ticket.reload({
-            include: ["contact", "queue", "whatsapp", "user"]
-          });
-          websocketUpdateTicket(ticket);
-          await persistAiDecisionLog({
-            companyId,
-            ticketId: ticket.id,
-            messageId: primaryMessageId,
-            action: "respond",
-            reason: direct.reason || "informational_knowledge_reply",
-            userMessage: maskSensitiveLog(userText),
-            aiResponse: replyBody,
-            details: {
-              knowledgeBaseIds: direct.knowledgeBaseIds,
-              chunks: direct.chunkCount,
-              hasReadyDocuments: direct.hasReadyDocuments
-            }
-          });
-          return;
-        }
-      } catch (informationalError) {
-        logger.warn(
-          { informationalError, ticketId: ticket.id },
-          "Informational knowledge reply failed — falling back to main LLM"
-        );
-      }
-    }
+    const informationalQuery = isInformationalIntent(userText);
 
     if (
       triageV2Enabled &&
@@ -694,6 +576,25 @@ const ProcessInboundMessageService = async ({
       });
       markCustomerReply();
       await finalizeAiResponse(ticket, primaryMessageId);
+      return;
+    }
+
+    const useDirectWhatsAppTurn =
+      !forceHandoff &&
+      (informationalQuery ||
+        isPureGreetingMessage(userText.trim()) ||
+        isShortHelpRequest(userText) ||
+        isWaitingForBotNudge(userText));
+
+    if (useDirectWhatsAppTurn) {
+      await runWhatsAppAiTurn({
+        companyId,
+        ticket,
+        agent,
+        userText,
+        messageId: primaryMessageId,
+        markSent: markCustomerReply
+      });
       return;
     }
 
@@ -1232,7 +1133,9 @@ const ProcessInboundMessageService = async ({
           userText,
           body: isInformationalIntent(userText)
             ? AI_INFORMATIONAL_FALLBACK
-            : AI_CUSTOMER_FALLBACK
+            : AI_CUSTOMER_FALLBACK,
+          skipDedupe: true,
+          markSent: markCustomerReply
         });
       } catch (guardError) {
         logger.error(

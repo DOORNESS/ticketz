@@ -5,7 +5,6 @@ import { logger } from "../../utils/logger";
 import {
   resolveProcessingAgent,
   canAiEngageTicket,
-  detectAgentIdentityQuestion,
   ensureTicketQueueFromWhatsapp
 } from "./AiHelpers";
 import ProcessInboundMessageService, {
@@ -14,10 +13,7 @@ import ProcessInboundMessageService, {
 } from "./ProcessInboundMessageService";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
 import { isTransientAiError } from "./isTransientAiError";
-import {
-  isInformationalIntent,
-  isPureGreetingMessage
-} from "./Triage/CaseCompletenessEngine";
+import { isInformationalIntent } from "./Triage/CaseCompletenessEngine";
 import {
   recordAiJobCompleted,
   recordAiJobStarted
@@ -54,7 +50,7 @@ const parsePositiveInt = (
     : fallback;
 
 const getDebounceMs = (): number =>
-  parsePositiveInt(process.env.AI_QUEUE_DEBOUNCE_MS, 800);
+  parsePositiveInt(process.env.AI_QUEUE_DEBOUNCE_MS, 1200);
 
 const getMaxAttempts = (): number =>
   parsePositiveInt(process.env.AI_QUEUE_MAX_ATTEMPTS, 3);
@@ -263,11 +259,7 @@ const sendTransientQueueFallback = async ({
     .filter(Boolean)
     .join("\n");
 
-  if (
-    !userText ||
-    isPureGreetingMessage(userText) ||
-    detectAgentIdentityQuestion(userText)
-  ) {
+  if (!userText) {
     return;
   }
 
@@ -425,9 +417,20 @@ export const processBufferedAiInbound = async (
           { ticketId, companyId, pendingCount },
           "AI inbound buffer retained — ticket could not be revalidated"
         );
-      } else {
-        await redis.del(bufferKey(ticketId));
+        if (job) {
+          await persistAiDecisionLog({
+            companyId,
+            ticketId,
+            action: "job_cancelled",
+            reason: "ticket_no_longer_eligible_for_ai"
+          });
+          await recordAiJobCompleted(job, "cancelled");
+        }
+        await scheduleDebouncedJob(companyId, ticketId);
+        return;
       }
+
+      await redis.del(bufferKey(ticketId));
       if (job) {
         await persistAiDecisionLog({
           companyId,

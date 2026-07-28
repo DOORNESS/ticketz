@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.77] — 2026-07-28
+
+### Refatorado (WhatsApp IA — padrão refeito)
+
+- **`WhatsAppAiTurnService`** — fluxo linear: saudação rápida OU resposta informativa direta (LLM + base), sempre com fallback.
+- **`findUnansweredCustomerQuestion`** — se o cliente mandou pergunta sem resposta, *"Oi"* / *"Cadê vc"* reprocessam a pergunta real (não repetem Nivelton).
+- **`resolveCustomerTurnText`** — unifica batch, nudge e pergunta pendente num único texto.
+- **Guarda obrigatória** — `skipDedupe` no fallback final (fim do silêncio por dedupe Redis).
+- **Fila** — erro transitório não ignora mais saudações; buffer reagendado se ticket ficar inelegível momentaneamente.
+- **Debounce 1200ms** — agrupa *Oi* + pergunta sem atraso perceptível.
+
 ## [1.5.76] — 2026-07-27
 
 ### Corrigido (lentidão, silêncio e saudação repetida — Nivelton)
