@@ -57,7 +57,9 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
           : undefined,
         lifecycleStatus: req.query.lifecycleStatus as
           | import("../models/KnowledgeAsset").KnowledgeLifecycleStatus
-          | undefined
+          | undefined,
+        compact: true,
+        limit: 200
       }),
     []
   );

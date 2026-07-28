@@ -780,7 +780,7 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
         }
       };
       fetchMessages();
-    }, 200);
+    }, 0);
     return () => {
       clearTimeout(delayDebounceFn);
     };
@@ -1015,7 +1015,7 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
 
     const interval = setInterval(() => {
       pollNewMessages();
-    }, 1500);
+    }, 3000);
 
     return () => clearInterval(interval);
   }, [ticketId, pollNewMessages]);

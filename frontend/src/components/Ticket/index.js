@@ -108,7 +108,6 @@ const Ticket = () => {
   const [tagsExpanded, setTagsExpanded] = useState(false);
   const [supervisionParticipating, setSupervisionParticipating] =
     useState(false);
-  const [suggestLoading, setSuggestLoading] = useState(false);
   const [resumeLoading, setResumeLoading] = useState(false);
   const [annexDialogOpen, setAnnexDialogOpen] = useState(false);
   const [annexSuggestedText, setAnnexSuggestedText] = useState("");
@@ -196,36 +195,30 @@ const Ticket = () => {
       setLoading(true);
     }
 
-    const delayDebounceFn = setTimeout(
-      () => {
-        const fetchTicket = async () => {
-          try {
-            const isUuid =
-              ticketId &&
-              String(ticketId).includes("-") &&
-              !/^\d+$/.test(ticketId);
-            const endpoint = isUuid
-              ? `/tickets/u/${ticketId}`
-              : `/tickets/${ticketId}`;
-            const { data } = await api.get(endpoint);
-            if (cancelled) return;
-            setContact(data.contact);
-            syncTicketView(data);
-            setLoading(false);
-          } catch (err) {
-            if (cancelled) return;
-            setLoading(false);
-            toastError(err);
-          }
-        };
-        fetchTicket();
-      },
-      snapshot?.id ? 0 : 150
-    );
+    const fetchTicket = async () => {
+      try {
+        const isUuid =
+          ticketId &&
+          String(ticketId).includes("-") &&
+          !/^\d+$/.test(ticketId);
+        const endpoint = isUuid
+          ? `/tickets/u/${ticketId}`
+          : `/tickets/${ticketId}`;
+        const { data } = await api.get(endpoint);
+        if (cancelled) return;
+        setContact(data.contact);
+        syncTicketView(data);
+        setLoading(false);
+      } catch (err) {
+        if (cancelled) return;
+        setLoading(false);
+        toastError(err);
+      }
+    };
+    void fetchTicket();
 
     return () => {
       cancelled = true;
-      clearTimeout(delayDebounceFn);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ticketId, user?.id, authLoading]);
@@ -290,7 +283,7 @@ const Ticket = () => {
       } catch (_) {
         /* ignore transient poll errors */
       }
-    }, 2000);
+    }, 10000);
 
     return () => clearInterval(interval);
   }, [ticket?.id, ticket?.aiAgentId, ticket?.aiPaused, ticket?.userId]);
@@ -356,29 +349,10 @@ const Ticket = () => {
     }
   };
 
-  const handleSuggestResponse = async () => {
+  const handleSuggestResponse = () => {
     if (!ticket?.id) return;
-    setSuggestLoading(true);
-    try {
-      const { data } = await api.post(`/tickets/${ticket.id}/ai/copilot`, {
-        instruction:
-          "Analise a conversa e sugira a melhor resposta para o cliente agora. Seja claro, objetivo e use a base de conhecimento quando possível.",
-        refresh: true
-      });
-      const text = data?.suggestion?.suggestedResponse;
-      if (!text) {
-        toast.error(
-          "Não foi possível gerar sugestão da IA. Tente novamente em instantes."
-        );
-        return;
-      }
-      setAnnexSuggestedText(text);
-      setAnnexDialogOpen(true);
-    } catch (err) {
-      toastError(err);
-    } finally {
-      setSuggestLoading(false);
-    }
+    setAnnexSuggestedText("");
+    setAnnexDialogOpen(true);
   };
 
   const renderMessagesList = () => {
@@ -435,7 +409,6 @@ const Ticket = () => {
           onStopParticipating={handleStopParticipating}
           onResumeAi={handleResumeAi}
           onSuggestResponse={handleSuggestResponse}
-          suggestLoading={suggestLoading}
           resumeLoading={resumeLoading}
           user={user}
           tagsExpanded={tagsExpanded}
@@ -460,25 +433,27 @@ const Ticket = () => {
         onClose={() => setRepositoryOpen(false)}
         ticket={ticket}
       />
-      <TicketAdminPanel
-        open={adminPanelOpen}
-        onClose={() => setAdminPanelOpen(false)}
-        ticket={ticket}
-        user={user}
-        observationMode={isObserving}
-        onOpenRepository={() => {
-          setAdminPanelOpen(false);
-          setRepositoryOpen(true);
-        }}
-        actionButtons={
-          <TicketActionButtons
-            ticket={ticket}
-            showTabGroups={showTabGroups}
-            observationMode={isObserving}
-            onTicketUpdated={syncTicketView}
-          />
-        }
-      />
+      {adminPanelOpen && (
+        <TicketAdminPanel
+          open
+          onClose={() => setAdminPanelOpen(false)}
+          ticket={ticket}
+          user={user}
+          observationMode={isObserving}
+          onOpenRepository={() => {
+            setAdminPanelOpen(false);
+            setRepositoryOpen(true);
+          }}
+          actionButtons={
+            <TicketActionButtons
+              ticket={ticket}
+              showTabGroups={showTabGroups}
+              observationMode={isObserving}
+              onTicketUpdated={syncTicketView}
+            />
+          }
+        />
+      )}
       <ContactDrawer
         open={drawerOpen}
         handleDrawerClose={handleDrawerClose}

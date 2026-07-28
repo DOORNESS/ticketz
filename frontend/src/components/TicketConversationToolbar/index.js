@@ -65,7 +65,6 @@ const TicketConversationToolbar = ({
   onStopParticipating,
   onSuggestResponse,
   onResumeAi,
-  suggestLoading,
   resumeLoading,
   tagsExpanded,
   onToggleTags,
@@ -85,6 +84,7 @@ const TicketConversationToolbar = ({
   const canUseRepository =
     ticket?.status !== "closed" &&
     (canUserOperateTicket(ticket, user) || isAiHandlingTicket(ticket));
+  const canTeachAi = canSupervise || canUserOperateTicket(ticket, user);
 
   return (
     <Box className={classes.root}>
@@ -135,16 +135,15 @@ const TicketConversationToolbar = ({
             {resumeLoading ? "Retomando…" : "Retomar IA"}
           </Button>
         )}
-        {canSupervise && (
+        {canTeachAi && (
           <Button
             size="small"
             variant="outlined"
             className={classes.supervisionButton}
             startIcon={<EmojiObjectsIcon fontSize="small" />}
-            disabled={suggestLoading}
             onClick={onSuggestResponse}
           >
-            Sugerir resposta
+            Ensinar IA
           </Button>
         )}
         {aiActive && (

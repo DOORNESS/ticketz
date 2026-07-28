@@ -116,7 +116,7 @@ const TicketAdminPanel = ({
               variant="outlined"
               onClick={() => runCopilotQuick("Sugerir resposta")}
             >
-              Sugerir resposta
+              Pedir sugestão à IA
             </Button>
             <Button
               size="small"

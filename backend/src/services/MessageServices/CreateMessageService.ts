@@ -37,41 +37,66 @@ export const websocketCreateMessage = async (
   message: Message,
   options?: { forceHumanAlert?: boolean }
 ) => {
-  await message.ticket.reload({
-    include: [
-      {
-        model: Contact,
-        as: "contact",
-        include: ["tags", "extraInfo"]
-      },
-      "queue",
-      "tags",
-      "user",
-      {
-        model: Whatsapp,
-        as: "whatsapp",
-        attributes: ["name", "id"]
-      }
-    ]
-  });
-
   const io = getIO();
-  const ticket = message.ticket;
+  let ticket = message.ticket;
   const suppressHumanAlert =
     shouldSuppressHumanNotification(ticket) && !options?.forceHumanAlert;
 
-  const payload = {
+  // The open chat needs only the new message. Emit it before the expensive
+  // ticket reload so a list-enrichment failure can never block real-time chat.
+  io.to(message.ticketId.toString()).emit(
+    `company-${message.companyId}-appMessage`,
+    {
+      action: "create",
+      message,
+      ticket: ticket
+        ? serializeTicketWithOperationalState(ticket)
+        : { id: message.ticketId },
+      contact: ticket?.contact,
+      suppressHumanAlert
+    }
+  );
+
+  try {
+    await ticket.reload({
+      include: [
+        {
+          model: Contact,
+          as: "contact",
+          include: ["tags", "extraInfo"]
+        },
+        "queue",
+        "tags",
+        "user",
+        {
+          model: Whatsapp,
+          as: "whatsapp",
+          attributes: ["name", "id"]
+        }
+      ]
+    });
+  } catch (error) {
+    logger.warn(
+      {
+        error,
+        step: "websocket_list_enrichment",
+        ticketId: message.ticketId,
+        messageId: message.id,
+        companyId: message.companyId
+      },
+      "Message emitted to chat, but ticket list enrichment failed"
+    );
+    return;
+  }
+
+  ticket = message.ticket;
+  const listPayload = {
     action: "create",
     message,
     ticket: serializeTicketWithOperationalState(ticket),
     contact: ticket.contact,
     suppressHumanAlert
   };
-
-  io.to(message.ticketId.toString()).emit(
-    `company-${message.companyId}-appMessage`,
-    payload
-  );
 
   let listStack = io
     .to(`company-${message.companyId}-${message.ticket.status}`)
@@ -83,7 +108,7 @@ export const websocketCreateMessage = async (
       .to(`queue-${message.ticket.queueId}-notification`);
   }
 
-  listStack.emit(`company-${message.companyId}-appMessage`, payload);
+  listStack.emit(`company-${message.companyId}-appMessage`, listPayload);
 
   if (ticket.aiHandoff && ticket.queueId && !message.fromMe) {
     io.to(`queue-${ticket.queueId}-handoff`)
@@ -167,7 +192,18 @@ const CreateMessageService = async ({
   const io = getIO();
 
   if (!skipWebsocket) {
-    void websocketCreateMessage(message);
+    void websocketCreateMessage(message).catch(error => {
+      logger.error(
+        {
+          error,
+          step: "websocket_message_create",
+          ticketId: message.ticketId,
+          messageId: message.id,
+          companyId
+        },
+        "Failed to emit created message"
+      );
+    });
   }
 
   io.to(`company-${companyId}-mainchannel`).emit(

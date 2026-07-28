@@ -34,7 +34,14 @@ const ListMessagesService = async ({
   queues = [],
   minUpdatedAt
 }: Request): Promise<Response> => {
-  const ticket = await ShowTicketService(ticketId, companyId);
+  // Incremental polling only needs tenancy and channel information. Avoid
+  // rebuilding the complete ticket/contact/tag graph every few seconds.
+  const ticket = minUpdatedAt
+    ? await Ticket.findOne({
+        where: { id: ticketId, companyId },
+        attributes: ["id", "companyId", "channel"]
+      })
+    : await ShowTicketService(ticketId, companyId);
 
   if (!ticket) {
     throw new AppError("ERR_NO_TICKET_FOUND", 404);

@@ -53,11 +53,12 @@ const AiSuggestAnnexDialog = ({
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>Sugestão da IA</DialogTitle>
+      <DialogTitle>Ensinar a IA</DialogTitle>
       <DialogContent>
         <Typography variant="body2" color="textSecondary" gutterBottom>
-          Deseja salvar esta resposta na base &quot;Respostas anexas&quot; da
-        linha (Nível ou Fortmax) para a IA usar em casos semelhantes?
+          Escreva a resposta correta que você deseja ensinar. Ao anexar, ela
+          será publicada na base &quot;Respostas anexas&quot; da linha correta
+          (Nível ou Fortmax) para a IA usar em casos semelhantes.
         </Typography>
         <TextField
           fullWidth
@@ -71,7 +72,7 @@ const AiSuggestAnnexDialog = ({
         <TextField
           fullWidth
           margin="dense"
-          label="Conteúdo sugerido"
+          label="Resposta validada por você"
           value={content}
           onChange={event => setContent(event.target.value)}
           variant="outlined"

@@ -49,4 +49,56 @@ describe("shouldShowTicketInList whatsapp filter", () => {
       })
     ).toBe(false);
   });
+
+  it("keeps an active AI ticket out of the human waiting tab for admins", () => {
+    const ticket = {
+      id: 2,
+      status: "pending",
+      whatsappId: 2,
+      queueId: 6,
+      aiAgentId: 9,
+      userId: null,
+      aiPaused: false,
+      aiHandoff: false
+    };
+
+    expect(
+      shouldShowTicketInList({
+        ticket,
+        status: "pending",
+        selectedQueueIds: [],
+        selectedWhatsappIds: [],
+        profile: "admin",
+        showAll: true,
+        userId: 1,
+        superUser: true
+      })
+    ).toBe(false);
+  });
+
+  it("keeps a paused AI ticket visible in the human waiting tab", () => {
+    const ticket = {
+      id: 3,
+      status: "pending",
+      whatsappId: 2,
+      queueId: 6,
+      aiAgentId: 9,
+      userId: null,
+      aiPaused: true,
+      aiHandoff: false
+    };
+
+    expect(
+      shouldShowTicketInList({
+        ticket,
+        status: "pending",
+        selectedQueueIds: [],
+        selectedWhatsappIds: [],
+        profile: "admin",
+        showAll: true,
+        userId: 1,
+        superUser: true
+      })
+    ).toBe(true);
+  });
 });

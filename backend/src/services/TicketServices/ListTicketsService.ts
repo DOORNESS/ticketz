@@ -123,6 +123,25 @@ const ListTicketsService = async ({
     });
   }
 
+  // "Aguardando" is a human queue. An administrator may supervise every
+  // queue, but active AI tickets must still remain exclusively in the IA tab.
+  if (!isAiHandlingList && status === "pending") {
+    andedOrs.push({
+      [Op.or]: [
+        { aiAgentId: { [Op.is]: null } },
+        { aiPaused: true },
+        { userId: { [Op.ne]: null } },
+        {
+          aiHandoff: true,
+          [Op.or]: [
+            { aiHandoffMode: { [Op.ne]: "operational" } },
+            { aiHandoffMode: { [Op.is]: null } }
+          ]
+        }
+      ]
+    });
+  }
+
   const includeHandoffPendingWithoutQueue =
     status === "pending" && !isSupervision && !isAiHandlingList;
 

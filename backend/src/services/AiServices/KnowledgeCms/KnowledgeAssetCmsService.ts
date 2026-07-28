@@ -26,6 +26,8 @@ export type ListAssetsFilter = {
   categoryId?: number;
   lifecycleStatus?: KnowledgeLifecycleStatus;
   assetType?: KnowledgeAssetType;
+  compact?: boolean;
+  limit?: number;
 };
 
 export const listKnowledgeAssets = async (
@@ -46,12 +48,46 @@ export const listKnowledgeAssets = async (
     where.assetType = filter.assetType;
   }
 
+  const compactVersionAttributes = [
+    "id",
+    "ingestionStatus",
+    "errorMessage",
+    "chunkCount",
+    "createdAt"
+  ];
+
   return KnowledgeAsset.findAll({
     where,
+    ...(filter.compact
+      ? {
+          attributes: [
+            "id",
+            "knowledgeBaseId",
+            "categoryId",
+            "assetType",
+            "lifecycleStatus",
+            "publishedVersionId",
+            "currentVersionId",
+            "title",
+            "metadata",
+            "createdAt",
+            "updatedAt"
+          ]
+        }
+      : {}),
+    ...(filter.limit ? { limit: filter.limit } : {}),
     order: [["updatedAt", "DESC"]],
     include: [
-      { model: KnowledgeAssetVersion, as: "publishedVersion" },
-      { model: KnowledgeAssetVersion, as: "currentVersion" }
+      {
+        model: KnowledgeAssetVersion,
+        as: "publishedVersion",
+        ...(filter.compact ? { attributes: compactVersionAttributes } : {})
+      },
+      {
+        model: KnowledgeAssetVersion,
+        as: "currentVersion",
+        ...(filter.compact ? { attributes: compactVersionAttributes } : {})
+      }
     ]
   });
 };

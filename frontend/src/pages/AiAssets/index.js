@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import {
   Box,
   Button,
@@ -148,6 +154,8 @@ const AiAssets = () => {
   const [jobsAsset, setJobsAsset] = useState(null);
   const [rollbackOpen, setRollbackOpen] = useState(false);
   const [rollbackVersionId, setRollbackVersionId] = useState("");
+  const assetsRequestRunningRef = useRef(false);
+  const assetsReloadQueuedRef = useRef(false);
 
   const baseOptions = useMemo(() => {
     if (basesLoading) {
@@ -182,7 +190,11 @@ const AiAssets = () => {
   const loadBases = useCallback(async () => {
     setBasesLoading(true);
     try {
-      const { data } = await apiGetWithWarmupRetry("/ai/knowledge-bases");
+      const { data } = await apiGetWithWarmupRetry(
+        "/ai/knowledge-bases",
+        {},
+        2
+      );
       setBases((Array.isArray(data) ? data : []).filter(base => base.active));
     } catch (err) {
       toastError(err);
@@ -209,6 +221,12 @@ const AiAssets = () => {
   }, []);
 
   const loadAssets = useCallback(async () => {
+    if (assetsRequestRunningRef.current) {
+      assetsReloadQueuedRef.current = true;
+      return;
+    }
+
+    assetsRequestRunningRef.current = true;
     setLoading(true);
     try {
       const params = {};
@@ -218,13 +236,22 @@ const AiAssets = () => {
       if (filters.knowledgeBaseId) {
         params.knowledgeBaseId = filters.knowledgeBaseId;
       }
-      const { data } = await apiGetWithWarmupRetry("/ai/assets", { params });
+      const { data } = await apiGetWithWarmupRetry(
+        "/ai/assets",
+        { params },
+        2
+      );
       setAssets(Array.isArray(data) ? data : []);
     } catch (err) {
       toastError(err);
       setAssets([]);
     } finally {
+      assetsRequestRunningRef.current = false;
       setLoading(false);
+      if (assetsReloadQueuedRef.current) {
+        assetsReloadQueuedRef.current = false;
+        window.setTimeout(loadAssets, 0);
+      }
     }
   }, [filters.knowledgeBaseId, filters.lifecycleStatus]);
 
@@ -241,9 +268,20 @@ const AiAssets = () => {
   }, [createForm.knowledgeBaseId, loadCategories]);
 
   useEffect(() => {
-    const interval = setInterval(() => loadAssets(), 15000);
+    const hasActiveIngestion = assets.some(asset => {
+      const status =
+        asset.currentVersion?.ingestionStatus ||
+        asset.publishedVersion?.ingestionStatus;
+      return status === "pending" || status === "processing";
+    });
+
+    if (!hasActiveIngestion) {
+      return undefined;
+    }
+
+    const interval = setInterval(() => loadAssets(), 10000);
     return () => clearInterval(interval);
-  }, [loadAssets]);
+  }, [assets, loadAssets]);
 
   const resetCreateForm = () => {
     setCreateForm(defaultCreateForm);

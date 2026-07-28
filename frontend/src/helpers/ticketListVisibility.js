@@ -108,7 +108,7 @@ export const shouldShowTicketInList = ({
 
   if (bypassQueueScope) {
     if (status === "pending") {
-      return ticket.status === "pending";
+      return ticket.status === "pending" && !isAiHandlingTicket(ticket);
     }
 
     if (status === "open") {
