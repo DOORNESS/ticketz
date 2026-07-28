@@ -732,7 +732,7 @@ const ProcessInboundMessageService = async ({
         knowledgeBaseIds,
         userText,
         provider: agent.provider,
-        loadStrategy: "full"
+        loadStrategy: "auto"
       }),
       buildConversationHistory(ticket.id, 4),
       loadVerifiedMemoryForPrompt(companyId, ticket.contactId),
@@ -1074,7 +1074,7 @@ const ProcessInboundMessageService = async ({
           knowledgeBaseIds,
           userText,
           provider: agent.provider,
-          loadStrategy: "full"
+          loadStrategy: "auto"
         });
         const recovery = await chatCompletion(companyId, {
           model: agent.textModel,
