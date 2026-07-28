@@ -154,9 +154,37 @@ export const sendAiCustomerFallback = async ({
     }
   }
 
-  await deliverAiReply(ticket, body);
-  markSent?.();
-  await finalizeAiResponse(ticket, messageId);
+  let delivered = false;
+  try {
+    delivered = await deliverAiReply(ticket, body);
+    if (delivered) {
+      markSent?.();
+    } else {
+      logger.warn(
+        { ticketId: ticket.id, reason },
+        "AI customer fallback was not delivered to WhatsApp"
+      );
+    }
+  } catch (error) {
+    logger.error(
+      { error, ticketId: ticket.id, reason },
+      "AI customer fallback delivery failed"
+    );
+  } finally {
+    try {
+      await finalizeAiResponse(ticket, messageId);
+    } catch (finalizeError) {
+      logger.warn(
+        { finalizeError, ticketId: ticket.id },
+        "Failed to finalize AI state after customer fallback"
+      );
+    }
+  }
+
+  if (!delivered) {
+    return;
+  }
+
   await persistAiDecisionLog({
     companyId,
     ticketId: ticket.id,

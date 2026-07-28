@@ -85,7 +85,7 @@ export const tryEngageAiOnInboundMessage = async ({
 
   if (processingState === "processing" || lockExists) {
     const stalledMs = Date.now() - new Date(ticket.updatedAt).getTime();
-    if (stalledMs > 45000) {
+    if (stalledMs > 20000) {
       await redis.del(`ai:lock:${ticket.id}`);
       await ticket.update({ aiProcessingState: "awaiting_customer" } as never);
       await ticket.reload();

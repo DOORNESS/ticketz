@@ -6,6 +6,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.78] — 2026-07-28
+
+### Corrigido (silêncio IA + copiloto supervisão)
+
+- **`sendAiWhatsAppReply`** — erros WhatsApp propagados; duplicata recente tratada como entrega ok.
+- **`WhatsAppAiTurnService`** — só marca turno enviado após WhatsApp confirmar; `finalizeAiResponse` sempre no `finally`.
+- **`sendAiCustomerFallback`** — libera `aiProcessingState` mesmo se WhatsApp falhar (evita ticket preso em `processing`).
+- **`AiCopilotService`** — fallback local da marca quando LLM falha; supervisão com ticket IA sem `userId`.
+- **Fila IA** — lock stale liberado em 12–25s (antes 20–45s).
+- **Frontend** — “Sugerir resposta” funciona em modo observação (supervisão).
+
+---
+
 ## [1.5.77] — 2026-07-28
 
 ### Refatorado (WhatsApp IA — padrão refeito)

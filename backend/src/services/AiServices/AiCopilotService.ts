@@ -13,6 +13,7 @@ import { searchRepositoryForAi } from "../ContentRepository/ContentRepositorySer
 import { getIO } from "../../libs/socket";
 import { logger } from "../../utils/logger";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
+import { resolveBrandFallback } from "./InformationalDirectReplyService";
 
 export type CopilotStyle =
   | "default"
@@ -116,9 +117,102 @@ export const shouldRunCopilot = (ticket: Ticket): boolean =>
 
 const canRunSupervisionCopilot = (ticket: Ticket): boolean =>
   isAiFeaturesEnabled() &&
-  Boolean(ticket.aiAgentId || ticket.aiStartedAt) &&
+  Boolean(ticket.aiAgentId || ticket.aiStartedAt || ticket.aiHandoff) &&
   !ticket.userId &&
   ticket.status !== "closed";
+
+type CopilotPayload = {
+  suggestedResponse: string;
+  improvedResponse: string;
+  rationale: string;
+  relatedDocument: string;
+  nextSteps: string;
+  riskAssessment: string;
+  customerSentiment: string;
+  confidence: number;
+};
+
+const buildBrandCopilotFallback = (
+  agent: AiAgent,
+  userText: string
+): CopilotPayload => ({
+  suggestedResponse: resolveBrandFallback(agent, userText),
+  improvedResponse: "",
+  rationale:
+    "Sugestão local gerada porque o provedor de IA não respondeu. Revise antes de enviar.",
+  relatedDocument: "",
+  nextSteps: "Confirmar WhatsApp conectado e chave do provedor de IA.",
+  riskAssessment: "Cliente pode estar aguardando resposta.",
+  customerSentiment: "neutro",
+  confidence: 0.35
+});
+
+const persistCopilotSuggestion = async ({
+  ticket,
+  payload,
+  knowledgeContext,
+  repositoryMatches
+}: {
+  ticket: Ticket;
+  payload: CopilotPayload;
+  knowledgeContext: Awaited<ReturnType<typeof buildKnowledgeContextForQuery>>;
+  repositoryMatches: Awaited<ReturnType<typeof searchRepositoryForAi>>;
+}): Promise<AiCopilotSuggestion> => {
+  const topSimilarity = knowledgeContext.usedChunks[0]?.similarity || 0;
+  const confidence = Math.max(payload.confidence, topSimilarity);
+
+  await AiCopilotSuggestion.update(
+    { status: "superseded" },
+    {
+      where: {
+        ticketId: ticket.id,
+        companyId: ticket.companyId,
+        status: "pending"
+      }
+    }
+  );
+
+  const suggestion = await AiCopilotSuggestion.create({
+    companyId: ticket.companyId,
+    ticketId: ticket.id,
+    suggestedResponse: payload.suggestedResponse,
+    improvedResponse: payload.improvedResponse,
+    rationale: payload.rationale,
+    relatedDocument: payload.relatedDocument,
+    nextSteps: payload.nextSteps,
+    riskAssessment: payload.riskAssessment,
+    customerSentiment: payload.customerSentiment,
+    usedChunks: [
+      ...knowledgeContext.usedChunks,
+      ...repositoryMatches.map(item => ({
+        documentTitle: item.displayTitle || item.name,
+        topic: `Repositório #${item.id}`,
+        similarity: 0.5,
+        source: "repository"
+      }))
+    ],
+    confidence,
+    status: "pending"
+  });
+
+  try {
+    const io = getIO();
+    io.to(ticket.id.toString())
+      .to(`company-${ticket.companyId}-mainchannel`)
+      .emit(`company-${ticket.companyId}-ai-copilot`, {
+        action: "update",
+        ticketId: ticket.id,
+        suggestion
+      });
+  } catch (emitError) {
+    logger.warn(
+      { emitError, ticketId: ticket.id },
+      "Failed to emit copilot suggestion update"
+    );
+  }
+
+  return suggestion;
+};
 
 export const generateCopilotSuggestion = async ({
   ticket,
@@ -215,103 +309,64 @@ export const generateCopilotSuggestion = async ({
 
     const stylePrompt = STYLE_PROMPTS[style] || STYLE_PROMPTS.default;
 
-    const completion = await chatCompletion(ticket.companyId, {
-      model: activeAgent.textModel,
-      temperature: 0.3,
-      maxTokens: 700,
-      providerId: activeAgent.provider,
-      messages: [
-        { role: "system", content: buildCopilotSystemPrompt(activeAgent) },
-        {
-          role: "user",
-          content: [
-            `Histórico:\n${history}`,
-            `Base de conhecimento:\n${knowledgeContext.contextBlock || "sem contexto"}`,
-            `Repositório (materiais disponíveis):\n${repositoryBlock}`,
-            `Estilo solicitado: ${stylePrompt}`,
-            instruction
-              ? `Instrução do atendente:\n${instruction}`
-              : "Gere sugestão para a última mensagem do cliente."
-          ].join("\n\n")
-        }
-      ]
-    });
-
-    const parsed = parseCopilotJson(completion.content || "");
-    const fallbackText = (completion.content || "").trim();
-    const parsedOrFallback =
-      parsed ||
-      (fallbackText
-        ? {
-            suggestedResponse: fallbackText.slice(0, 2000),
-            improvedResponse: "",
-            rationale: "Resposta gerada sem JSON estruturado.",
-            relatedDocument: "",
-            nextSteps: "",
-            riskAssessment: "",
-            customerSentiment: "",
-            confidence: 0.5
-          }
-        : null);
-
-    if (!parsedOrFallback) {
-      return null;
-    }
-
-    const topSimilarity = knowledgeContext.usedChunks[0]?.similarity || 0;
-    const confidence = Math.max(parsedOrFallback.confidence, topSimilarity);
-
-    await AiCopilotSuggestion.update(
-      { status: "superseded" },
-      {
-        where: {
-          ticketId: ticket.id,
-          companyId: ticket.companyId,
-          status: "pending"
-        }
-      }
-    );
-
-    const suggestion = await AiCopilotSuggestion.create({
-      companyId: ticket.companyId,
-      ticketId: ticket.id,
-      suggestedResponse: parsedOrFallback.suggestedResponse,
-      improvedResponse: parsedOrFallback.improvedResponse,
-      rationale: parsedOrFallback.rationale,
-      relatedDocument: parsedOrFallback.relatedDocument,
-      nextSteps: parsedOrFallback.nextSteps,
-      riskAssessment: parsedOrFallback.riskAssessment,
-      customerSentiment: parsedOrFallback.customerSentiment,
-      usedChunks: [
-        ...knowledgeContext.usedChunks,
-        ...repositoryMatches.map(item => ({
-          documentTitle: item.displayTitle || item.name,
-          topic: `Repositório #${item.id}`,
-          similarity: 0.5,
-          source: "repository"
-        }))
-      ],
-      confidence,
-      status: "pending"
-    });
+    let parsedOrFallback: CopilotPayload | null = null;
 
     try {
-      const io = getIO();
-      io.to(ticket.id.toString())
-        .to(`company-${ticket.companyId}-mainchannel`)
-        .emit(`company-${ticket.companyId}-ai-copilot`, {
-          action: "update",
-          ticketId: ticket.id,
-          suggestion
-        });
-    } catch (emitError) {
+      const completion = await chatCompletion(ticket.companyId, {
+        model: activeAgent.textModel,
+        temperature: 0.3,
+        maxTokens: 700,
+        providerId: activeAgent.provider,
+        messages: [
+          { role: "system", content: buildCopilotSystemPrompt(activeAgent) },
+          {
+            role: "user",
+            content: [
+              `Histórico:\n${history}`,
+              `Base de conhecimento:\n${knowledgeContext.contextBlock || "sem contexto"}`,
+              `Repositório (materiais disponíveis):\n${repositoryBlock}`,
+              `Estilo solicitado: ${stylePrompt}`,
+              instruction
+                ? `Instrução do atendente:\n${instruction}`
+                : "Gere sugestão para a última mensagem do cliente."
+            ].join("\n\n")
+          }
+        ]
+      });
+
+      const parsed = parseCopilotJson(completion.content || "");
+      const fallbackText = (completion.content || "").trim();
+      parsedOrFallback =
+        parsed ||
+        (fallbackText
+          ? {
+              suggestedResponse: fallbackText.slice(0, 2000),
+              improvedResponse: "",
+              rationale: "Resposta gerada sem JSON estruturado.",
+              relatedDocument: "",
+              nextSteps: "",
+              riskAssessment: "",
+              customerSentiment: "",
+              confidence: 0.5
+            }
+          : null);
+    } catch (completionError) {
       logger.warn(
-        { emitError, ticketId: ticket.id },
-        "Failed to emit copilot suggestion update"
+        { completionError, ticketId: ticket.id },
+        "Copilot LLM failed — using brand fallback suggestion"
       );
     }
 
-    return suggestion;
+    if (!parsedOrFallback) {
+      parsedOrFallback = buildBrandCopilotFallback(activeAgent, userText);
+    }
+
+    return persistCopilotSuggestion({
+      ticket,
+      payload: parsedOrFallback,
+      knowledgeContext,
+      repositoryMatches
+    });
   } catch (error) {
     if (error instanceof AppError) {
       throw error;

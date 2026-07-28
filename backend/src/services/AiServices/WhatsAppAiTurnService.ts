@@ -1,6 +1,7 @@
 import Ticket from "../../models/Ticket";
 import AiAgent from "../../models/AiAgent";
 import Message from "../../models/Message";
+import AppError from "../../errors/AppError";
 import { deliverAiReply } from "./sendAiWhatsAppReply";
 import { tryInformationalDirectReply } from "./InformationalDirectReplyService";
 import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
@@ -13,6 +14,7 @@ import {
   isPureGreetingMessage
 } from "./Triage/CaseCompletenessEngine";
 import { findUnansweredCustomerQuestion } from "./WhatsAppCustomerTurnResolver";
+import { logger } from "../../utils/logger";
 
 export type WhatsAppTurnInput = {
   companyId: number;
@@ -40,6 +42,7 @@ const alreadyBotGreeted = async (ticketId: number): Promise<boolean> => {
   return (
     body.includes("nivelton") ||
     body.includes("como posso ajudar") ||
+    body.includes("em que posso ajudar") ||
     body.includes("nível cashback") ||
     body.includes("nivel cashback")
   );
@@ -60,6 +63,64 @@ export const buildFastGreetingReply = async (
 
 const maskForLog = (text: string): string =>
   text.replace(/\b\d{3}\.\d{3}\.\d{3}-\d{2}\b/g, "[CPF]");
+
+const completeTurnDelivery = async ({
+  companyId,
+  ticket,
+  messageId,
+  userText,
+  replyBody,
+  reason,
+  markSent,
+  details
+}: {
+  companyId: number;
+  ticket: Ticket;
+  messageId?: string;
+  userText: string;
+  replyBody: string;
+  reason: string;
+  markSent?: () => void;
+  details?: Record<string, unknown>;
+}): Promise<void> => {
+  let delivered = false;
+
+  try {
+    delivered = await deliverAiReply(ticket, replyBody);
+    if (!delivered) {
+      throw new AppError("ERR_SENDING_WAPP_MSG", 400);
+    }
+    markSent?.();
+  } finally {
+    try {
+      await finalizeAiResponse(ticket, messageId);
+    } catch (finalizeError) {
+      logger.warn(
+        { finalizeError, ticketId: ticket.id },
+        "Failed to finalize AI state after WhatsApp turn"
+      );
+    }
+  }
+
+  if (!delivered) {
+    throw new AppError("ERR_SENDING_WAPP_MSG", 400);
+  }
+
+  await ticket.reload({
+    include: ["contact", "queue", "whatsapp", "user"]
+  });
+  websocketUpdateTicket(ticket);
+  await persistAiDecisionLog({
+    companyId,
+    ticketId: ticket.id,
+    messageId,
+    action: "respond",
+    reason,
+    userMessage: maskForLog(userText),
+    aiResponse: replyBody,
+    details
+  });
+};
 
 /**
  * Caminho principal WhatsApp: saudação rápida ou resposta informativa direta.
@@ -84,21 +145,14 @@ export const runWhatsAppAiTurn = async ({
 
   if (pureGreeting && !unanswered) {
     const greetingReply = await buildFastGreetingReply(ticket.id);
-    await deliverAiReply(ticket, greetingReply);
-    markSent?.();
-    await finalizeAiResponse(ticket, messageId);
-    await ticket.reload({
-      include: ["contact", "queue", "whatsapp", "user"]
-    });
-    websocketUpdateTicket(ticket);
-    await persistAiDecisionLog({
+    await completeTurnDelivery({
       companyId,
-      ticketId: ticket.id,
+      ticket,
       messageId,
-      action: "respond",
+      userText: trimmed,
+      replyBody: greetingReply,
       reason: "fast_greeting_reply",
-      userMessage: maskForLog(trimmed),
-      aiResponse: greetingReply
+      markSent
     });
     return "greeting";
   }
@@ -117,21 +171,14 @@ export const runWhatsAppAiTurn = async ({
       ? NIVEL_INFORMATIONAL_FALLBACK
       : GENERIC_FALLBACK);
 
-  await deliverAiReply(ticket, replyBody);
-  markSent?.();
-  await finalizeAiResponse(ticket, messageId);
-  await ticket.reload({
-    include: ["contact", "queue", "whatsapp", "user"]
-  });
-  websocketUpdateTicket(ticket);
-  await persistAiDecisionLog({
+  await completeTurnDelivery({
     companyId,
-    ticketId: ticket.id,
+    ticket,
     messageId,
-    action: "respond",
+    userText: trimmed,
+    replyBody,
     reason: direct.reason || "whatsapp_ai_turn",
-    userMessage: maskForLog(trimmed),
-    aiResponse: replyBody,
+    markSent,
     details: {
       knowledgeBaseIds: direct.knowledgeBaseIds,
       chunks: direct.chunkCount,

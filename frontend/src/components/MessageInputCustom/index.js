@@ -1132,7 +1132,8 @@ const MessageInputCustom = forwardRef((props, ref) => {
   };
 
   const handleSuggestReply = async () => {
-    if (!ticket?.id || disableOption) return;
+    if (!ticket?.id) return;
+    if (disableOption && !props.observationMode) return;
     setSuggestLoading(true);
     try {
       const { data } = await api.post(`/tickets/${ticket.id}/ai/copilot`, {

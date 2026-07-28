@@ -2,6 +2,8 @@ import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import formatBody from "../../helpers/Mustache";
+import AppError from "../../errors/AppError";
+import { logger } from "../../utils/logger";
 
 const DUPLICATE_WINDOW_MS = 120000;
 
@@ -29,17 +31,27 @@ export const sendAiWhatsAppReply = async ({
     if (lastOutbound?.body?.trim() === normalized) {
       const ageMs = Date.now() - new Date(lastOutbound.createdAt).getTime();
       if (ageMs < DUPLICATE_WINDOW_MS) {
-        return false;
+        return true;
       }
     }
   }
 
-  await SendWhatsAppMessage({
-    body: formatBody(normalized, ticket),
-    ticket
-  });
-
-  return true;
+  try {
+    await SendWhatsAppMessage({
+      body: formatBody(normalized, ticket),
+      ticket
+    });
+    return true;
+  } catch (error) {
+    logger.error(
+      { error, ticketId: ticket.id },
+      "sendAiWhatsAppReply failed"
+    );
+    if (error instanceof AppError) {
+      throw error;
+    }
+    throw new AppError("ERR_SENDING_WAPP_MSG", 400);
+  }
 };
 
 /** Envia resposta ao cliente; repete com skip de duplicata se necessário. */

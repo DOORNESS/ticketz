@@ -76,7 +76,7 @@ const buildConversationHistory = async (
     }));
 };
 
-const resolveBrandFallback = (agent: AiAgent, userText = ""): string => {
+export const resolveBrandFallback = (agent: AiAgent, userText = ""): string => {
   const combined =
     `${agent.name || ""} ${agent.basePrompt || ""} ${userText}`.toLowerCase();
   if (

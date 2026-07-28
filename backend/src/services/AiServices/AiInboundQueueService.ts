@@ -296,13 +296,13 @@ const clearStaleAiLockIfNeeded = async (
   const processingState = (ticket as { aiProcessingState?: string })
     .aiProcessingState;
 
-  if (processingState === "processing" && stalledMs > 45000) {
+  if (processingState === "processing" && stalledMs > 25000) {
     await redis.del(key);
     await ticket.update({ aiProcessingState: "awaiting_customer" } as never);
     return true;
   }
 
-  if (processingState === "processing" && stalledMs > 20000) {
+  if (processingState === "processing" && stalledMs > 12000) {
     await redis.del(key);
     return true;
   }
