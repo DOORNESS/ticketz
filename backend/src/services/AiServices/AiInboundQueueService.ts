@@ -21,6 +21,7 @@ import {
 import { persistAiDecisionLog } from "./AiDecisionLogger";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import formatBody from "../../helpers/Mustache";
+import { isRemovableDebounceJobState } from "./AiInboundQueueJobState";
 
 export type AiInboundPayload = {
   companyId: number;
@@ -208,8 +209,12 @@ const scheduleDebouncedJob = async (
 
   if (existingJob) {
     const state = await existingJob.getState();
-    if (state === "delayed" || state === "waiting") {
+    if (isRemovableDebounceJobState(state)) {
       await existingJob.remove();
+      logger.info(
+        { companyId, ticketId, queueId: jobId, state },
+        "Removed existing AI debounce job before scheduling"
+      );
     }
   }
 
