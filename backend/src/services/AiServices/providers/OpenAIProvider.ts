@@ -25,6 +25,14 @@ const parsePositiveInt = (
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 };
 
+export const normalizeChatTemperature = (value: number | undefined): number => {
+  if (!Number.isFinite(value) || value! < 0 || value! > 2) {
+    return 0.3;
+  }
+
+  return value!;
+};
+
 export class OpenAIProvider implements AIProvider {
   readonly id: AIProviderId;
 
@@ -88,7 +96,7 @@ export class OpenAIProvider implements AIProvider {
       model: params.model,
       messages:
         requestMessages as OpenAI.Chat.Completions.ChatCompletionMessageParam[],
-      temperature: params.temperature ?? 0.3,
+      temperature: normalizeChatTemperature(params.temperature),
       max_tokens: params.maxTokens ?? 1024,
       ...(tools
         ? {

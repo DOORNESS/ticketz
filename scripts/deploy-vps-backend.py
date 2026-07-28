@@ -98,6 +98,7 @@ PATCH_PATHS = [
     "services/CompanyService/VerifyCurrentSchedule.js",
     "services/MigrationServices/ApplyAiSchemaService.js",
     "services/MigrationServices/MigrationService.js",
+    "services/AiServices/providers/OpenAIProvider.js",
     "services/AiServices/AudioTranscriptionService.js",
     "services/AiServices/AudioPipelineLogger.js",
     "services/AiServices/MediaInboundResolver.js",
