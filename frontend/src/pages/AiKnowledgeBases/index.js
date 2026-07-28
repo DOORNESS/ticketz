@@ -155,7 +155,7 @@ const AiKnowledgeBases = () => {
       ]);
       setBases(Array.isArray(kbData) ? kbData : []);
       setDomains(Array.isArray(domainData) ? domainData : []);
-      await loadAssetCounts();
+      void loadAssetCounts();
     } catch (err) {
       toastError(err);
     }

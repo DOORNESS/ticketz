@@ -38,11 +38,16 @@ const AiSuggestAnnexDialog = ({
 
     try {
       setAnnexing(true);
-      await api.post(`/tickets/${ticketId}/ai/annex-response`, {
-        title: title.trim() || `Resposta ticket #${ticketId}`,
-        content: content.trim()
-      });
-      toast.success('Resposta anexada à base "Respostas anexas"');
+      const { data } = await api.post(
+        `/tickets/${ticketId}/ai/annex-response`,
+        {
+          title: title.trim() || `Resposta ticket #${ticketId}`,
+          content: content.trim()
+        }
+      );
+      toast.success(
+        `Base "${data?.base?.name || "Respostas anexas"}" atualizada no ativo "Histórico de respostas validadas".`
+      );
       onClose();
     } catch (err) {
       toastError(err);

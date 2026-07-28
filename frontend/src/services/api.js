@@ -4,17 +4,23 @@ import { isApiWarmupError } from "../helpers/apiWarmup";
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-const API_TIMEOUT_MS = 45000;
-const MAX_API_RETRIES = 8;
+const API_TIMEOUT_MS = 20000;
+const MAX_API_RETRIES = 2;
 
 const attachRetryInterceptor = client => {
   client.interceptors.response.use(
     response => response,
     async error => {
       const originalRequest = error.config;
+      if (originalRequest?._skipApiRetry) {
+        return Promise.reject(error);
+      }
+      const method = String(originalRequest?.method || "get").toLowerCase();
+      const isSafeRead = method === "get" || method === "head";
       const status = error?.response?.status;
       const retryCount = originalRequest?._apiRetryCount || 0;
       const retryable =
+        isSafeRead &&
         retryCount < MAX_API_RETRIES &&
         (isApiWarmupError(error) ||
           status === 503 ||
@@ -28,7 +34,7 @@ const attachRetryInterceptor = client => {
       }
 
       originalRequest._apiRetryCount = retryCount + 1;
-      await sleep(2000 * originalRequest._apiRetryCount);
+      await sleep(750 * originalRequest._apiRetryCount);
       return client(originalRequest);
     }
   );

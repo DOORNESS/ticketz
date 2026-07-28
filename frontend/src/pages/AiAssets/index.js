@@ -46,7 +46,6 @@ import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import api from "../../services/api";
-import { apiGetWithWarmupRetry } from "../../helpers/fetchWithWarmupRetry";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
 import { useAiPageStyles } from "../../components/Ai/shared";
@@ -190,11 +189,10 @@ const AiAssets = () => {
   const loadBases = useCallback(async () => {
     setBasesLoading(true);
     try {
-      const { data } = await apiGetWithWarmupRetry(
-        "/ai/knowledge-bases",
-        {},
-        2
-      );
+      const { data } = await api.get("/ai/knowledge-bases", {
+        timeout: 15000,
+        _skipApiRetry: true
+      });
       setBases((Array.isArray(data) ? data : []).filter(base => base.active));
     } catch (err) {
       toastError(err);
@@ -236,11 +234,11 @@ const AiAssets = () => {
       if (filters.knowledgeBaseId) {
         params.knowledgeBaseId = filters.knowledgeBaseId;
       }
-      const { data } = await apiGetWithWarmupRetry(
-        "/ai/assets",
-        { params },
-        2
-      );
+      const { data } = await api.get("/ai/assets", {
+        params,
+        timeout: 15000,
+        _skipApiRetry: true
+      });
       setAssets(Array.isArray(data) ? data : []);
     } catch (err) {
       toastError(err);
@@ -939,7 +937,7 @@ const AiAssets = () => {
                           <Edit />
                         </IconButton>
                       </Tooltip>
-                      {["word", "pdf", "document"].includes(
+                      {["word", "pdf", "document", "markdown", "text"].includes(
                         asset.assetType
                       ) && (
                         <Tooltip title="Baixar anexo">

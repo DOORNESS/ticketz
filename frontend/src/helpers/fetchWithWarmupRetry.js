@@ -15,15 +15,19 @@ const isRetryableError = error => {
   );
 };
 
-export async function apiGetWithWarmupRetry(url, config = {}, maxRetries = 10) {
+export async function apiGetWithWarmupRetry(url, config = {}, maxRetries = 1) {
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
-      return await api.get(url, config);
+      return await api.get(url, {
+        ...config,
+        timeout: config.timeout || 15000,
+        _skipApiRetry: true
+      });
     } catch (error) {
       if (!isRetryableError(error) || attempt >= maxRetries) {
         throw error;
       }
-      await sleep(2500);
+      await sleep(750);
     }
   }
 

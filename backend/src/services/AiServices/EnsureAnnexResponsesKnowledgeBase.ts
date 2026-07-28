@@ -35,7 +35,7 @@ const BRAND_CONFIG: Record<
   },
   default: {
     slug: "respostas-anexas",
-    domainNames: ["nivel cashback", "fortmax", "suporte"],
+    domainNames: [],
     agentNames: []
   }
 };
@@ -89,11 +89,17 @@ export const ensureAnnexResponsesKnowledgeBase = async (
   const config = BRAND_CONFIG[brand];
 
   const domain =
-    (await findByNameLoose(KnowledgeDomain, companyId, config.domainNames)) ||
-    (await KnowledgeDomain.findOne({
-      where: { companyId, active: true },
-      order: [["sortOrder", "ASC"]]
-    }));
+    brand === "default"
+      ? null
+      : (await findByNameLoose(
+          KnowledgeDomain,
+          companyId,
+          config.domainNames
+        )) ||
+        (await KnowledgeDomain.findOne({
+          where: { companyId, active: true },
+          order: [["sortOrder", "ASC"]]
+        }));
 
   let base = await KnowledgeBase.findOne({
     where: {
@@ -117,7 +123,9 @@ export const ensureAnnexResponsesKnowledgeBase = async (
     if (!base.active) {
       updates.active = true;
     }
-    if (!base.knowledgeDomainId && domain?.id) {
+    if (brand === "default" && base.knowledgeDomainId) {
+      updates.knowledgeDomainId = null;
+    } else if (!base.knowledgeDomainId && domain?.id) {
       updates.knowledgeDomainId = domain.id;
     }
     if (base.slug !== config.slug) {
@@ -151,19 +159,49 @@ export const ensureAnnexResponsesKnowledgeBase = async (
         })
       : agents;
 
+  const legacyBases =
+    brand === "default"
+      ? await KnowledgeBase.findAll({
+          where: {
+            companyId,
+            slug: {
+              [Op.in]: [
+                BRAND_CONFIG.nivel.slug,
+                BRAND_CONFIG.fortmax.slug
+              ]
+            }
+          },
+          attributes: ["id"]
+        })
+      : [];
+  const legacyBaseIds = legacyBases.map(item => item.id);
+
   await Promise.all(
     targetAgents.map(async agent => {
       const linkedIds = await listAgentKnowledgeBaseIds(companyId, agent.id);
-      if (linkedIds.includes(base.id)) {
+      const consolidatedIds = linkedIds.filter(
+        id => !legacyBaseIds.includes(id)
+      );
+      if (
+        consolidatedIds.includes(base.id) &&
+        consolidatedIds.length === linkedIds.length
+      ) {
         return;
       }
       await syncAgentKnowledgeBases({
         companyId,
         aiAgentId: agent.id,
-        knowledgeBaseIds: [...linkedIds, base.id]
+        knowledgeBaseIds: Array.from(new Set([...consolidatedIds, base.id]))
       });
     })
   );
+
+  if (legacyBaseIds.length) {
+    await KnowledgeBase.update(
+      { active: false },
+      { where: { companyId, id: { [Op.in]: legacyBaseIds } } }
+    );
+  }
 
   return base;
 };
@@ -202,8 +240,5 @@ export const ensureAnnexCategoryId = async (
 export const ensureAllAnnexResponsesKnowledgeBases = async (
   companyId: number
 ): Promise<void> => {
-  await Promise.all([
-    ensureAnnexResponsesKnowledgeBase(companyId, "nivel"),
-    ensureAnnexResponsesKnowledgeBase(companyId, "fortmax")
-  ]);
+  await ensureAnnexResponsesKnowledgeBase(companyId, "default");
 };
