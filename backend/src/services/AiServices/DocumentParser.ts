@@ -1,8 +1,7 @@
 import fs from "fs";
 import path from "path";
 import mammoth from "mammoth";
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const pdfParse = require("pdf-parse");
+import { PDFParse } from "pdf-parse";
 
 export const extractTextFromBuffer = async (
   buffer: Buffer,
@@ -12,8 +11,15 @@ export const extractTextFromBuffer = async (
   const ext = (filename || "").split(".").pop()?.toLowerCase() || type;
 
   if (ext === "pdf" || type === "pdf") {
-    const parsed = await pdfParse(buffer);
-    return parsed.text || "";
+    const data = new Uint8Array(buffer.byteLength);
+    data.set(buffer);
+    const parser = new PDFParse({ data });
+    try {
+      const parsed = await parser.getText();
+      return parsed.text || "";
+    } finally {
+      await parser.destroy();
+    }
   }
 
   if (ext === "docx" || type === "docx" || type === "word") {
