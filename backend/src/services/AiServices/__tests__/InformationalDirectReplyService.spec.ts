@@ -1,4 +1,5 @@
 import { tryInformationalDirectReply } from "../InformationalDirectReplyService";
+import * as withAiTimeoutModule from "../withAiTimeout";
 import {
   isInformationalIntent,
   isShortHelpRequest,
@@ -158,6 +159,28 @@ describe("InformationalDirectReplyService", () => {
     expect(result.reason).toBe("informational_brand_fallback");
     expect(result.body).toMatch(/Nível Cashback/i);
     expect(result.body).not.toMatch(/base deste canal ainda está limitada/i);
+  });
+
+  it("uses brand fallback when knowledge lookup times out", async () => {
+    jest.spyOn(withAiTimeoutModule, "withAiTimeout").mockImplementationOnce(
+      async () => {
+        throw new withAiTimeoutModule.AiOperationTimeoutError(
+          "informational_knowledge_lookup",
+          8000
+        );
+      }
+    );
+
+    const result = await tryInformationalDirectReply({
+      companyId: 1,
+      ticket,
+      agent,
+      userText: "para que serve nível em minha empresa?"
+    });
+
+    expect(result.replied).toBe(true);
+    expect(result.reason).toBe("informational_brand_fallback");
+    expect(result.body).toMatch(/Nível Cashback/i);
   });
 
   it("always replies even when model returns almost nothing", async () => {

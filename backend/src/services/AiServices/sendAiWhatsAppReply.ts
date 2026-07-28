@@ -22,15 +22,27 @@ export const sendAiWhatsAppReply = async ({
   }
 
   if (!skipDuplicateCheck) {
-    const lastOutbound = await Message.findOne({
-      where: { ticketId: ticket.id, fromMe: true },
-      order: [["createdAt", "DESC"]],
-      attributes: ["body", "createdAt"]
-    });
+    const [lastOutbound, lastInbound] = await Promise.all([
+      Message.findOne({
+        where: { ticketId: ticket.id, fromMe: true },
+        order: [["createdAt", "DESC"]],
+        attributes: ["body", "createdAt"]
+      }),
+      Message.findOne({
+        where: { ticketId: ticket.id, fromMe: false },
+        order: [["createdAt", "DESC"]],
+        attributes: ["createdAt"]
+      })
+    ]);
 
     if (lastOutbound?.body?.trim() === normalized) {
       const ageMs = Date.now() - new Date(lastOutbound.createdAt).getTime();
-      if (ageMs < DUPLICATE_WINDOW_MS) {
+      const inboundAfterOutbound =
+        lastInbound &&
+        new Date(lastInbound.createdAt).getTime() >
+          new Date(lastOutbound.createdAt).getTime();
+
+      if (ageMs < DUPLICATE_WINDOW_MS && !inboundAfterOutbound) {
         return true;
       }
     }
@@ -43,10 +55,7 @@ export const sendAiWhatsAppReply = async ({
     });
     return true;
   } catch (error) {
-    logger.error(
-      { error, ticketId: ticket.id },
-      "sendAiWhatsAppReply failed"
-    );
+    logger.error({ error, ticketId: ticket.id }, "sendAiWhatsAppReply failed");
     if (error instanceof AppError) {
       throw error;
     }

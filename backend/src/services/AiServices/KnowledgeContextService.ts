@@ -405,13 +405,15 @@ export const buildKnowledgeContextForQuery = async ({
   knowledgeBaseIds,
   userText,
   provider,
-  loadStrategy = "auto"
+  loadStrategy = "auto",
+  skipReingest = false
 }: {
   companyId: number;
   knowledgeBaseIds: number[];
   userText: string;
   provider?: string;
   loadStrategy?: "auto" | "full";
+  skipReingest?: boolean;
 }): Promise<KnowledgeContextResult> => {
   const expandedKnowledgeBaseIds = await expandKnowledgeBaseIdsByDomain(
     companyId,
@@ -450,7 +452,7 @@ export const buildKnowledgeContextForQuery = async ({
 
   let reingestedDocuments = 0;
 
-  if (readyCount + cmsPublishedChunkCount === 0) {
+  if (!skipReingest && readyCount + cmsPublishedChunkCount === 0) {
     reingestedDocuments = await reingestPendingDocuments(
       companyId,
       expandedKnowledgeBaseIds

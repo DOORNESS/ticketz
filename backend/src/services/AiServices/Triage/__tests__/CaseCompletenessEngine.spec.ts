@@ -60,6 +60,8 @@ describe("CaseCompletenessEngine", () => {
     expect(isShortHelpRequest("pode me ajudar agora ?")).toBe(true);
     expect(isShortHelpRequest("consegue me ajudar agora?")).toBe(true);
     expect(isShortHelpRequest("teste")).toBe(true);
+    expect(isShortHelpRequest("Oi, podes me ajudar?")).toBe(true);
+    expect(isShortHelpRequest("Olá, pode me ajudar?")).toBe(true);
     expect(isShortHelpRequest("Como funciona o Nível?")).toBe(false);
     expect(isWaitingForBotNudge("cade vc robozinho ?")).toBe(true);
     expect(isWaitingForBotNudge("por que nao respode ?")).toBe(true);

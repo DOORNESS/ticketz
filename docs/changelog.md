@@ -6,6 +6,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.79] — 2026-07-28
+
+### Corrigido (2º turno IA travando — timeout + dedupe WhatsApp)
+
+- **`InformationalDirectReplyService`** — timeout em busca na base (8s) e LLM (18s); sem reingest síncrono no caminho rápido WhatsApp.
+- **`WhatsAppAiTurnService`** — timeout total de 25s no turno informativo com fallback imediato da Nível.
+- **`sendAiWhatsAppReply`** — dedupe só quando não há mensagem nova do cliente após a última resposta (evita silêncio no 2º turno).
+- **`CaseCompletenessEngine`** — *"Oi, podes me ajudar?"* reconhecido como pedido curto de ajuda (caminho direto, sem LLM pesado).
+- **`withAiTimeout`** — utilitário compartilhado para operações IA com limite de tempo.
+
+---
+
 ## [1.5.78] — 2026-07-28
 
 ### Corrigido (silêncio IA + copiloto supervisão)

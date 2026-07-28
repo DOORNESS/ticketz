@@ -208,11 +208,14 @@ export const pickPrimaryCustomerText = (parts: string[]): string => {
 export const isPureGreetingMessage = (text: string): boolean =>
   PURE_GREETING_PATTERNS.some(pattern => pattern.test(text.trim()));
 
+const SHORT_HELP_PREFIX =
+  /^\s*(?:(?:oi|ol[aá]|bom dia|boa tarde|boa noite|e a[ií]|tudo bem)\s*[,!.]?\s*)*/i;
+
 const SHORT_HELP_PATTERNS = [
   /^\s*pode ajudar\s*\??\s*$/i,
-  /^\s*pode me ajudar(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,
+  /^\s*pode?s?\s+me\s+ajudar(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,
   /^\s*pode me ajj?dar(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,
-  /^\s*(?:vc|voc[eê])\s+pode me ajudar(?:\s+agora)?\s*\??\s*$/i,
+  /^\s*(?:vc|voc[eê])\s+pode?s?\s+me\s+ajudar(?:\s+agora)?\s*\??\s*$/i,
   /^\s*(?:me\s+)?ajud(?:a|ar|e)(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,
   /^\s*preciso de ajuda(?:\s+(?:agora|j[aá]))*\s*\??\s*$/i,
   /^\s*me ajuda(?:\s+(?:agora|j[aá]|por favor))*\s*\??\s*$/i,
@@ -220,6 +223,24 @@ const SHORT_HELP_PATTERNS = [
   /^\s*consegue me ajudar(?:\s+agora)?\s*\??\s*$/i,
   /^\s*teste\s*$/i
 ];
+
+const matchesShortHelpRequest = (text: string): boolean => {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  if (SHORT_HELP_PATTERNS.some(pattern => pattern.test(trimmed))) {
+    return true;
+  }
+
+  const withoutGreeting = trimmed.replace(SHORT_HELP_PREFIX, "").trim();
+  if (!withoutGreeting || withoutGreeting === trimmed) {
+    return false;
+  }
+
+  return SHORT_HELP_PATTERNS.some(pattern => pattern.test(withoutGreeting));
+};
 
 const WAITING_FOR_BOT_PATTERNS = [
   /^\s*\?\s*$/,
@@ -232,7 +253,7 @@ const WAITING_FOR_BOT_PATTERNS = [
 ];
 
 export const isShortHelpRequest = (text: string): boolean =>
-  SHORT_HELP_PATTERNS.some(pattern => pattern.test(text.trim()));
+  matchesShortHelpRequest(text);
 
 /** Cliente cobrando resposta — não é conteúdo novo; reengajar última pergunta real. */
 export const isWaitingForBotNudge = (text: string): boolean =>

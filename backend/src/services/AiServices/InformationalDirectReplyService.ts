@@ -7,6 +7,13 @@ import { sanitizeAiOutboundText } from "./sanitizeAiOutboundText";
 import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
 import { logger } from "../../utils/logger";
 import Message from "../../models/Message";
+import { parsePositiveInt, withAiTimeout } from "./withAiTimeout";
+
+const getKnowledgeLookupTimeoutMs = (): number =>
+  parsePositiveInt(process.env.AI_INFORMATIONAL_KNOWLEDGE_TIMEOUT_MS, 8000);
+
+const getInformationalLlmTimeoutMs = (): number =>
+  parsePositiveInt(process.env.AI_INFORMATIONAL_LLM_TIMEOUT_MS, 18000);
 
 export type InformationalDirectReplyResult = {
   replied: boolean;
@@ -126,13 +133,18 @@ export const tryInformationalDirectReply = async ({
   let contextBlock = "";
 
   try {
-    const knowledgeContext = await buildKnowledgeContextForQuery({
-      companyId,
-      knowledgeBaseIds,
-      userText,
-      provider: agent.provider,
-      loadStrategy: "full"
-    });
+    const knowledgeContext = await withAiTimeout(
+      buildKnowledgeContextForQuery({
+        companyId,
+        knowledgeBaseIds,
+        userText,
+        provider: agent.provider,
+        loadStrategy: "auto",
+        skipReingest: true
+      }),
+      getKnowledgeLookupTimeoutMs(),
+      "informational_knowledge_lookup"
+    );
 
     chunkCount = knowledgeContext.usedChunks.length;
     hasReadyDocuments = knowledgeContext.hasReadyDocuments;
@@ -157,30 +169,34 @@ export const tryInformationalDirectReply = async ({
     const history = await buildConversationHistory(ticket.id, 4);
 
     try {
-      const completion = await chatCompletion(companyId, {
-        model: agent.textModel,
-        temperature: Math.min(0.4, agent.temperature ?? 0.3),
-        maxTokens: Math.min(640, agent.maxTokens || 1024),
-        providerId: agent.provider,
-        messages: [
-          {
-            role: "system",
-            content: [
-              agent.basePrompt?.trim() ||
-                "Você é o assistente virtual deste canal de atendimento.",
-              "Responda em português, de forma clara e conversacional.",
-              "Use o material da base de conhecimento abaixo.",
-              "Não invente políticas, valores ou procedimentos que não estejam no material.",
-              `Material da base:\n${contextBlock.slice(0, 12000)}`
-            ].join("\n\n")
-          },
-          ...history.map(item => ({
-            role: item.role,
-            content: item.content
-          })),
-          { role: "user", content: userText }
-        ]
-      });
+      const completion = await withAiTimeout(
+        chatCompletion(companyId, {
+          model: agent.textModel,
+          temperature: Math.min(0.4, agent.temperature ?? 0.3),
+          maxTokens: Math.min(640, agent.maxTokens || 1024),
+          providerId: agent.provider,
+          messages: [
+            {
+              role: "system",
+              content: [
+                agent.basePrompt?.trim() ||
+                  "Você é o assistente virtual deste canal de atendimento.",
+                "Responda em português, de forma clara e conversacional.",
+                "Use o material da base de conhecimento abaixo.",
+                "Não invente políticas, valores ou procedimentos que não estejam no material.",
+                `Material da base:\n${contextBlock.slice(0, 12000)}`
+              ].join("\n\n")
+            },
+            ...history.map(item => ({
+              role: item.role,
+              content: item.content
+            })),
+            { role: "user", content: userText }
+          ]
+        }),
+        getInformationalLlmTimeoutMs(),
+        "informational_llm_reply"
+      );
 
       const reply = prepareCustomerFacingAiText(
         sanitizeAiOutboundText(completion.content?.trim() || ""),

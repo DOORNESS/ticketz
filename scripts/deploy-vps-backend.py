@@ -103,6 +103,7 @@ PATCH_PATHS = [
     "services/AiServices/MediaInboundResolver.js",
     "services/AiServices/ProcessInboundMessageService.js",
     "services/AiServices/InformationalDirectReplyService.js",
+    "services/AiServices/withAiTimeout.js",
     "services/AiServices/AiInboundQueueService.js",
     "services/AiServices/Triage/CaseCompletenessEngine.js",
     "services/AiServices/sendAiWhatsAppReply.js",

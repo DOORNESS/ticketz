@@ -15,6 +15,10 @@ import {
 } from "./Triage/CaseCompletenessEngine";
 import { findUnansweredCustomerQuestion } from "./WhatsAppCustomerTurnResolver";
 import { logger } from "../../utils/logger";
+import { parsePositiveInt, withAiTimeout } from "./withAiTimeout";
+
+const getWhatsAppTurnTimeoutMs = (): number =>
+  parsePositiveInt(process.env.AI_WHATSAPP_TURN_TIMEOUT_MS, 25000);
 
 export type WhatsAppTurnInput = {
   companyId: number;
@@ -157,11 +161,31 @@ export const runWhatsAppAiTurn = async ({
     return "greeting";
   }
 
-  const direct = await tryInformationalDirectReply({
-    companyId,
-    ticket,
-    agent,
-    userText: trimmed
+  const direct = await withAiTimeout(
+    tryInformationalDirectReply({
+      companyId,
+      ticket,
+      agent,
+      userText: trimmed
+    }),
+    getWhatsAppTurnTimeoutMs(),
+    "whatsapp_informational_turn"
+  ).catch(error => {
+    logger.warn(
+      { error, ticketId: ticket.id, companyId },
+      "Informational WhatsApp turn timed out — using brand fallback"
+    );
+
+    return {
+      replied: true,
+      body: isInformationalIntent(trimmed)
+        ? NIVEL_INFORMATIONAL_FALLBACK
+        : GENERIC_FALLBACK,
+      knowledgeBaseIds: [] as number[],
+      chunkCount: 0,
+      hasReadyDocuments: false,
+      reason: "informational_brand_fallback" as const
+    };
   });
 
   const replyBody =
