@@ -386,23 +386,13 @@ export const processBufferedAiInbound = async (
 
       if (!ownsLock) {
         if (job) {
-          await persistAiDecisionLog({
-            companyId,
-            ticketId,
-            action: "job_cancelled",
-            reason: "lock_not_acquired"
-          });
           await recordAiJobCompleted(job, "cancelled");
         }
 
-        setTimeout(() => {
-          void processBufferedAiInbound(companyId, ticketId).catch(error => {
-            logger.error(
-              { error, ticketId, companyId },
-              "Retry after AI lock contention failed"
-            );
-          });
-        }, getLockRetryMs());
+        logger.debug(
+          { companyId, ticketId, jobId: job?.id },
+          "AI processing skipped because another worker owns the ticket lock"
+        );
         return;
       }
     } else {
@@ -605,7 +595,12 @@ export const processBufferedAiInbound = async (
       await redis.del(lockKey(ticketId));
     }
 
-    await rescheduleIfBuffered(companyId, ticketId, job);
+    // Only the lock owner may schedule the next buffered turn. Contending
+    // workers must leave this responsibility to the owner; otherwise every
+    // collision creates another job and an unbounded retry storm.
+    if (ownsLock) {
+      await rescheduleIfBuffered(companyId, ticketId, job);
+    }
   }
 };
 
