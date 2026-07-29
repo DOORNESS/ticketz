@@ -5,6 +5,7 @@ import React, {
   useRef,
   useState
 } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Box,
   Button,
@@ -45,7 +46,14 @@ import {
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
+import TableRowSkeleton from "../../components/TableRowSkeleton";
 import api from "../../services/api";
+import {
+  AI_CACHE_KEYS,
+  invalidateAiListCache,
+  readAiListCache,
+  writeAiListCache
+} from "../../helpers/aiListCache";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
 import { useAiPageStyles } from "../../components/Ai/shared";
@@ -121,17 +129,32 @@ const defaultCreateForm = {
 
 const AiAssets = () => {
   const classes = useAiPageStyles();
-  const [assets, setAssets] = useState([]);
-  const [bases, setBases] = useState([]);
+  const location = useLocation();
+  const initialKnowledgeBaseFilter = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    return params.get("knowledgeBaseId") || "";
+  }, [location.search]);
+  const cachedBases = readAiListCache(AI_CACHE_KEYS.knowledgeBases);
+  const initialFilters = useMemo(
+    () => ({
+      lifecycleStatus: "",
+      knowledgeBaseId: initialKnowledgeBaseFilter
+    }),
+    [initialKnowledgeBaseFilter]
+  );
+  const cachedAssets = readAiListCache(
+    AI_CACHE_KEYS.assetsList(initialFilters)
+  );
+  const [assets, setAssets] = useState(cachedAssets || []);
+  const [bases, setBases] = useState(
+    cachedBases ? cachedBases.filter(base => base.active) : []
+  );
   const [categories, setCategories] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [basesLoading, setBasesLoading] = useState(true);
+  const [loading, setLoading] = useState(!cachedAssets?.length);
+  const [basesLoading, setBasesLoading] = useState(!cachedBases?.length);
   const [createTab, setCreateTab] = useState(0);
   const [autoPublish, setAutoPublish] = useState(true);
-  const [filters, setFilters] = useState({
-    lifecycleStatus: "",
-    knowledgeBaseId: ""
-  });
+  const [filters, setFilters] = useState(initialFilters);
   const [createForm, setCreateForm] = useState(defaultCreateForm);
   const [file, setFile] = useState(null);
   const [menuAnchor, setMenuAnchor] = useState(null);
@@ -155,6 +178,95 @@ const AiAssets = () => {
   const [rollbackVersionId, setRollbackVersionId] = useState("");
   const assetsRequestRunningRef = useRef(false);
   const assetsReloadQueuedRef = useRef(false);
+  const skipInitialFilterFetchRef = useRef(true);
+
+  const invalidateCaches = () => {
+    invalidateAiListCache("knowledge-bases");
+    invalidateAiListCache("assets:list");
+  };
+
+  const buildAssetParams = useCallback(currentFilters => {
+    const params = {};
+    if (currentFilters.lifecycleStatus) {
+      params.lifecycleStatus = currentFilters.lifecycleStatus;
+    }
+    if (currentFilters.knowledgeBaseId) {
+      params.knowledgeBaseId = currentFilters.knowledgeBaseId;
+    }
+    return params;
+  }, []);
+
+  const loadBases = useCallback(async ({ background = false } = {}) => {
+    const cached = readAiListCache(AI_CACHE_KEYS.knowledgeBases);
+    if (cached?.length) {
+      setBases(cached.filter(base => base.active));
+      setBasesLoading(false);
+    } else if (!background) {
+      setBasesLoading(true);
+    }
+
+    try {
+      const { data } = await api.get("/ai/knowledge-bases", {
+        timeout: 15000,
+        _skipApiRetry: true
+      });
+      const nextBases = Array.isArray(data) ? data : [];
+      writeAiListCache(AI_CACHE_KEYS.knowledgeBases, nextBases);
+      setBases(nextBases.filter(base => base.active));
+    } catch (err) {
+      if (!cached?.length) {
+        toastError(err);
+        setBases([]);
+      }
+    } finally {
+      setBasesLoading(false);
+    }
+  }, []);
+
+  const loadAssets = useCallback(
+    async ({ background = false, currentFilters = filters } = {}) => {
+      if (assetsRequestRunningRef.current) {
+        assetsReloadQueuedRef.current = true;
+        return;
+      }
+
+      const cacheKey = AI_CACHE_KEYS.assetsList(currentFilters);
+      const cached = readAiListCache(cacheKey);
+      if (cached?.length) {
+        setAssets(cached);
+        if (!background) {
+          setLoading(false);
+        }
+      } else if (!background) {
+        setLoading(true);
+      }
+
+      assetsRequestRunningRef.current = true;
+      try {
+        const { data } = await api.get("/ai/assets", {
+          params: buildAssetParams(currentFilters),
+          timeout: 15000,
+          _skipApiRetry: true
+        });
+        const nextAssets = Array.isArray(data) ? data : [];
+        setAssets(nextAssets);
+        writeAiListCache(cacheKey, nextAssets);
+      } catch (err) {
+        if (!cached?.length) {
+          toastError(err);
+          setAssets([]);
+        }
+      } finally {
+        assetsRequestRunningRef.current = false;
+        setLoading(false);
+        if (assetsReloadQueuedRef.current) {
+          assetsReloadQueuedRef.current = false;
+          window.setTimeout(() => loadAssets({ background: true }), 0);
+        }
+      }
+    },
+    [buildAssetParams, filters]
+  );
 
   const baseOptions = useMemo(() => {
     if (basesLoading) {
@@ -186,22 +298,6 @@ const AiAssets = () => {
     [categories]
   );
 
-  const loadBases = useCallback(async () => {
-    setBasesLoading(true);
-    try {
-      const { data } = await api.get("/ai/knowledge-bases", {
-        timeout: 15000,
-        _skipApiRetry: true
-      });
-      setBases((Array.isArray(data) ? data : []).filter(base => base.active));
-    } catch (err) {
-      toastError(err);
-      setBases([]);
-    } finally {
-      setBasesLoading(false);
-    }
-  }, []);
-
   const loadCategories = useCallback(async baseId => {
     if (!baseId) {
       setCategories([]);
@@ -218,48 +314,29 @@ const AiAssets = () => {
     }
   }, []);
 
-  const loadAssets = useCallback(async () => {
-    if (assetsRequestRunningRef.current) {
-      assetsReloadQueuedRef.current = true;
+  useEffect(() => {
+    Promise.all([
+      loadBases({ background: Boolean(cachedBases?.length) }),
+      loadAssets({
+        background: Boolean(cachedAssets?.length),
+        currentFilters: initialFilters
+      })
+    ]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (skipInitialFilterFetchRef.current) {
+      skipInitialFilterFetchRef.current = false;
       return;
     }
+    loadAssets({ currentFilters: filters });
+  }, [filters.knowledgeBaseId, filters.lifecycleStatus, loadAssets, filters]);
 
-    assetsRequestRunningRef.current = true;
-    setLoading(true);
-    try {
-      const params = {};
-      if (filters.lifecycleStatus) {
-        params.lifecycleStatus = filters.lifecycleStatus;
-      }
-      if (filters.knowledgeBaseId) {
-        params.knowledgeBaseId = filters.knowledgeBaseId;
-      }
-      const { data } = await api.get("/ai/assets", {
-        params,
-        timeout: 15000,
-        _skipApiRetry: true
-      });
-      setAssets(Array.isArray(data) ? data : []);
-    } catch (err) {
-      toastError(err);
-      setAssets([]);
-    } finally {
-      assetsRequestRunningRef.current = false;
-      setLoading(false);
-      if (assetsReloadQueuedRef.current) {
-        assetsReloadQueuedRef.current = false;
-        window.setTimeout(loadAssets, 0);
-      }
-    }
-  }, [filters.knowledgeBaseId, filters.lifecycleStatus]);
-
-  useEffect(() => {
-    loadBases();
-  }, [loadBases]);
-
-  useEffect(() => {
-    loadAssets();
-  }, [loadAssets]);
+  const refreshAssets = useCallback(() => {
+    invalidateCaches();
+    loadAssets({ currentFilters: filters });
+  }, [filters, loadAssets]);
 
   useEffect(() => {
     loadCategories(createForm.knowledgeBaseId);
@@ -277,7 +354,10 @@ const AiAssets = () => {
       return undefined;
     }
 
-    const interval = setInterval(() => loadAssets(), 10000);
+    const interval = setInterval(
+      () => loadAssets({ background: true, currentFilters: filters }),
+      10000
+    );
     return () => clearInterval(interval);
   }, [assets, loadAssets]);
 
@@ -304,7 +384,7 @@ const AiAssets = () => {
           : "Documento salvo como rascunho"
       );
       resetCreateForm();
-      loadAssets();
+      refreshAssets();
     } catch (err) {
       toastError(err);
     }
@@ -327,7 +407,7 @@ const AiAssets = () => {
           : "Site salvo como rascunho"
       );
       resetCreateForm();
-      loadAssets();
+      refreshAssets();
     } catch (err) {
       toastError(err);
     }
@@ -350,7 +430,7 @@ const AiAssets = () => {
           : "Documento salvo como rascunho"
       );
       resetCreateForm();
-      loadAssets();
+      refreshAssets();
     } catch (err) {
       toastError(err);
     }
@@ -371,7 +451,7 @@ const AiAssets = () => {
         await api.post(`/ai/assets/${asset.id}/${action}`, body || {});
       }
       toast.success("Ação executada com sucesso");
-      loadAssets();
+      refreshAssets();
     } catch (err) {
       toastError(err);
     }
@@ -381,7 +461,7 @@ const AiAssets = () => {
     try {
       await api.post(`/ai/assets/${asset.id}/quick-publish`);
       toast.success("Publicação iniciada");
-      loadAssets();
+      refreshAssets();
     } catch (err) {
       toastError(err);
     }
@@ -461,7 +541,7 @@ const AiAssets = () => {
       toast.success("Arquivo substituído — reindexação iniciada");
       setReplaceOpen(false);
       setReplaceFile(null);
-      loadAssets();
+      refreshAssets();
     } catch (err) {
       toastError(err);
     } finally {
@@ -492,7 +572,7 @@ const AiAssets = () => {
       });
       toast.success("Ativo vinculado à outra base");
       setCloneOpen(false);
-      loadAssets();
+      refreshAssets();
     } catch (err) {
       toastError(err);
     }
@@ -581,7 +661,7 @@ const AiAssets = () => {
       });
       toast.success("Rollback executado");
       setRollbackOpen(false);
-      loadAssets();
+      refreshAssets();
     } catch (err) {
       toastError(err);
     }
@@ -776,8 +856,8 @@ const AiAssets = () => {
             variant="contained"
             color="primary"
             startIcon={<Refresh />}
-            onClick={loadAssets}
-            disabled={loading}
+            onClick={() => loadAssets({ currentFilters: filters })}
+            disabled={loading && !assets.length}
           >
             Atualizar
           </Button>
@@ -845,14 +925,13 @@ const AiAssets = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {assets.length === 0 && (
+              {loading && !assets.length && <TableRowSkeleton columns={7} />}
+              {assets.length === 0 && !loading && (
                 <TableRow>
                   <TableCell colSpan={7} align="center">
-                    {loading
-                      ? "Carregando ativos..."
-                      : basesLoading
-                        ? "Carregando bases de conhecimento..."
-                        : "Nenhum ativo encontrado com os filtros atuais."}
+                    {basesLoading
+                      ? "Carregando bases de conhecimento..."
+                      : "Nenhum ativo encontrado com os filtros atuais."}
                   </TableCell>
                 </TableRow>
               )}

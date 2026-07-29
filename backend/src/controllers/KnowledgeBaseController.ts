@@ -2,7 +2,11 @@ import { Request, Response } from "express";
 import KnowledgeBase from "../models/KnowledgeBase";
 import AppError from "../errors/AppError";
 import { safeAiQuery } from "../helpers/safeAiQuery";
-import { listAgentsByKnowledgeBase } from "../services/AiServices/AiAgentKnowledgeBaseService";
+import {
+  listAgentsByKnowledgeBase,
+  listAgentsGroupedByKnowledgeBase
+} from "../services/AiServices/AiAgentKnowledgeBaseService";
+import { getAssetCountsByKnowledgeBase } from "../services/AiServices/KnowledgeCms/KnowledgeAssetCmsService";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
@@ -15,12 +19,17 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
     []
   );
 
-  const enriched = await Promise.all(
-    bases.map(async base => ({
-      ...base.toJSON(),
-      linkedAgents: await listAgentsByKnowledgeBase(companyId, base.id)
-    }))
-  );
+  const baseIds = bases.map(base => base.id);
+  const [linkedAgentsByBase, assetCountsByBase] = await Promise.all([
+    safeAiQuery(() => listAgentsGroupedByKnowledgeBase(companyId, baseIds), {}),
+    safeAiQuery(() => getAssetCountsByKnowledgeBase(companyId), {})
+  ]);
+
+  const enriched = bases.map(base => ({
+    ...base.toJSON(),
+    linkedAgents: linkedAgentsByBase[base.id] || [],
+    assetCounts: assetCountsByBase[base.id] || { total: 0, published: 0 }
+  }));
 
   return res.json(enriched);
 };
@@ -36,7 +45,11 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
     active: active !== false
   });
 
-  return res.status(201).json({ ...base.toJSON(), linkedAgents: [] });
+  return res.status(201).json({
+    ...base.toJSON(),
+    linkedAgents: [],
+    assetCounts: { total: 0, published: 0 }
+  });
 };
 
 export const update = async (
@@ -57,7 +70,11 @@ export const update = async (
   await base.update(req.body);
   return res.json({
     ...base.toJSON(),
-    linkedAgents: await listAgentsByKnowledgeBase(companyId, base.id)
+    linkedAgents: await listAgentsByKnowledgeBase(companyId, base.id),
+    assetCounts: (await getAssetCountsByKnowledgeBase(companyId))[base.id] || {
+      total: 0,
+      published: 0
+    }
   });
 };
 

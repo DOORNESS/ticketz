@@ -81,8 +81,28 @@ export const listAgentsByKnowledgeBase = async (
 ): Promise<
   { id: number; name: string; specialty: string | null; role: string }[]
 > => {
+  const grouped = await listAgentsGroupedByKnowledgeBase(companyId, [
+    knowledgeBaseId
+  ]);
+
+  return grouped[knowledgeBaseId] || [];
+};
+
+export const listAgentsGroupedByKnowledgeBase = async (
+  companyId: number,
+  knowledgeBaseIds: number[]
+): Promise<
+  Record<
+    number,
+    { id: number; name: string; specialty: string | null; role: string }[]
+  >
+> => {
+  if (!knowledgeBaseIds.length) {
+    return {};
+  }
+
   const links = await AiAgentKnowledgeBase.findAll({
-    where: { companyId, knowledgeBaseId },
+    where: { companyId, knowledgeBaseId: knowledgeBaseIds },
     include: [
       {
         association: "aiAgent",
@@ -91,13 +111,28 @@ export const listAgentsByKnowledgeBase = async (
     ]
   });
 
-  return links
-    .map(link => link.aiAgent)
-    .filter(agent => agent?.active)
-    .map(agent => ({
+  const grouped: Record<
+    number,
+    { id: number; name: string; specialty: string | null; role: string }[]
+  > = {};
+
+  links.forEach(link => {
+    const agent = link.aiAgent;
+    if (!agent?.active) {
+      return;
+    }
+
+    if (!grouped[link.knowledgeBaseId]) {
+      grouped[link.knowledgeBaseId] = [];
+    }
+
+    grouped[link.knowledgeBaseId].push({
       id: agent.id,
       name: agent.name,
       specialty: agent.specialty,
       role: agent.role
-    }));
+    });
+  });
+
+  return grouped;
 };

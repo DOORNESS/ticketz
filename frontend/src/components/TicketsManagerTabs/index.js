@@ -24,6 +24,7 @@ import { isMasterAdminUser } from "../../helpers/isMasterAdmin";
 import { i18n } from "../../translate/i18n";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { TicketsContext } from "../../context/Tickets/TicketsContext";
+import { WhatsAppsContext } from "../../context/WhatsApp/WhatsAppsContext";
 import { Can } from "../Can";
 import TicketsQueueSelect from "../TicketsQueueSelect";
 import TicketsWhatsappFilter from "../TicketsWhatsappFilter";
@@ -164,6 +165,7 @@ const TicketsManagerTabs = () => {
   const { user } = useContext(AuthContext);
   const { listSubTab, setListSubTab, setCurrentTicket, refreshTicketLists } =
     useContext(TicketsContext);
+  const { whatsApps } = useContext(WhatsAppsContext);
   const { profile } = user || {};
   const permissionRole = resolvePermissionRole(user);
   const isSuperAdmin = user?.super === true;
@@ -179,7 +181,7 @@ const TicketsManagerTabs = () => {
   const userQueueIds = userQueues.map(q => q.id);
   const [selectedQueueIds, setSelectedQueueIds] = useState(userQueueIds || []);
   const [selectedWhatsappIds, setSelectedWhatsappIds] = useState([]);
-  const [whatsapps, setWhatsapps] = useState([]);
+  const [prefetchSiblingLists, setPrefetchSiblingLists] = useState(false);
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -205,17 +207,22 @@ const TicketsManagerTabs = () => {
   }, []);
 
   useEffect(() => {
-    const loadWhatsapps = async () => {
-      try {
-        const { data } = await api.get("/whatsapp/");
-        setWhatsapps(Array.isArray(data) ? data : []);
-      } catch (err) {
-        setWhatsapps([]);
-      }
-    };
+    if (tab !== "open") {
+      return undefined;
+    }
 
-    loadWhatsapps();
-  }, []);
+    const enablePrefetch = () => setPrefetchSiblingLists(true);
+
+    if (typeof window.requestIdleCallback === "function") {
+      const idleId = window.requestIdleCallback(enablePrefetch, {
+        timeout: 1200
+      });
+      return () => window.cancelIdleCallback(idleId);
+    }
+
+    const timer = setTimeout(enablePrefetch, 600);
+    return () => clearTimeout(timer);
+  }, [tab]);
 
   useEffect(() => {
     if (tab === "search") {
@@ -363,7 +370,7 @@ const TicketsManagerTabs = () => {
         </Tabs>
       </Paper>
       <TicketsWhatsappFilter
-        whatsapps={whatsapps}
+        whatsapps={whatsApps || []}
         selectedWhatsappIds={selectedWhatsappIds}
         onChange={setSelectedWhatsappIds}
       />
@@ -480,7 +487,7 @@ const TicketsManagerTabs = () => {
             supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
             selectedWhatsappIds={selectedWhatsappIds}
-            selectedWhatsappIds={selectedWhatsappIds}
+            fetchEnabled={tabOpen === "open" || prefetchSiblingLists}
             updateCount={val => setOpenCount(val)}
             style={applyPanelStyle("open")}
             setTabOpen={setListSubTab}
@@ -491,7 +498,7 @@ const TicketsManagerTabs = () => {
             supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
             selectedWhatsappIds={selectedWhatsappIds}
-            selectedWhatsappIds={selectedWhatsappIds}
+            fetchEnabled={tabOpen === "pending" || prefetchSiblingLists}
             updateCount={val => setPendingCount(val)}
             style={applyPanelStyle("pending")}
             setTabOpen={setListSubTab}
@@ -503,7 +510,7 @@ const TicketsManagerTabs = () => {
             supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
             selectedWhatsappIds={selectedWhatsappIds}
-            selectedWhatsappIds={selectedWhatsappIds}
+            fetchEnabled={tabOpen === "ai" || prefetchSiblingLists}
             updateCount={val => setAiCount(val)}
             style={applyPanelStyle("ai")}
             setTabOpen={setListSubTab}

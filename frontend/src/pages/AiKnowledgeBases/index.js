@@ -22,8 +22,15 @@ import { DeleteOutline, Edit } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
+import TableRowSkeleton from "../../components/TableRowSkeleton";
 import api from "../../services/api";
 import { apiGetWithWarmupRetry } from "../../helpers/fetchWithWarmupRetry";
+import {
+  AI_CACHE_KEYS,
+  invalidateAiListCache,
+  readAiListCache,
+  writeAiListCache
+} from "../../helpers/aiListCache";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
 import AiSetupWizard from "../../components/AiSetupWizard";
@@ -98,9 +105,11 @@ const CollapsibleDescription = ({ text, classes }) => {
 const AiKnowledgeBases = () => {
   const classes = useAiPageStyles();
   const localClasses = useLocalStyles();
-  const [bases, setBases] = useState([]);
-  const [domains, setDomains] = useState([]);
-  const [assetCounts, setAssetCounts] = useState({});
+  const cachedBases = readAiListCache(AI_CACHE_KEYS.knowledgeBases);
+  const cachedDomains = readAiListCache(AI_CACHE_KEYS.knowledgeDomains);
+  const [bases, setBases] = useState(cachedBases || []);
+  const [domains, setDomains] = useState(cachedDomains || []);
+  const [loading, setLoading] = useState(!cachedBases?.length);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [editingId, setEditingId] = useState(null);
@@ -124,46 +133,41 @@ const AiKnowledgeBases = () => {
     return map;
   }, [domains]);
 
-  const loadAssetCounts = async () => {
-    try {
-      const { data } = await apiGetWithWarmupRetry("/ai/assets");
-      const counts = {};
-      (Array.isArray(data) ? data : []).forEach(asset => {
-        const baseId = asset.knowledgeBaseId;
-        if (!baseId) {
-          return;
-        }
-        if (!counts[baseId]) {
-          counts[baseId] = { total: 0, published: 0 };
-        }
-        counts[baseId].total += 1;
-        if (asset.lifecycleStatus === "published") {
-          counts[baseId].published += 1;
-        }
-      });
-      setAssetCounts(counts);
-    } catch (_err) {
-      setAssetCounts({});
+  const load = async ({ background = false } = {}) => {
+    if (!background && !bases.length) {
+      setLoading(true);
     }
-  };
 
-  const load = async () => {
     try {
       const [{ data: kbData }, { data: domainData }] = await Promise.all([
         apiGetWithWarmupRetry("/ai/knowledge-bases"),
         apiGetWithWarmupRetry("/ai/knowledge-domains")
       ]);
-      setBases(Array.isArray(kbData) ? kbData : []);
-      setDomains(Array.isArray(domainData) ? domainData : []);
-      void loadAssetCounts();
+      const nextBases = Array.isArray(kbData) ? kbData : [];
+      const nextDomains = Array.isArray(domainData) ? domainData : [];
+      setBases(nextBases);
+      setDomains(nextDomains);
+      writeAiListCache(AI_CACHE_KEYS.knowledgeBases, nextBases);
+      writeAiListCache(AI_CACHE_KEYS.knowledgeDomains, nextDomains);
     } catch (err) {
-      toastError(err);
+      if (!bases.length) {
+        toastError(err);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    load({ background: Boolean(cachedBases?.length) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const invalidateCaches = () => {
+    invalidateAiListCache("knowledge-bases");
+    invalidateAiListCache("knowledge-domains");
+    invalidateAiListCache("assets:list");
+  };
 
   const handleSave = async () => {
     try {
@@ -183,6 +187,7 @@ const AiKnowledgeBases = () => {
       setOpen(false);
       setEditingId(null);
       setForm(defaultForm);
+      invalidateCaches();
       load();
     } catch (err) {
       toastError(err);
@@ -237,8 +242,11 @@ const AiKnowledgeBases = () => {
               </TableRow>
             </TableHead>
             <TableBody>
+              {loading && !bases.length && (
+                <TableRowSkeleton avatar={false} columns={7} />
+              )}
               {bases.map(base => {
-                const counts = assetCounts[base.id];
+                const counts = base.assetCounts;
                 return (
                   <TableRow key={base.id}>
                     <TableCell>{base.name}</TableCell>
@@ -254,7 +262,7 @@ const AiKnowledgeBases = () => {
                     <TableCell>
                       {counts
                         ? `${counts.published} pub. / ${counts.total} total`
-                        : "—"}
+                        : "0 pub. / 0 total"}
                     </TableCell>
                     <TableCell>
                       {(base.linkedAgents || [])
@@ -269,6 +277,7 @@ const AiKnowledgeBases = () => {
                       <IconButton
                         onClick={async () => {
                           await api.delete(`/ai/knowledge-bases/${base.id}`);
+                          invalidateCaches();
                           load();
                         }}
                       >

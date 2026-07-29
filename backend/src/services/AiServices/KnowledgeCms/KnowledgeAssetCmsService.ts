@@ -1,5 +1,5 @@
 import crypto from "crypto";
-import { Op } from "sequelize";
+import { fn, col, literal, Op } from "sequelize";
 import KnowledgeAsset, {
   KnowledgeAssetType,
   KnowledgeLifecycleStatus
@@ -90,6 +90,50 @@ export const listKnowledgeAssets = async (
       }
     ]
   });
+};
+
+export type KnowledgeBaseAssetCounts = {
+  total: number;
+  published: number;
+};
+
+export const getAssetCountsByKnowledgeBase = async (
+  companyId: number
+): Promise<Record<number, KnowledgeBaseAssetCounts>> => {
+  const rows = (await KnowledgeAsset.findAll({
+    where: { companyId },
+    attributes: [
+      "knowledgeBaseId",
+      [fn("COUNT", col("KnowledgeAsset.id")), "total"],
+      [
+        fn(
+          "SUM",
+          literal(
+            `CASE WHEN "KnowledgeAsset"."lifecycleStatus" = 'published' THEN 1 ELSE 0 END`
+          )
+        ),
+        "published"
+      ]
+    ],
+    group: ["knowledgeBaseId"],
+    raw: true
+  })) as unknown as Array<{
+    knowledgeBaseId: number;
+    total: string;
+    published: string | null;
+  }>;
+
+  return rows.reduce<Record<number, KnowledgeBaseAssetCounts>>((acc, row) => {
+    if (!row.knowledgeBaseId) {
+      return acc;
+    }
+
+    acc[row.knowledgeBaseId] = {
+      total: Number(row.total) || 0,
+      published: Number(row.published) || 0
+    };
+    return acc;
+  }, {});
 };
 
 export const getKnowledgeAsset = async (

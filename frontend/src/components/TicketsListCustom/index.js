@@ -183,7 +183,8 @@ const TicketsListCustom = props => {
     showTabGroups,
     aiFilter,
     supervision,
-    listMode
+    listMode,
+    fetchEnabled = true
   } = props;
   const classes = useStyles();
   const [paginationCursor, setPaginationCursor] = useState({
@@ -205,12 +206,10 @@ const TicketsListCustom = props => {
   const socketManager = useContext(SocketContext);
 
   useEffect(() => {
-    dispatch({ type: "RESET" });
     setPaginationCursor({ nextUpdatedAt: null, nextTicketId: null });
   }, [
     status,
     searchParam,
-    dispatch,
     showAll,
     contactId,
     tags,
@@ -219,8 +218,7 @@ const TicketsListCustom = props => {
     selectedWhatsappIds,
     aiFilter,
     supervision,
-    listMode,
-    showAll
+    listMode
   ]);
 
   const {
@@ -245,7 +243,8 @@ const TicketsListCustom = props => {
     queueIds: JSON.stringify(selectedQueueIds),
     whatsappIds: JSON.stringify(selectedWhatsappIds || []),
     aiFilter,
-    supervision: supervision ? "true" : undefined
+    supervision: supervision ? "true" : undefined,
+    fetchEnabled
   });
 
   useEffect(() => {
