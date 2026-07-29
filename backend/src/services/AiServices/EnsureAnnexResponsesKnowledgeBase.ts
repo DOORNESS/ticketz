@@ -19,22 +19,26 @@ export type AnnexResponsesBrand = "nivel" | "fortmax" | "default";
 const BRAND_CONFIG: Record<
   AnnexResponsesBrand,
   {
+    name: string;
     slug: string;
     domainNames: string[];
     agentNames: string[];
   }
 > = {
   nivel: {
+    name: "Respostas anexas — Nível",
     slug: "respostas-anexas-nivel",
     domainNames: ["nivel cashback", "nível cashback"],
     agentNames: ["nivelton", "agente nivel cashback"]
   },
   fortmax: {
+    name: "Respostas anexas — Fortmax",
     slug: "respostas-anexas-fortmax",
     domainNames: ["fortmax", "suporte fortmax"],
     agentNames: ["webin fortmax", "webin", "atendimento geral fortmax"]
   },
   default: {
+    name: ANNEX_RESPONSES_BASE_NAME,
     slug: "respostas-anexas",
     domainNames: [],
     agentNames: []
@@ -92,15 +96,7 @@ export const ensureAnnexResponsesKnowledgeBase = async (
   const domain =
     brand === "default"
       ? null
-      : (await findByNameLoose(
-          KnowledgeDomain,
-          companyId,
-          config.domainNames
-        )) ||
-        (await KnowledgeDomain.findOne({
-          where: { companyId, active: true },
-          order: [["sortOrder", "ASC"]]
-        }));
+      : await findByNameLoose(KnowledgeDomain, companyId, config.domainNames);
 
   let base = await KnowledgeBase.findOne({
     where: {
@@ -112,7 +108,7 @@ export const ensureAnnexResponsesKnowledgeBase = async (
   if (!base) {
     base = await KnowledgeBase.create({
       companyId,
-      name: ANNEX_RESPONSES_BASE_NAME,
+      name: config.name,
       slug: config.slug,
       description:
         "Respostas validadas por humanos durante supervisão da IA — anexadas manualmente.",
@@ -121,6 +117,9 @@ export const ensureAnnexResponsesKnowledgeBase = async (
     });
   } else {
     const updates: Partial<KnowledgeBase> = {};
+    if (base.name !== config.name) {
+      updates.name = config.name;
+    }
     if (!base.active) {
       updates.active = true;
     }
@@ -166,15 +165,18 @@ export const ensureAnnexResponsesKnowledgeBase = async (
           where: {
             companyId,
             slug: {
-              [Op.in]: [
-                BRAND_CONFIG.nivel.slug,
-                BRAND_CONFIG.fortmax.slug
-              ]
+              [Op.in]: [BRAND_CONFIG.nivel.slug, BRAND_CONFIG.fortmax.slug]
             }
           },
           attributes: ["id"]
         })
-      : [];
+      : await KnowledgeBase.findAll({
+          where: {
+            companyId,
+            slug: BRAND_CONFIG.default.slug
+          },
+          attributes: ["id"]
+        });
   const legacyBaseIds = legacyBases.map(item => item.id);
   const cumulativeAsset =
     brand === "default"
@@ -187,7 +189,7 @@ export const ensureAnnexResponsesKnowledgeBase = async (
           attributes: ["id"]
         })
       : null;
-  const canConsolidateLegacy = Boolean(cumulativeAsset);
+  const canConsolidateLegacy = brand !== "default" || Boolean(cumulativeAsset);
 
   await Promise.all(
     targetAgents.map(async agent => {
@@ -209,7 +211,7 @@ export const ensureAnnexResponsesKnowledgeBase = async (
     })
   );
 
-  if (legacyBaseIds.length && canConsolidateLegacy) {
+  if (legacyBaseIds.length && canConsolidateLegacy && targetAgents.length) {
     await KnowledgeBase.update(
       { active: false },
       { where: { companyId, id: { [Op.in]: legacyBaseIds } } }
@@ -253,5 +255,8 @@ export const ensureAnnexCategoryId = async (
 export const ensureAllAnnexResponsesKnowledgeBases = async (
   companyId: number
 ): Promise<void> => {
-  await ensureAnnexResponsesKnowledgeBase(companyId, "default");
+  await Promise.all([
+    ensureAnnexResponsesKnowledgeBase(companyId, "nivel"),
+    ensureAnnexResponsesKnowledgeBase(companyId, "fortmax")
+  ]);
 };

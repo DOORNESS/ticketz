@@ -6,17 +6,40 @@ import {
 jest.mock("../../../models/Message", () => ({
   __esModule: true,
   default: {
-    findAll: jest.fn()
+    findAll: jest.fn(),
+    findOne: jest.fn()
   }
+}));
+jest.mock("../sendAiWhatsAppReply", () => ({
+  deliverAiReply: jest.fn(async () => true)
+}));
+jest.mock("../InformationalDirectReplyService", () => ({
+  tryInformationalDirectReply: jest.fn()
+}));
+jest.mock("../prepareCustomerFacingAiText", () => ({
+  prepareCustomerFacingAiText: jest.fn((text: string) => text)
+}));
+jest.mock("../AiDecisionLogger", () => ({
+  persistAiDecisionLog: jest.fn(async () => undefined)
+}));
+jest.mock("../Triage/TriageOrchestratorService", () => ({
+  finalizeAiResponse: jest.fn(async () => undefined)
+}));
+jest.mock("../../TicketServices/UpdateTicketService", () => ({
+  websocketUpdateTicket: jest.fn()
 }));
 
 import Message from "../../../models/Message";
+import type AiAgent from "../../../models/AiAgent";
+import { buildFastGreetingReply } from "../WhatsAppAiTurnService";
 
 const mockFindAll = Message.findAll as jest.Mock;
+const mockFindOne = Message.findOne as jest.Mock;
 
 describe("WhatsAppAiTurnService", () => {
   beforeEach(() => {
     mockFindAll.mockReset();
+    mockFindOne.mockReset();
   });
 
   it("finds unanswered substantive customer question", async () => {
@@ -64,7 +87,10 @@ describe("WhatsAppAiTurnService", () => {
 
   it("replays last real question on cadê vc", async () => {
     mockFindAll.mockResolvedValueOnce([
-      { fromMe: false, body: "Queria saber como o nível pode ser útil para minha empresa?" },
+      {
+        fromMe: false,
+        body: "Queria saber como o nível pode ser útil para minha empresa?"
+      },
       { fromMe: false, body: "Oi" }
     ]);
 
@@ -82,7 +108,8 @@ describe("WhatsAppAiTurnService", () => {
 
     const resolved = await resolveCustomerTurnText({
       ticketId: 42,
-      rawUserText: "Oi\n\nQueria saber como o nível pode ser útil para minha empresa?",
+      rawUserText:
+        "Oi\n\nQueria saber como o nível pode ser útil para minha empresa?",
       messageParts: [
         "Oi",
         "Queria saber como o nível pode ser útil para minha empresa?"
@@ -90,5 +117,33 @@ describe("WhatsAppAiTurnService", () => {
     });
 
     expect(resolved).toContain("útil para minha empresa");
+  });
+
+  it("greets with the active Fortmax agent identity", async () => {
+    mockFindOne.mockResolvedValueOnce(null);
+    const agent = {
+      name: "Webin",
+      basePrompt:
+        'Você é o Webin, assistente virtual da Fortmax. Responda: "Me chamo Webin, Assistente Virtual da Fortmax."'
+    } as AiAgent;
+
+    const reply = await buildFastGreetingReply(42, agent);
+
+    expect(reply).toMatch(/Webin.*Fortmax/i);
+    expect(reply).not.toMatch(/Nivelton|Nível Cashback/i);
+  });
+
+  it("greets with the active Nível agent identity", async () => {
+    mockFindOne.mockResolvedValueOnce(null);
+    const agent = {
+      name: "Nivelton",
+      basePrompt:
+        'Você é o Nivelton. Responda: "Me chamo Nivelton, assistente da Nível Cashback."'
+    } as AiAgent;
+
+    const reply = await buildFastGreetingReply(42, agent);
+
+    expect(reply).toMatch(/Nivelton.*Nível Cashback/i);
+    expect(reply).not.toMatch(/Fortmax/i);
   });
 });

@@ -1,5 +1,6 @@
 import AiAgent from "../../models/AiAgent";
 import { PromptMemoryItem } from "./ContactMemory/ContactAiMemoryService";
+import { buildAgentOperationalRules } from "./AgentPersonaService";
 
 export type AiPromptBuilderInput = {
   agent: AiAgent;
@@ -28,29 +29,14 @@ Use SOMENTE a base de conhecimento recuperada e o histórico da conversa para af
 Trate os materiais como conhecimento para conduzir o atendimento: compreenda, explique com naturalidade e avance uma etapa por vez até o resultado esperado. Não copie blocos literalmente e não diga "segundo a base", "conforme o documento" ou algo semelhante.
 Ao fornecer um link, escolha apenas o link exato e relevante presente no contexto, escreva-o uma única vez em formato de URL simples e explique claramente o que o cliente deve fazer nele.
 Nunca combine dois links, nunca use o formato Markdown [link](link) e nunca invente ou corrija uma URL por conta própria.
-REGRA ESPECÍFICA PARA SENHA E ACESSO: em qualquer conversa sobre esquecer, trocar, redefinir ou recuperar senha/conta, use exclusivamente o procedimento e o link do material "Recuperar conta e senha". Envie esse mesmo link de recuperação uma única vez e explique que, dentro da página, o cliente escolhe entre "Trocar minha senha" (quando ainda acessa o e-mail ou telefone) e "Solicitar ajuda" (quando não acessa mais os dados ou já tentou sem sucesso). Não interrogue o cliente para escolher outro fluxo: a própria página faz essa separação.
-NUNCA envie nem recomende uma URL terminada em "/chamado" para senha, recuperação de senha, recuperação de conta ou problema de acesso. O "/chamado" é reservado a empresas e a outros problemas que não sejam senha ou acesso.
 Nunca invente preços, prazos ou políticas que não estejam no contexto.
-Quando o contexto for Nível Cashback / Nivelton, "Nível" (com acento) é SEMPRE o nome da empresa/produto Nível Cashback — nunca interprete como medida, grau, nível de pedreiro ou posição hierárquica.
-Perguntas como "o que é o Nível?", "fale sobre o nível" ou "como funciona o Nível?" referem-se ao produto Nível Cashback.
-Responda dúvidas sobre produto, cashback, cadastro, benefícios e uso com base na base de conhecimento — tire todas as dúvidas possíveis antes de escalar.
-NUNCA informe telefone, número de WhatsApp ou outro contato telefônico. Conduza o procedimento usando apenas as orientações e links presentes na base de conhecimento.
 Responda em português do Brasil.
 `.trim();
 
-export const DEFAULT_WEBIN_PERSONA_RULES = `
-Você é o Webin, assistente virtual da Fortmax. Quando perguntarem seu nome, diga: "Me chamo Webin, Assistente Virtual da Fortmax."
-`.trim();
-
 export const buildDefaultOperationalRules = (
-  agent?: Pick<AiAgent, "basePrompt"> | null
-): string => {
-  if (agent?.basePrompt?.trim()) {
-    return DEFAULT_OPERATIONAL_RULES;
-  }
-
-  return `${DEFAULT_WEBIN_PERSONA_RULES}\n${DEFAULT_OPERATIONAL_RULES}`;
-};
+  agent?: Pick<AiAgent, "name" | "basePrompt"> | null
+): string =>
+  `${DEFAULT_OPERATIONAL_RULES}\n${buildAgentOperationalRules(agent)}`.trim();
 
 export const WRITE_TOOL_GUARD = `
 Ferramentas de escrita alteram tickets, tags, filas, memória ou agendamentos.

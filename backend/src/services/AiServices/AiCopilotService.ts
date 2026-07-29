@@ -14,6 +14,7 @@ import { getIO } from "../../libs/socket";
 import { logger } from "../../utils/logger";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
 import { resolveBrandFallback } from "./InformationalDirectReplyService";
+import { buildAgentOperationalRules } from "./AgentPersonaService";
 
 export type CopilotStyle =
   | "default"
@@ -46,11 +47,12 @@ Responda APENAS em JSON válido:
 }
 confidence entre 0 e 1.`;
 
-const COPILOT_BRAND_RULES = `"Nível" (com acento) neste atendimento é a marca Nível Cashback — nunca interprete como medida, grau ou nível genérico.
-Use a persona do agente e a base de conhecimento para sugerir respostas corretas sobre o produto.`;
-
 const buildCopilotSystemPrompt = (agent?: AiAgent | null): string => {
-  const blocks = [COPILOT_SYSTEM, COPILOT_BRAND_RULES];
+  const blocks = [
+    COPILOT_SYSTEM,
+    "Use exclusivamente a persona do agente ativo e a base de conhecimento do atendimento. Nunca misture marcas.",
+    buildAgentOperationalRules(agent)
+  ];
   if (agent?.basePrompt?.trim()) {
     blocks.push(`Persona do agente ativo:\n${agent.basePrompt.trim()}`);
   }

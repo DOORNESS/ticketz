@@ -33,20 +33,24 @@
 - Fase 4: write tools governadas + observabilidade v2 + UI memória/timeline
 - Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot), SaaS, deploy Docker
 - Concierge IA multifila: apresentação Webin + escolha por número ou linguagem natural restrita às filas da conexão
+- Isolamento runtime Nível×Fortmax: persona/fallback/telefone pelo agente ativo e bases de respostas anexas separadas
+- RAG `structured-v2`: metadata página/capítulo/seção, threshold efetivo, reranking híbrido e chunks vizinhos
 
 ### Parcial / próximas fases
 
 - Métricas custo dashboard IA
 - Providers gemini/anthropic (501)
 - Fase 4+ conforme `AI_ARCHITECTURE_PLAN.md`
+- OCR/visão para PDFs escaneados, tabelas e diagramas
+- Benchmark por manual (recall, fidelidade e contaminação entre marcas)
 
 ### Melhorias prioritárias (§44)
 
 1. Expandir `AI_MIGRATION_NAMES`
 2. Unificar debounce default IA
-3. Remover branding hardcoded nos prompts
-4. Playground paridade RAG com inbound
-5. Implementar tools piloto
+3. OCR/visão para ingestão de documentos
+4. Benchmark RAG com perguntas gabarito
+5. Playground paridade RAG com inbound
 
 ## Regra de atualização
 

@@ -3,6 +3,11 @@ import AiAgent from "../../models/AiAgent";
 import AiAgentQueue from "../../models/AiAgentQueue";
 import Queue from "../../models/Queue";
 import { logger } from "../../utils/logger";
+import {
+  AgentBrand,
+  buildAgentIdentityReply,
+  detectAgentBrand
+} from "./AgentPersonaService";
 import { chatCompletion } from "./ModelGateway";
 
 type QueueCandidate = Pick<Queue, "id" | "name" | "greetingMessage">;
@@ -44,6 +49,39 @@ const TOPIC_KEYWORDS: Record<string, string[]> = {
     "senha",
     "instalacao",
     "tecnico"
+  ],
+  consumidor: [
+    "consumidor",
+    "cliente",
+    "cashback",
+    "saldo",
+    "extrato",
+    "gift card",
+    "recarga",
+    "saque",
+    "compra",
+    "indicacao"
+  ],
+  empresa: [
+    "empresa",
+    "empresario",
+    "lojista",
+    "comerciante",
+    "implantacao",
+    "demonstracao",
+    "vendas",
+    "fidelizacao"
+  ],
+  recuperar: [
+    "recuperar",
+    "recuperacao",
+    "senha",
+    "login",
+    "acesso",
+    "conta",
+    "cpf",
+    "email",
+    "sms"
   ]
 };
 
@@ -58,7 +96,8 @@ const normalize = (value: string): string =>
 
 const findConciergeAgent = async (
   companyId: number,
-  queueIds: number[]
+  queueIds: number[],
+  expectedBrand: AgentBrand
 ): Promise<AiAgent | null> => {
   const links = await AiAgentQueue.findAll({
     where: {
@@ -81,22 +120,54 @@ const findConciergeAgent = async (
 
   const agents = links.map(link => link.aiAgent).filter(Boolean);
   return (
-    agents.find(agent => normalize(agent.name).includes("webin")) ||
+    agents.find(agent => detectAgentBrand(agent) === expectedBrand) ||
     agents[0] ||
     null
   );
 };
 
-const buildFallbackIntroduction = (agent: AiAgent | null): string => {
-  const name = agent?.name?.trim() || "Webin";
-  return `Olá! Eu sou o ${name}, assistente virtual da Fortmax. Vou direcionar seu atendimento para o departamento mais adequado.`;
+const inferQueueBrand = (queues: QueueCandidate[]): AgentBrand => {
+  const catalog = normalize(queues.map(queue => queue.name).join(" "));
+  if (catalog.includes("nivel")) {
+    return "nivel";
+  }
+  if (
+    catalog.includes("fortmax") ||
+    catalog.includes("webg3") ||
+    catalog.includes("web g3")
+  ) {
+    return "fortmax";
+  }
+  return "generic";
+};
+
+const brandLabel = (brand: AgentBrand): string => {
+  if (brand === "nivel") {
+    return "Nível Cashback";
+  }
+  if (brand === "fortmax") {
+    return "Fortmax";
+  }
+  return "canal";
+};
+
+const brandReference = (brand: AgentBrand): string =>
+  brand === "generic" ? "deste canal" : `da ${brandLabel(brand)}`;
+
+const buildFallbackIntroduction = (
+  agent: AiAgent | null,
+  brand: AgentBrand
+): string => {
+  const identity = buildAgentIdentityReply(agent);
+  return `Olá! ${identity} Sou assistente virtual ${brandReference(brand)} e vou direcionar seu atendimento para o departamento mais adequado.`;
 };
 
 const generateIntroduction = async (
   companyId: number,
-  agent: AiAgent | null
+  agent: AiAgent | null,
+  brand: AgentBrand
 ): Promise<string> => {
-  const fallback = buildFallbackIntroduction(agent);
+  const fallback = buildFallbackIntroduction(agent, brand);
   if (!agent) {
     return fallback;
   }
@@ -110,8 +181,9 @@ const generateIntroduction = async (
       messages: [
         {
           role: "system",
-          content:
-            "Você escreve uma saudação curta para WhatsApp. Apresente-se exatamente com o nome informado, diga que é assistente virtual da Fortmax e que ajudará a direcionar o atendimento. Use português natural, no máximo duas frases. Não liste departamentos, não inclua links, telefones, Markdown ou informações adicionais."
+          content: `Você escreve uma saudação curta para WhatsApp. Apresente-se exatamente com o nome informado, diga que é assistente virtual ${brandReference(
+            brand
+          )} e que ajudará a direcionar o atendimento. Use português natural, no máximo duas frases. Não liste departamentos, não inclua links, telefones, Markdown ou informações adicionais.`
         },
         {
           role: "user",
@@ -150,11 +222,13 @@ export const buildIntelligentQueueMenu = async ({
   companyId: number;
   queues: QueueCandidate[];
 }): Promise<string> => {
+  const brand = inferQueueBrand(queues);
   const agent = await findConciergeAgent(
     companyId,
-    queues.map(queue => queue.id)
+    queues.map(queue => queue.id),
+    brand
   );
-  const introduction = await generateIntroduction(companyId, agent);
+  const introduction = await generateIntroduction(companyId, agent, brand);
   const options = queues
     .map((queue, index) => `${index + 1} - ${queue.name}`)
     .join("\n");
@@ -195,9 +269,17 @@ const scoreQueue = (queue: QueueCandidate, customerText: string): number => {
     });
   });
 
+  const ignoredTokens = new Set([
+    "fortmax",
+    "nivel",
+    "cashback",
+    "suporte",
+    "atendimento"
+  ]);
+
   normalize(queue.name)
     .split(" ")
-    .filter(token => token.length >= 4 && token !== "fortmax")
+    .filter(token => token.length >= 4 && !ignoredTokens.has(token))
     .forEach(token => {
       if (customer.includes(token)) {
         score += 3;
@@ -239,9 +321,11 @@ const resolveByLlm = async ({
   customerText: string;
   queues: QueueCandidate[];
 }): Promise<AiQueueSelection | null> => {
+  const brand = inferQueueBrand(queues);
   const agent = await findConciergeAgent(
     companyId,
-    queues.map(queue => queue.id)
+    queues.map(queue => queue.id),
+    brand
   );
   if (!agent) {
     return null;

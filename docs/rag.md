@@ -21,6 +21,7 @@
 | Contexto para prompt | `AiServices/KnowledgeContextService.ts` |
 | Ingestão documentos | `AiServices/IngestKnowledgeDocumentService.ts` |
 | Chunking | `AiServices/ChunkingService.ts` |
+| Constantes / threshold | `AiServices/RagConfig.ts` |
 | Parsing PDF/DOCX/TXT | `AiServices/DocumentParser.ts` |
 | Embeddings | `AiServices/ModelGateway.ts` → `OpenAIProvider.ts` |
 
@@ -29,6 +30,14 @@
 - Modelo embedding: `text-embedding-3-small`
 - Dimensão vector: 1536 (pgvector)
 - Threshold confiável inbound: similarity ≥ 0.25
+- O threshold é aplicado antes do prompt; resultados fracos são descartados
+- Chunking `structured-v2`: 1800 caracteres, overlap 200, títulos/parágrafos/páginas
+- Metadata: página, capítulo, seção, parágrafo, offsets e versão do chunking
+- Retrieval: 24 candidatos → rerank híbrido → vizinhos ±1 → top 8
+- Conteúdo idêntico da mesma versão/fonte é deduplicado antes do top 8
+- Claim atômico por versão impede duas ingestões concorrentes de duplicarem chunks
+- Sem fallback automático dos primeiros 24 chunks
+- Env opcionais: `AI_RAG_MIN_SIMILARITY` (0–1), `AI_RAG_NEIGHBOR_WINDOW` (0–2)
 - CMS ON: apenas chunks de versões **publicadas** e **indexadas** (`KnowledgeRetrievalPolicy`)
 - UI admin: `/ai/assets` — upload, substituir arquivo, download, texto, URL de site, clone entre bases, publicação rápida (ver §29 manual)
 

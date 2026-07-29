@@ -21,12 +21,8 @@ import {
   isShortHelpRequest,
   isInformationalIntent
 } from "./Triage/CaseCompletenessEngine";
-import {
-  resolveCustomerTurnText
-} from "./WhatsAppCustomerTurnResolver";
-import {
-  runWhatsAppAiTurn
-} from "./WhatsAppAiTurnService";
+import { resolveCustomerTurnText } from "./WhatsAppCustomerTurnResolver";
+import { runWhatsAppAiTurn } from "./WhatsAppAiTurnService";
 import {
   buildAiSchedulePromptBlock,
   getAiScheduleContext
@@ -40,7 +36,7 @@ import { isOrchestratorEnabledForCompany } from "./AiOrchestratorFeatureFlag";
 import { isTransientAiError } from "./isTransientAiError";
 import { logger } from "../../utils/logger";
 import { persistAiDecisionLog } from "./AiDecisionLogger";
-import { AI_HANDOFF_REASONS } from "./AiOperationalTypes";
+import { AI_HANDOFF_REASONS, AiHandoffReason } from "./AiOperationalTypes";
 import { logAiOperationalEvent } from "./AiOperationalLogService";
 import UpdateTicketService, {
   websocketUpdateTicket
@@ -72,6 +68,11 @@ import { HandoffPolicyDecision } from "./Triage/AiTriageTypes";
 import { logAiTicketTimelineEvent } from "./Triage/AiTicketTimelineService";
 import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
 import { responseMimicsHumanHandoff } from "./Triage/detectImpliedHandoffMessage";
+import {
+  resolveAgentExternalSupportReply,
+  resolveAgentInformationalFallback
+} from "./AgentPersonaService";
+import { getRagMinimumSimilarity } from "./RagConfig";
 
 export type InboundMessageItem = {
   messageBody: string;
@@ -96,9 +97,6 @@ const TRANSIENT_ERROR_FALLBACK =
 
 const AI_CUSTOMER_FALLBACK =
   "Ainda não encontrei uma resposta completa na base. Pode me contar um pouco mais o que você precisa?";
-
-const AI_INFORMATIONAL_FALLBACK =
-  "A Nível Cashback ajuda sua empresa a fidelizar clientes com cashback em cada compra — o cliente acumula saldo e volta a gastar com você. Posso detalhar benefícios para lojistas, como funciona para o cliente final, ou como começar.";
 
 const resolveEffectiveMaxTokens = (
   agent: AiAgent,
@@ -487,7 +485,7 @@ const ProcessInboundMessageService = async ({
   try {
     if (triageV2Enabled) {
       try {
-        await ticket.update({ aiProcessingState: "processing" } as any);
+        await ticket.update({ aiProcessingState: "processing" });
       } catch (triageBootstrapError) {
         logger.warn(
           { triageBootstrapError, ticketId: ticket.id },
@@ -555,11 +553,11 @@ const ProcessInboundMessageService = async ({
 
     if (
       triageV2Enabled &&
-      (ticket as any).aiProcessingState === "awaiting_handoff_confirmation"
+      ticket.aiProcessingState === "awaiting_handoff_confirmation"
     ) {
       await ticket.reload();
       const pendingReason = ticket.aiHandoffOriginalReason;
-      const pendingMode = (ticket as any).aiHandoffMode as
+      const pendingMode = ticket.aiHandoffMode as
         | "operational"
         | "definitive"
         | undefined;
@@ -572,7 +570,7 @@ const ProcessInboundMessageService = async ({
             action:
               pendingMode === "operational" ? "operational" : "definitive",
             handoffMode: pendingMode || "definitive",
-            handoffReason: pendingReason as any,
+            handoffReason: pendingReason as AiHandoffReason,
             skipLegacyOutOfHours: true
           },
           userText,
@@ -588,7 +586,7 @@ const ProcessInboundMessageService = async ({
           aiProcessingState: "awaiting_customer",
           aiHandoffOriginalReason: null,
           aiInvestigationRound: 0
-        } as any);
+        });
         await sendAiWhatsAppReply({
           ticket,
           body: "Sem problemas! Me conte com mais detalhes o que você precisa que eu te ajudo da melhor forma possível."
@@ -626,7 +624,32 @@ const ProcessInboundMessageService = async ({
       return;
     }
 
-    if (forceHandoff || detectHumanHandoffRequest(userText)) {
+    const requestedHumanSupport = detectHumanHandoffRequest(userText);
+    const externalSupportReply =
+      !forceHandoff && requestedHumanSupport
+        ? resolveAgentExternalSupportReply(agent)
+        : null;
+
+    if (externalSupportReply) {
+      await sendAiWhatsAppReply({
+        ticket,
+        body: externalSupportReply
+      });
+      await persistAiDecisionLog({
+        companyId,
+        ticketId: ticket.id,
+        messageId: primaryMessageId,
+        action: "respond",
+        reason: "brand_external_support_protocol",
+        userMessage: maskSensitiveLog(userText),
+        aiResponse: externalSupportReply
+      });
+      markCustomerReply();
+      await finalizeAiResponse(ticket, primaryMessageId);
+      return;
+    }
+
+    if (forceHandoff || requestedHumanSupport) {
       const handledByTriage = await runTriageGate({
         companyId,
         ticket,
@@ -643,9 +666,10 @@ const ProcessInboundMessageService = async ({
         return;
       }
 
-      const resolvedHandoffReason = detectHumanHandoffRequest(userText)
+      const resolvedHandoffReason = requestedHumanSupport
         ? AI_HANDOFF_REASONS.customer_requested_human
-        : (handoffReason as any) || AI_HANDOFF_REASONS.customer_requested_human;
+        : (handoffReason as AiHandoffReason) ||
+          AI_HANDOFF_REASONS.customer_requested_human;
 
       await HandoffToHumanService({
         ticket,
@@ -677,7 +701,7 @@ const ProcessInboundMessageService = async ({
           aiEndedAt: new Date(),
           aiProcessingState: null,
           justClose: true
-        } as any
+        }
       });
 
       await logAiOperationalEvent({
@@ -743,17 +767,16 @@ const ProcessInboundMessageService = async ({
     const usedChunks = knowledgeContext.usedChunks;
     const contextBlock = knowledgeContext.contextBlock;
     const hasReliableContext =
-      knowledgeContext.hasReadyDocuments && usedChunks.length > 0
-        ? informationalQuery || usedChunks[0].similarity >= 0.25
-        : usedChunks.length > 0 && usedChunks[0].similarity >= 0.25;
+      usedChunks.length > 0 &&
+      usedChunks[0].similarity >= getRagMinimumSimilarity();
 
     const contextHint = contextBlock
       ? contextBlock
       : knowledgeContext.hasReadyDocuments
         ? informationalQuery
-          ? "Documentos existem na base. Responda com o máximo de detalhes úteis da base sobre como a Nível funciona, planos, benefícios e uso. Não invente fatos."
+          ? "Documentos existem na base, mas nenhum trecho atingiu relevância suficiente para esta pergunta. Não invente fatos; peça um detalhe objetivo para refazer a busca."
           : "Documentos existem na base, mas nenhum trecho relevante foi recuperado para esta pergunta. Não invente fatos. Continue a conversa com empatia e use a base; faça no máximo uma pergunta objetiva se faltar um detalhe essencial."
-        : "A base de conhecimento ainda não tem documentos publicados para este tema. Não invente políticas, preços ou procedimentos. Seja cordial, responda com o que souber da Nível Cashback e peça um detalhe se necessário.";
+        : "A base de conhecimento ainda não tem documentos publicados para este tema. Não invente políticas, preços, contatos ou procedimentos. Seja cordial e peça um detalhe se necessário.";
 
     const effectiveMaxTokens = resolveEffectiveMaxTokens(
       agent,
@@ -847,14 +870,18 @@ const ProcessInboundMessageService = async ({
           : "low_confidence_fallback",
         userText,
         body: informationalQuery
-          ? AI_INFORMATIONAL_FALLBACK
+          ? resolveAgentInformationalFallback(agent)
           : AI_CUSTOMER_FALLBACK,
         markSent: markCustomerReply
       });
       return;
     }
 
-    const outboundText = prepareCustomerFacingAiText(aiResponse, userText);
+    const outboundText = prepareCustomerFacingAiText(
+      aiResponse,
+      userText,
+      agent
+    );
     if (!outboundText) {
       await sendAiCustomerFallback({
         ticket,
@@ -863,7 +890,7 @@ const ProcessInboundMessageService = async ({
         reason: "empty_sanitized_response",
         userText,
         body: informationalQuery
-          ? AI_INFORMATIONAL_FALLBACK
+          ? resolveAgentInformationalFallback(agent)
           : AI_CUSTOMER_FALLBACK,
         markSent: markCustomerReply
       });
@@ -1112,7 +1139,8 @@ const ProcessInboundMessageService = async ({
         });
         const recoveryText = prepareCustomerFacingAiText(
           recovery.content?.trim() || "",
-          userText
+          userText,
+          agent
         );
         if (recoveryText.length >= 20) {
           await deliverAiReply(ticket, recoveryText);
@@ -1174,7 +1202,7 @@ const ProcessInboundMessageService = async ({
           reason: "mandatory_reply_guard",
           userText,
           body: isInformationalIntent(userText)
-            ? AI_INFORMATIONAL_FALLBACK
+            ? resolveAgentInformationalFallback(agent)
             : AI_CUSTOMER_FALLBACK,
           skipDedupe: true,
           markSent: markCustomerReply
@@ -1190,7 +1218,7 @@ const ProcessInboundMessageService = async ({
     if (shouldFinalizeAiState) {
       try {
         await ticket.reload();
-        if ((ticket as any).aiProcessingState === "processing") {
+        if (ticket.aiProcessingState === "processing") {
           await finalizeAiResponse(ticket, primaryMessageId);
         }
       } catch (finalizeError) {

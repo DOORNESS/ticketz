@@ -11,6 +11,15 @@
 - Comportamento legado preservado quando `AI_KB_CMS_ENABLED=false` **e** setting `aiKbCmsEnabled=disabled`
 - Nenhuma regressão em Copilot, handoff, chatbot, filas ou atendimento humano
 
+### Evolução compatível — pipeline `structured-v2` (2026-07-29)
+
+- Novas ingestões/reindexações preservam página (quando exposta pelo parser), capítulo, seção, parágrafo e offsets em `KnowledgeChunks.metadata`.
+- `KnowledgeAssetVersion` registra `chunkSize=1800`, `chunkOverlap=200` e `ingestionPipeline=structured-v2`.
+- Chunks antigos permanecem recuperáveis; substituição/reindexação faz o swap atômico para o pipeline novo.
+- Retrieval aplica threshold real, reranking híbrido e vizinhos da mesma versão publicada (CMS) ou documento `ready` (legado).
+- A ausência de resultado relevante não injeta mais os primeiros chunks do asset.
+- OCR de PDF escaneado e interpretação especializada de tabelas/imagens continuam fora do MVP.
+
 ---
 
 ## 0. Nomenclatura oficial

@@ -5,6 +5,7 @@ import KnowledgeChunk from "../../models/KnowledgeChunk";
 import KnowledgeBase from "../../models/KnowledgeBase";
 import { createEmbedding } from "./ModelGateway";
 import {
+  postProcessRetrievedChunks,
   retrieveKnowledgeForQuery,
   searchKnowledgeChunksByText,
   RetrievedChunk
@@ -12,11 +13,16 @@ import {
 import { ingestKnowledgeDocument } from "./IngestKnowledgeDocumentService";
 import { logger } from "../../utils/logger";
 import { isInternalKnowledgeSection } from "./sanitizeAiOutboundText";
+import {
+  getRagMinimumSimilarity,
+  RAG_CHUNK_SIZE,
+  RAG_MAX_CONTEXT_CHARS,
+  RAG_RETRIEVAL_LIMIT
+} from "./RagConfig";
 
-const MAX_CONTEXT_CHARS = 20000;
-const MAX_CHUNK_SNIPPET = 1200;
+const MAX_CONTEXT_CHARS = RAG_MAX_CONTEXT_CHARS;
+const MAX_CHUNK_SNIPPET = RAG_CHUNK_SIZE;
 const FULL_CORPUS_DOC_LIMIT = 24;
-const AUTO_FULL_CORPUS_DOC_LIMIT = 24;
 const MIN_BASE_DESCRIPTION_CHARS = 120;
 const MAX_DESCRIPTION_SECTIONS = 16;
 
@@ -30,25 +36,42 @@ export type KnowledgeContextResult = {
     similarity: number;
     knowledgeDocumentId?: number;
     documentTitle?: string;
+    page?: number;
+    chapter?: string;
+    section?: string;
   }[];
   hasReadyDocuments: boolean;
   reingestedDocuments: number;
 };
 
 const mapChunks = (chunks: RetrievedChunk[]) =>
-  chunks.map(chunk => ({
-    id: chunk.id,
-    content: chunk.content.slice(0, MAX_CHUNK_SNIPPET),
-    similarity: chunk.similarity,
-    knowledgeDocumentId: chunk.knowledgeDocumentId,
-    documentTitle: String(chunk.metadata?.documentTitle || "")
-  }));
-
-const buildContextBlock = (
-  chunks: { id: number; content: string; similarity: number }[]
-): string =>
   chunks
-    .map((chunk, idx) => `[Trecho ${idx + 1}]\n${chunk.content}`)
+    .filter(chunk => chunk.similarity >= getRagMinimumSimilarity())
+    .map(chunk => ({
+      id: chunk.id,
+      content: chunk.content.slice(0, MAX_CHUNK_SNIPPET),
+      similarity: chunk.similarity,
+      knowledgeDocumentId: chunk.knowledgeDocumentId,
+      documentTitle: String(
+        chunk.metadata?.documentTitle || chunk.metadata?.assetTitle || ""
+      ),
+      page: Number(chunk.metadata?.page) || undefined,
+      chapter: String(chunk.metadata?.chapter || "") || undefined,
+      section: String(chunk.metadata?.section || "") || undefined
+    }));
+
+const buildContextBlock = (chunks: ContextChunk[]): string =>
+  chunks
+    .map((chunk, idx) => {
+      const source = [
+        chunk.documentTitle,
+        chunk.chapter,
+        chunk.section,
+        chunk.page ? `p. ${chunk.page}` : ""
+      ].filter(Boolean);
+      const label = source.length ? ` — ${source.join(" · ")}` : "";
+      return `[Trecho ${idx + 1}${label}]\n${chunk.content}`;
+    })
     .join("\n\n")
     .slice(0, MAX_CONTEXT_CHARS);
 
@@ -447,9 +470,6 @@ export const buildKnowledgeContextForQuery = async ({
     expandedKnowledgeBaseIds
   );
 
-  const effectiveReadyCount =
-    readyCount + cmsPublishedChunkCount + descriptionReadyCount;
-
   let reingestedDocuments = 0;
 
   if (!skipReingest && readyCount + cmsPublishedChunkCount === 0) {
@@ -462,11 +482,7 @@ export const buildKnowledgeContextForQuery = async ({
   const descriptionLimit =
     loadStrategy === "full" ? MAX_DESCRIPTION_SECTIONS : 8;
 
-  if (
-    loadStrategy === "full" ||
-    (effectiveReadyCount > 0 &&
-      effectiveReadyCount <= AUTO_FULL_CORPUS_DOC_LIMIT)
-  ) {
+  if (loadStrategy === "full") {
     const documentChunks = await loadAllReadyChunkTexts(
       companyId,
       expandedKnowledgeBaseIds,
@@ -501,40 +517,35 @@ export const buildKnowledgeContextForQuery = async ({
       expandedKnowledgeBaseIds,
       userText,
       queryEmbedding,
-      8
+      RAG_RETRIEVAL_LIMIT
     );
   } catch (error) {
     logger.warn(
       { error, companyId },
       "Vector knowledge search failed, falling back to keyword search"
     );
-    merged = await searchKnowledgeChunksByText(
+    const textChunks = await searchKnowledgeChunksByText(
       companyId,
       expandedKnowledgeBaseIds,
       userText,
-      8
+      RAG_RETRIEVAL_LIMIT
     );
-  }
-
-  if (!merged.length && userText.trim().length >= 3) {
-    merged = await searchKnowledgeChunksByText(
+    merged = await postProcessRetrievedChunks({
       companyId,
-      expandedKnowledgeBaseIds,
-      userText,
-      8
-    );
+      knowledgeBaseIds: expandedKnowledgeBaseIds,
+      query: userText,
+      chunks: textChunks,
+      limit: RAG_RETRIEVAL_LIMIT
+    });
   }
 
   let usedChunks: KnowledgeContextResult["usedChunks"] = mapChunks(merged);
 
-  if (!usedChunks.length) {
-    usedChunks = await loadAllReadyChunkTexts(
-      companyId,
-      expandedKnowledgeBaseIds
-    );
-  }
-
-  if (!usedChunks.length || userText.trim()) {
+  if (
+    !usedChunks.length &&
+    readyCount + cmsPublishedChunkCount === 0 &&
+    descriptionReadyCount > 0
+  ) {
     const descriptionChunks = await loadKnowledgeBaseDescriptionChunks(
       companyId,
       expandedKnowledgeBaseIds,
@@ -546,6 +557,7 @@ export const buildKnowledgeContextForQuery = async ({
 
   const hasReadyDocuments =
     readyCount > 0 ||
+    cmsPublishedChunkCount > 0 ||
     reingestedDocuments > 0 ||
     usedChunks.length > 0 ||
     (await countBasesWithDescription(companyId, expandedKnowledgeBaseIds)) > 0;

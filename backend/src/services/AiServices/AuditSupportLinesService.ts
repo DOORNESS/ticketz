@@ -6,6 +6,7 @@ import AiAgentQueue from "../../models/AiAgentQueue";
 import KnowledgeBase from "../../models/KnowledgeBase";
 import KnowledgeDomain from "../../models/KnowledgeDomain";
 import KnowledgeDocument from "../../models/KnowledgeDocument";
+import KnowledgeChunk from "../../models/KnowledgeChunk";
 import AiAgentKnowledgeBase from "../../models/AiAgentKnowledgeBase";
 import {
   findWhatsappByBrand,
@@ -44,8 +45,14 @@ export type AuditSupportLinesSummary = {
 };
 
 const FORTMAX_QUEUE_HINTS = ["suporte fortmax", "suporte webg3"];
-const NIVEL_QUEUE_HINTS = ["suporte nivel", "suporte nível"];
+const NIVEL_QUEUE_HINTS = [
+  "suporte consumidor nivel",
+  "suporte consumidor nível",
+  "suporte nivel",
+  "suporte nível"
+];
 const FORTMAX_DEPARTMENT_HINTS = ["fortmax", "webg3", "web g3"];
+const NIVEL_DEPARTMENT_HINTS = ["nivel", "nível"];
 const FORTMAX_DOMAIN_HINTS = ["fortmax"];
 const NIVEL_DOMAIN_HINTS = ["nivel cashback", "nível cashback", "nivel"];
 const FORTMAX_AGENT_HINTS = ["webin", "fortmax"];
@@ -61,14 +68,28 @@ const matchesAnyHint = (value: string, hints: string[]): boolean => {
 const countReadyDocuments = async (
   companyId: number,
   knowledgeBaseId: number
-): Promise<number> =>
-  KnowledgeDocument.count({
-    where: {
-      companyId,
-      knowledgeBaseId,
-      status: "ready"
-    }
-  });
+): Promise<number> => {
+  const [legacyDocuments, cmsAssets] = await Promise.all([
+    KnowledgeDocument.count({
+      where: {
+        companyId,
+        knowledgeBaseId,
+        status: "ready"
+      }
+    }),
+    KnowledgeChunk.count({
+      where: {
+        companyId,
+        knowledgeBaseId,
+        lifecycleStatus: "published"
+      },
+      distinct: true,
+      col: "knowledgeAssetId"
+    })
+  ]);
+
+  return legacyDocuments + cmsAssets;
+};
 
 const auditBrandLine = async (
   companyId: number,
@@ -120,27 +141,20 @@ const auditBrandLine = async (
       code: "whatsapp_without_queue",
       message: `WhatsApp "${whatsapp.name}" não tem fila vinculada`
     });
-  } else if (queues.length > 1 && line === "nivel") {
-    issues.push({
-      severity: "error",
-      line,
-      code: "whatsapp_multiple_queues",
-      message: `WhatsApp "${whatsapp.name}" tem ${queues.length} filas — deve ter apenas 1`
-    });
   }
 
-  if (line === "fortmax") {
-    queues.forEach(linkedQueue => {
-      if (!matchesAnyHint(linkedQueue.name, FORTMAX_DEPARTMENT_HINTS)) {
-        issues.push({
-          severity: "error",
-          line,
-          code: "queue_brand_mismatch",
-          message: `Fila "${linkedQueue.name}" não corresponde à linha Fortmax`
-        });
-      }
-    });
-  }
+  const departmentHints =
+    line === "fortmax" ? FORTMAX_DEPARTMENT_HINTS : NIVEL_DEPARTMENT_HINTS;
+  queues.forEach(linkedQueue => {
+    if (!matchesAnyHint(linkedQueue.name, departmentHints)) {
+      issues.push({
+        severity: "error",
+        line,
+        code: "queue_brand_mismatch",
+        message: `Fila "${linkedQueue.name}" não corresponde à linha ${line}`
+      });
+    }
+  });
 
   const queue =
     queues.find(linkedQueue => matchesAnyHint(linkedQueue.name, queueHints)) ||
@@ -171,6 +185,47 @@ const auditBrandLine = async (
       code: "queue_cross_brand",
       message: `Fila "${queue.name}" pertence à outra marca`
     });
+  }
+
+  const secondaryQueues = queues.filter(
+    linkedQueue => linkedQueue.id !== queue?.id
+  );
+  for (let index = 0; index < secondaryQueues.length; index += 1) {
+    const linkedQueue = secondaryQueues[index];
+    const links = await AiAgentQueue.findAll({
+      where: { companyId, queueId: linkedQueue.id },
+      include: [
+        {
+          model: AiAgent,
+          as: "aiAgent",
+          required: true
+        }
+      ]
+    });
+
+    if (links.length !== 1) {
+      issues.push({
+        severity: "error",
+        line,
+        code: links.length ? "queue_multiple_agents" : "queue_without_agent",
+        message: `Fila "${linkedQueue.name}" deve ter exatamente 1 agente IA; encontrado(s): ${links.length}`
+      });
+      continue;
+    }
+
+    const linkedAgent = links[0].aiAgent;
+    if (
+      !linkedAgent?.active ||
+      !matchesAnyHint(linkedAgent.name, agentHints) ||
+      matchesAnyHint(linkedAgent.name, forbiddenAgentHints)
+    ) {
+      issues.push({
+        severity: "error",
+        line,
+        code: "agent_cross_brand",
+        message: `Fila "${linkedQueue.name}" está vinculada ao agente incompatível "${linkedAgent?.name || "desconhecido"}"`
+      });
+    }
   }
 
   let agent: AiAgent | null = null;

@@ -30,6 +30,10 @@
 | `20260725100000-ai-phase2-knowledge-cms` | Domínios, categorias, assets, versões, permissões, jobs |
 | `20260730100000-ai-phase3-memory-tools` | Memória contato, agent tools, tool execution logs |
 
+`KnowledgeChunks.metadata` (JSONB) suporta o pipeline `structured-v2` sem migration adicional: `chunkIndex`, `chunkingVersion`, `format`, página, capítulo, seção, parágrafos e offsets. `KnowledgeAssetVersions` registra tamanho, overlap e nome do pipeline.
+
+O backfill `npm run backfill:knowledge-assets` preserva o `knowledgeDomainId` real de cada `KnowledgeBase` ao migrar chunks legados; o domínio `Geral` é usado somente para bases originalmente sem domínio.
+
 ## Variável
 
 - `AUTO_MIGRATE=true` — aplica migrations na subida (`MigrationService.ts`)

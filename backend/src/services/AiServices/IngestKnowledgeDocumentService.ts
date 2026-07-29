@@ -4,8 +4,8 @@ import KnowledgeChunk from "../../models/KnowledgeChunk";
 import StorageService from "../StorageService/StorageService";
 import { resolveKnowledgeStorageKey } from "../../helpers/mediaStorage";
 import { createEmbedding } from "./ModelGateway";
-import { splitTextIntoChunks } from "./ChunkingService";
-import { extractTextFromBuffer } from "./DocumentParser";
+import { splitTextIntoChunks, StructuredPage } from "./ChunkingService";
+import { extractStructuredTextFromBuffer } from "./DocumentParser";
 import { logger } from "../../utils/logger";
 
 const insertChunkWithEmbedding = async (
@@ -54,6 +54,8 @@ export const ingestKnowledgeDocument = async (
     await StorageService.ensureReady(companyId);
 
     let text = rawText || "";
+    let pages: StructuredPage[] | undefined;
+    let format = document.type || "text";
 
     if (!text && document.storageUrl) {
       if (document.type === "text") {
@@ -67,11 +69,14 @@ export const ingestKnowledgeDocument = async (
       } else {
         const key = resolveKnowledgeStorageKey(document.storageUrl);
         const buffer = await StorageService.download(key, companyId);
-        text = await extractTextFromBuffer(
+        const extracted = await extractStructuredTextFromBuffer(
           buffer,
           document.type,
           document.originalFilename
         );
+        text = extracted.text;
+        pages = extracted.pages;
+        format = extracted.format;
       }
     }
 
@@ -83,7 +88,7 @@ export const ingestKnowledgeDocument = async (
       where: { knowledgeDocumentId: document.id, companyId }
     });
 
-    const chunks = splitTextIntoChunks(text);
+    const chunks = splitTextIntoChunks(text, { pages, format });
 
     await Promise.all(
       chunks.map(async chunk => {

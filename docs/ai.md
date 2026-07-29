@@ -44,6 +44,7 @@
 | Memória contato | `ContactMemory/` — policy, sanitizer, Bull queue |
 | Tools | `tools/` — executor, loop, 4 pilot tools |
 | Prompt | `AiPromptBuilder.ts` |
+| Persona e isolamento de marca | `AgentPersonaService.ts` — identidade, saudação, fallback, regras e protocolo externo por agente |
 | Feature flags | `AI_CONTACT_MEMORY_ENABLED`, `AI_TOOLS_ENABLED` + settings |
 | Migration | `20260730100000-ai-phase3-memory-tools.ts` |
 | Scripts | `seed:ai-phase3`, `audit:ai-phase3` |
@@ -61,6 +62,10 @@ Ver [`AI_PHASE3_ARCHITECTURE.md`](AI_PHASE3_ARCHITECTURE.md) e [`AI_PHASE3_REPOR
 | RAG policy | `KnowledgeRetrievalPolicy.ts` + `RetrievalEngine.ts` |
 
 Env vars ingestão: `AI_KB_INGESTION_CONCURRENCY`, `AI_KB_INGESTION_MAX_ATTEMPTS`, `AI_KB_INGESTION_BACKOFF_MS`
+
+RAG v2: `RagConfig.ts`, `ChunkingService.ts`, `RetrievalEngine.ts` e `KnowledgeContextService.ts` implementam chunking estrutural, threshold efetivo, reranking e recuperação de vizinhos. Bases cumulativas de respostas supervisionadas são separadas por marca (`respostas-anexas-nivel` / `respostas-anexas-fortmax`).
+
+O concierge multifila identifica a marca pelas filas autorizadas antes de selecionar a persona. A conexão Nível pode operar com filas separadas para consumidor, empresa e recuperação, todas exclusivas do Nivelton e mapeadas para suas respectivas bases.
 
 ## Diretório no código
 

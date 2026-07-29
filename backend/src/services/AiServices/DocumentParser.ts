@@ -2,12 +2,19 @@ import fs from "fs";
 import path from "path";
 import mammoth from "mammoth";
 import { PDFParse } from "pdf-parse";
+import { StructuredPage } from "./ChunkingService";
 
-export const extractTextFromBuffer = async (
+export type ExtractedDocumentText = {
+  text: string;
+  pages?: StructuredPage[];
+  format: string;
+};
+
+export const extractStructuredTextFromBuffer = async (
   buffer: Buffer,
   type: string,
   filename?: string
-): Promise<string> => {
+): Promise<ExtractedDocumentText> => {
   const ext = (filename || "").split(".").pop()?.toLowerCase() || type;
 
   if (ext === "pdf" || type === "pdf") {
@@ -16,7 +23,25 @@ export const extractTextFromBuffer = async (
     const parser = new PDFParse({ data });
     try {
       const parsed = await parser.getText();
-      return parsed.text || "";
+      const parsedPages = (
+        parsed as unknown as {
+          pages?: Array<{ text?: string; pageNumber?: number; num?: number }>;
+        }
+      ).pages;
+      const pages = Array.isArray(parsedPages)
+        ? parsedPages
+            .map((page, index) => ({
+              pageNumber: page.pageNumber || page.num || index + 1,
+              text: String(page.text || "").trim()
+            }))
+            .filter(page => Boolean(page.text))
+        : [];
+
+      return {
+        text: parsed.text || pages.map(page => page.text).join("\f"),
+        pages: pages.length ? pages : undefined,
+        format: "pdf"
+      };
     } finally {
       await parser.destroy();
     }
@@ -36,17 +61,30 @@ export const extractTextFromBuffer = async (
     }
 
     const result = await mammoth.extractRawText({ buffer });
-    return result.value || "";
+    return { text: result.value || "", format: "docx" };
   }
 
   if (
     ["txt", "md", "markdown", "html", "text"].includes(ext) ||
     type === "text"
   ) {
-    return buffer.toString("utf-8");
+    return { text: buffer.toString("utf-8"), format: ext || "text" };
   }
 
-  return buffer.toString("utf-8");
+  return { text: buffer.toString("utf-8"), format: ext || type || "text" };
+};
+
+export const extractTextFromBuffer = async (
+  buffer: Buffer,
+  type: string,
+  filename?: string
+): Promise<string> => {
+  const extracted = await extractStructuredTextFromBuffer(
+    buffer,
+    type,
+    filename
+  );
+  return extracted.text;
 };
 
 export const extractTextFromFilePath = async (

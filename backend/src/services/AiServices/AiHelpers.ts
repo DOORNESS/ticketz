@@ -14,6 +14,8 @@ import {
   type OrchestratorResult
 } from "./AiOrchestratorService";
 import { listAgentKnowledgeBaseIds } from "./AiAgentKnowledgeBaseService";
+import { detectAgentBrand } from "./AgentPersonaService";
+export { buildAgentIdentityReply } from "./AgentPersonaService";
 
 const HANDOFF_KEYWORDS = [
   "quero atendente",
@@ -238,33 +240,12 @@ type AgentBrandHint = {
   basePrompt?: string | null;
 };
 
-const detectAgentBrand = (
-  agent: AgentBrandHint
-): "nivel" | "fortmax" | null => {
-  const text = `${agent.name || ""} ${agent.basePrompt || ""}`.toLowerCase();
-  if (
-    text.includes("nivelton") ||
-    text.includes("nível cashback") ||
-    text.includes("nivel cashback")
-  ) {
-    return "nivel";
-  }
-  if (
-    text.includes("webin") ||
-    text.includes("fortmax") ||
-    text.includes("webg3")
-  ) {
-    return "fortmax";
-  }
-  return null;
-};
-
 export const resolveBrandKnowledgeBaseIds = async (
   companyId: number,
   agent: AgentBrandHint
 ): Promise<number[]> => {
   const brand = detectAgentBrand(agent);
-  if (!brand) {
+  if (brand === "generic") {
     return [];
   }
 
@@ -522,9 +503,6 @@ export const detectSensitiveTopic = (message: string): boolean => {
   return SENSITIVE_KEYWORDS.some(keyword => lower.includes(keyword));
 };
 
-/** WhatsApp humano Nível — só quando a IA não pode resolver sozinha. */
-export const NIVEL_SUPPORT_WHATSAPP_DISPLAY = "(17) 99165-8811";
-
 const HUMAN_ACCOUNT_ESCALATION_PATTERNS = [
   /reset(?:ar)?\s+(?:a\s+)?(?:minha\s+)?senha/i,
   /recuper(?:ar|ação|acao)\s+(?:de\s+)?(?:minha\s+)?(?:senha|conta|acesso)/i,
@@ -598,10 +576,6 @@ const normalizeForMatch = (message: string): string =>
     .replace(/[\u0300-\u036f]/g, "")
     .trim();
 
-export const AI_ASSISTANT_DISPLAY_NAME = "Webin";
-export const AI_ASSISTANT_IDENTITY_REPLY =
-  "Me chamo Webin, Assistente Virtual da Fortmax.";
-
 export const detectAgentIdentityQuestion = (message: string): boolean => {
   const text = normalizeForMatch(message);
   if (!text || text.length > 120) {
@@ -654,28 +628,6 @@ export const detectHandoffConfirmationDecline = (message: string): boolean => {
       text
     )
   );
-};
-
-export const buildAgentIdentityReply = (
-  agent?: Pick<AiAgent, "name" | "basePrompt"> | null
-): string => {
-  const prompt = agent?.basePrompt?.trim() || "";
-  const quoted = prompt.match(/"([^"]+)"/);
-  if (quoted?.[1]?.trim()) {
-    const reply = quoted[1].trim();
-    return reply.endsWith(".") ? reply : `${reply}.`;
-  }
-
-  const personaMatch = prompt.match(/(?:Você é o|Você é a)\s+([^,\n.]+)/i);
-  if (personaMatch?.[1]?.trim()) {
-    return `Me chamo ${personaMatch[1].trim()}.`;
-  }
-
-  if (agent?.name?.trim()) {
-    return `Me chamo ${agent.name.trim()}.`;
-  }
-
-  return AI_ASSISTANT_IDENTITY_REPLY;
 };
 
 export const buildHandoffConfirmationQuestion = (): string =>

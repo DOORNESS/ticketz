@@ -8,6 +8,7 @@ import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
 import { logger } from "../../utils/logger";
 import Message from "../../models/Message";
 import { parsePositiveInt, withAiTimeout } from "./withAiTimeout";
+import { resolveAgentInformationalFallback } from "./AgentPersonaService";
 
 const getKnowledgeLookupTimeoutMs = (): number =>
   parsePositiveInt(process.env.AI_INFORMATIONAL_KNOWLEDGE_TIMEOUT_MS, 8000);
@@ -28,15 +29,6 @@ export type InformationalDirectReplyResult = {
     | "empty_reply"
     | "provider_error";
 };
-
-const NIVEL_BRAND_FALLBACK =
-  "A Nível Cashback ajuda sua empresa a fidelizar clientes: em cada compra o cliente acumula cashback e volta a gastar com você. Posso te explicar o funcionamento para o lojista, para o cliente final, ou os benefícios principais — o que você prefere?";
-
-const FORTMAX_BRAND_FALLBACK =
-  "Posso te ajudar com os produtos Fortmax (como WebG3 e FortControl): funcionalidades, uso e suporte. Me diga o que sua empresa precisa resolver que eu te oriento com base no nosso material.";
-
-const GENERIC_BRAND_FALLBACK =
-  "Claro — posso te explicar o que nosso produto faz pela sua empresa com base no material deste canal. Me diga se prefere visão geral, benefícios ou como começar.";
 
 const INSTRUCTION_PLACEHOLDER_MARKERS = [
   "A base deste canal ainda está limitada",
@@ -83,28 +75,8 @@ const buildConversationHistory = async (
     }));
 };
 
-export const resolveBrandFallback = (agent: AiAgent, userText = ""): string => {
-  const combined =
-    `${agent.name || ""} ${agent.basePrompt || ""} ${userText}`.toLowerCase();
-  if (
-    combined.includes("nivelton") ||
-    combined.includes("nível cashback") ||
-    combined.includes("nivel cashback") ||
-    combined.includes("nível") ||
-    combined.includes("nivel") ||
-    combined.includes("cashback")
-  ) {
-    return NIVEL_BRAND_FALLBACK;
-  }
-  if (
-    combined.includes("webin") ||
-    combined.includes("fortmax") ||
-    combined.includes("webg3")
-  ) {
-    return FORTMAX_BRAND_FALLBACK;
-  }
-  return GENERIC_BRAND_FALLBACK;
-};
+export const resolveBrandFallback = (agent: AiAgent, _userText = ""): string =>
+  resolveAgentInformationalFallback(agent);
 
 /**
  * Caminho estável para dúvidas informativas.
@@ -155,7 +127,7 @@ export const tryInformationalDirectReply = async ({
         : "A base deste canal ainda está limitada. Explique de forma geral e cordial o que puder; peça mais detalhes se necessário.");
 
     if (!hasRealKnowledgeContext(contextBlock)) {
-      const brandFallback = resolveBrandFallback(agent, userText);
+      const brandFallback = resolveBrandFallback(agent);
       return {
         replied: true,
         body: brandFallback,
@@ -200,7 +172,8 @@ export const tryInformationalDirectReply = async ({
 
       const reply = prepareCustomerFacingAiText(
         sanitizeAiOutboundText(completion.content?.trim() || ""),
-        userText
+        userText,
+        agent
       );
       if (reply.length >= 20) {
         return {
@@ -225,10 +198,12 @@ export const tryInformationalDirectReply = async ({
     );
   }
 
-  const brandFallback = resolveBrandFallback(agent, userText);
+  const brandFallback = resolveBrandFallback(agent);
   return {
     replied: true,
-    body: prepareCustomerFacingAiText(brandFallback, userText) || brandFallback,
+    body:
+      prepareCustomerFacingAiText(brandFallback, userText, agent) ||
+      brandFallback,
     knowledgeBaseIds,
     chunkCount,
     hasReadyDocuments,

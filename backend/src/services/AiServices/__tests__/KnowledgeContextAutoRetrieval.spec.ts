@@ -73,4 +73,33 @@ describe("KnowledgeContextService automatic retrieval", () => {
     expect(result.usedChunks[0].id).toBe(4989);
     expect(result.contextBlock).toMatch(/fidelizar clientes/i);
   });
+
+  it("excludes weak chunks and does not dump the first published chunks", async () => {
+    (retrieveKnowledgeForQuery as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 12,
+        content: "Trecho do início do manual sem relação com a pergunta.",
+        knowledgeDocumentId: null,
+        metadata: {},
+        similarity: 0.12
+      }
+    ]);
+
+    const result = await buildKnowledgeContextForQuery({
+      companyId: 1,
+      knowledgeBaseIds: [5],
+      userText: "Como cancelar uma cobrança duplicada?",
+      loadStrategy: "auto",
+      skipReingest: true
+    });
+
+    expect(result.usedChunks).toEqual([]);
+    expect(result.contextBlock).toBe("");
+    expect(result.hasReadyDocuments).toBe(true);
+    expect(
+      (sequelize.query as jest.Mock).mock.calls.some(([sql]) =>
+        String(sql).includes("ORDER BY kc.id ASC")
+      )
+    ).toBe(false);
+  });
 });

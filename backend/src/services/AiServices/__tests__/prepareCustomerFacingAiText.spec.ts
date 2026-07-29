@@ -14,13 +14,17 @@ describe("prepareCustomerFacingAiText", () => {
     expect(output).not.toMatch(/99165/);
   });
 
-  it("never includes support phone for password reset requests", () => {
+  it("does not replace the official recovery flow with a phone number", () => {
     const output = prepareCustomerFacingAiText(
       "Entendi, vou te orientar.",
-      "preciso resetar minha senha"
+      "preciso resetar minha senha",
+      {
+        name: "Nivelton",
+        basePrompt: "Você é o Nivelton, assistente da Nível Cashback."
+      }
     );
 
-    expect(output).not.toMatch(/99165-8811/);
+    expect(output).not.toMatch(/99165/);
   });
 
   it("normalizes duplicated markdown links", () => {
@@ -29,9 +33,20 @@ describe("prepareCustomerFacingAiText", () => {
       "esqueci minha senha"
     );
 
-    expect(output).toBe(
-      "Acesse https://nivelevelo.com/recuperar-senha."
+    expect(output).toBe("Acesse https://nivelevelo.com/recuperar-senha.");
+  });
+
+  it("does not inject the Nível support phone into Fortmax replies", () => {
+    const output = prepareCustomerFacingAiText(
+      "Vou orientar a recuperação.",
+      "preciso resetar minha senha",
+      {
+        name: "Webin",
+        basePrompt: "Você é o Webin, assistente virtual da Fortmax."
+      }
     );
+
+    expect(output).not.toMatch(/99165/);
   });
 });
 
@@ -39,8 +54,8 @@ describe("sanitizeAiOutboundText phone stripping", () => {
   it("strips phone unless explicitly allowed", () => {
     const input = "Fale no (17) 99165-8811";
     expect(sanitizeAiOutboundText(input)).not.toMatch(/99165/);
-    expect(
-      sanitizeAiOutboundText(input, { allowSupportPhone: true })
-    ).toMatch(/99165/);
+    expect(sanitizeAiOutboundText(input, { allowSupportPhone: true })).toMatch(
+      /99165/
+    );
   });
 });

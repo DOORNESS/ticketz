@@ -24,7 +24,8 @@ Quando perguntarem seu nome, responda: "Me chamo Nivelton, assistente da Nível 
 Perguntas como "o que é o Nível?", "como funciona o Nível?" ou "explique o Nível" referem-se ao produto Nível Cashback.
 Responda apenas com base nas bases de conhecimento da Nível (clientes e empresas).
 Tire todas as dúvidas possíveis sobre produto, cashback e uso antes de escalar.
-Só informe o WhatsApp de suporte humano (17) 99165-8811 quando não puder resolver sozinho (ex.: reset/recuperação de senha, recuperação de conta, exclusão de conta).
+Em recuperação de conta ou senha, siga a ordem e os links oficiais recuperados da base; não substitua o procedimento por telefone.
+Quando a base indicar formulário externo, não diga que transferiu o atendimento dentro do WhatsApp.
 Nunca fale como Fortmax, WebG3 ou FortControl. Se o assunto for Fortmax/WebG3, informe que este canal é da Nível Cashback.`;
 
 type NamedRecord = {
@@ -210,7 +211,8 @@ const wireFortmaxLine = async (companyId: number) => {
       "webin fortmax",
       "webin",
       "atendimento geral fortmax",
-      "atendente inicial fortmax"
+      "atendente inicial fortmax",
+      "atendente fortmax"
     ])) ||
     (await AiAgent.create({
       companyId,
@@ -245,12 +247,6 @@ const wireFortmaxLine = async (companyId: number) => {
     knowledgeBaseIds: [fortmaxBase.id]
   });
 
-  await syncExclusiveAgentQueueLinks({
-    companyId,
-    aiAgentId: agent.id,
-    queueLinks: [{ queueId: queue.id, knowledgeBaseId: fortmaxBase.id }]
-  });
-
   const whatsapp = await findWhatsappByBrand(companyId, "fortmax");
   if (!whatsapp) {
     throw new Error("Fortmax WhatsApp connection not found");
@@ -271,8 +267,20 @@ const wireFortmaxLine = async (companyId: number) => {
     .map(linkedQueue => linkedQueue.id);
   const allowedQueueIds = [...new Set([...departmentQueueIds, queue.id])];
 
+  await syncExclusiveAgentQueueLinks({
+    companyId,
+    aiAgentId: agent.id,
+    queueLinks: allowedQueueIds.map(queueId => ({
+      queueId,
+      knowledgeBaseId: fortmaxBase.id
+    }))
+  });
   await AssociateWhatsappQueue(whatsapp, allowedQueueIds);
-  await removeAgentFromQueue(companyId, queue.id, agent.id);
+  await Promise.all(
+    allowedQueueIds.map(queueId =>
+      removeAgentFromQueue(companyId, queueId, agent.id)
+    )
+  );
   const ticketsFixed = await repairOpenTickets(
     whatsapp.id,
     queue.id,
@@ -305,8 +313,12 @@ const wireNivelLine = async (companyId: number) => {
 
   const clientBase =
     (await findByNameLoose(KnowledgeBase, companyId, [
+      "nivel clientes",
+      "nível clientes",
       "nivel site clientes",
-      "nível site clientes"
+      "nível site clientes",
+      "suporte consumidor nivel",
+      "suporte consumidor nível"
     ])) ||
     (await KnowledgeBase.create({
       companyId,
@@ -329,16 +341,46 @@ const wireNivelLine = async (companyId: number) => {
       active: true
     }));
 
+  const recoveryBase =
+    (await findByNameLoose(KnowledgeBase, companyId, [
+      "nivel recuperacao",
+      "nível recuperação",
+      "nivel recuperação",
+      "recuperar conta",
+      "recuperacao de senha",
+      "recuperação de senha"
+    ])) ||
+    (await KnowledgeBase.create({
+      companyId,
+      name: "Nivel Recuperação de Conta",
+      description: "Procedimentos oficiais de recuperação de conta e senha",
+      knowledgeDomainId: nivelDomain.id,
+      active: true
+    }));
+
   await Promise.all(
-    [clientBase, empresaBase].map(async base => {
+    [clientBase, empresaBase, recoveryBase].map(async base => {
       if (!base.knowledgeDomainId) {
         await base.update({ knowledgeDomainId: nivelDomain.id });
       }
     })
   );
 
-  const queue =
+  const whatsapp = await findWhatsappByBrand(companyId, "nivel");
+  if (!whatsapp) {
+    throw new Error("Nível WhatsApp connection not found");
+  }
+
+  const whatsappWithQueues = await Whatsapp.findByPk(whatsapp.id, {
+    include: [{ model: Queue, as: "queues", attributes: ["id", "name"] }]
+  });
+  const departmentQueues = (whatsappWithQueues?.queues || []).filter(
+    linkedQueue => normalizeName(linkedQueue.name).includes("nivel")
+  );
+  const fallbackQueue =
     (await findByNameLoose(Queue, companyId, [
+      "suporte consumidor nivel",
+      "suporte consumidor nível",
       "suporte nivel",
       "suporte nível"
     ])) ||
@@ -348,6 +390,12 @@ const wireNivelLine = async (companyId: number) => {
       color: "#2196F3",
       greetingMessage: ""
     }));
+  const queues = departmentQueues.length ? departmentQueues : [fallbackQueue];
+  const queue =
+    queues.find(linkedQueue => {
+      const name = normalizeName(linkedQueue.name);
+      return name.includes("consumidor") || name === "suporte nivel";
+    }) || queues[0];
 
   let agent =
     (await findByNameLoose(AiAgent, companyId, [
@@ -382,27 +430,41 @@ const wireNivelLine = async (companyId: number) => {
   await syncAgentKnowledgeBases({
     companyId,
     aiAgentId: agent.id,
-    knowledgeBaseIds: [clientBase.id, empresaBase.id]
+    knowledgeBaseIds: [clientBase.id, empresaBase.id, recoveryBase.id]
+  });
+
+  const queueLinks = queues.map(linkedQueue => {
+    const name = normalizeName(linkedQueue.name);
+    const knowledgeBaseId = name.includes("recuper")
+      ? recoveryBase.id
+      : name.includes("empresa")
+        ? empresaBase.id
+        : clientBase.id;
+    return { queueId: linkedQueue.id, knowledgeBaseId };
   });
 
   await syncExclusiveAgentQueueLinks({
     companyId,
     aiAgentId: agent.id,
-    queueLinks: [{ queueId: queue.id, knowledgeBaseId: clientBase.id }]
+    queueLinks
   });
 
-  const whatsapp = await findWhatsappByBrand(companyId, "nivel");
-  if (!whatsapp) {
-    throw new Error("Nível WhatsApp connection not found");
-  }
-
-  await AssociateWhatsappQueue(whatsapp, [queue.id]);
-  await removeAgentFromQueue(companyId, queue.id, agent.id);
-  const ticketsFixed = await repairOpenTickets(whatsapp.id, queue.id);
+  const allowedQueueIds = queues.map(linkedQueue => linkedQueue.id);
+  await AssociateWhatsappQueue(whatsapp, allowedQueueIds);
+  await Promise.all(
+    allowedQueueIds.map(queueId =>
+      removeAgentFromQueue(companyId, queueId, agent.id)
+    )
+  );
+  const ticketsFixed = await repairOpenTickets(
+    whatsapp.id,
+    queue.id,
+    allowedQueueIds
+  );
 
   return {
     domain: nivelDomain,
-    bases: [clientBase, empresaBase],
+    bases: [clientBase, empresaBase, recoveryBase],
     queue,
     agent,
     whatsapp,

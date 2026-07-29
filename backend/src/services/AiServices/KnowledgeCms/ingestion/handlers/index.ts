@@ -1,6 +1,6 @@
 import { resolveKnowledgeStorageKey } from "../../../../../helpers/mediaStorage";
 import StorageService from "../../../../StorageService/StorageService";
-import { extractTextFromBuffer } from "../../../DocumentParser";
+import { extractStructuredTextFromBuffer } from "../../../DocumentParser";
 import {
   BaseAssetHandler,
   AssetExtractionContext,
@@ -61,8 +61,14 @@ export class PdfAssetHandler extends BaseAssetHandler {
       resolveStorageKey(context.storageUrl),
       context.companyId
     );
-    const text = await extractTextFromBuffer(buffer, "pdf");
-    return { text };
+    const extracted = await extractStructuredTextFromBuffer(buffer, "pdf");
+    return {
+      text: extracted.text,
+      metadata: {
+        format: extracted.format,
+        ...(extracted.pages ? { structuredPages: extracted.pages } : {})
+      }
+    };
   }
 }
 
@@ -81,8 +87,8 @@ export class WordAssetHandler extends BaseAssetHandler {
       resolveStorageKey(context.storageUrl),
       context.companyId
     );
-    const text = await extractTextFromBuffer(buffer, "docx");
-    return { text };
+    const extracted = await extractStructuredTextFromBuffer(buffer, "docx");
+    return { text: extracted.text, metadata: { format: extracted.format } };
   }
 }
 

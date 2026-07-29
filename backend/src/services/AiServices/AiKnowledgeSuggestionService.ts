@@ -75,14 +75,14 @@ const mergeChunkContents = (chunks: KnowledgeChunk[]): string => {
 
 const loadLegacyAnnexContent = async (
   companyId: number,
-  targetBaseId: number
+  targetBaseId: number,
+  brand: string
 ): Promise<string> => {
   const legacyBases = await KnowledgeBase.findAll({
     where: {
       companyId,
-      slug: {
-        [Op.in]: ["respostas-anexas-nivel", "respostas-anexas-fortmax"]
-      }
+      slug: "respostas-anexas",
+      id: { [Op.ne]: targetBaseId }
     },
     attributes: ["id", "slug"]
   });
@@ -109,7 +109,20 @@ const loadLegacyAnnexContent = async (
     });
     const content = mergeChunkContents(chunks);
     if (content) {
-      sections.push(`## Conteúdo legado — ${asset.title}\n\n${content}`);
+      const brandMarker =
+        brand === "nivel"
+          ? "- Linha: Nível"
+          : brand === "fortmax"
+            ? "- Linha: Fortmax"
+            : "";
+      const matchingEntries = content
+        .split(/\n{2,}---\n{2,}/)
+        .map(entry => entry.trim())
+        .filter(
+          entry =>
+            Boolean(entry) && (!brandMarker || entry.includes(brandMarker))
+        );
+      sections.push(...matchingEntries);
     }
   }
   return sections.join("\n\n---\n\n");
@@ -203,7 +216,7 @@ const appendHumanResponseToCumulativeAsset = async ({
 
     const previousText = asset
       ? await loadCumulativeAssetText(companyId, asset)
-      : await loadLegacyAnnexContent(companyId, base.id);
+      : await loadLegacyAnnexContent(companyId, base.id, brand);
     const entry = await buildAnnexEntry({
       ticketId,
       brand,
@@ -427,7 +440,7 @@ export const annexHumanResponseToBase = async ({
   userId?: number;
 }): Promise<{ base: KnowledgeBase; assetId?: number; documentId?: number }> => {
   const brand = await resolveAnnexResponsesBrand(companyId, ticketId);
-  const base = await ensureAnnexResponsesKnowledgeBase(companyId, "default");
+  const base = await ensureAnnexResponsesKnowledgeBase(companyId, brand);
   const normalizedTitle = title.trim() || "Resposta supervisionada";
   const normalizedContent = content.trim();
 
@@ -447,7 +460,7 @@ export const annexHumanResponseToBase = async ({
       content: normalizedContent,
       userId
     });
-    await ensureAnnexResponsesKnowledgeBase(companyId, "default");
+    await ensureAnnexResponsesKnowledgeBase(companyId, brand);
 
     await AiKnowledgeSuggestion.create({
       companyId,

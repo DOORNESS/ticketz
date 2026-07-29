@@ -99,6 +99,10 @@ export const backfillCompanyKnowledgeAssets = async (
   await Promise.all(
     documents.map(async doc => {
       try {
+        const documentBase = await KnowledgeBase.findOne({
+          where: { id: doc.knowledgeBaseId, companyId }
+        });
+        const knowledgeDomainId = documentBase?.knowledgeDomainId || domain.id;
         const chunkCount = await KnowledgeChunk.count({
           where: { companyId, knowledgeDocumentId: doc.id }
         });
@@ -188,7 +192,7 @@ export const backfillCompanyKnowledgeAssets = async (
             knowledgeAssetVersionId: version.id,
             knowledgeAssetId: asset.id,
             knowledgeBaseId: doc.knowledgeBaseId,
-            knowledgeDomainId: domain.id,
+            knowledgeDomainId,
             lifecycleStatus: doc.status === "ready" ? "published" : "draft"
           },
           {

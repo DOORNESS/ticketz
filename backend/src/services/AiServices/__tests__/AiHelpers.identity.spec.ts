@@ -1,5 +1,4 @@
 import {
-  AI_ASSISTANT_IDENTITY_REPLY,
   buildAgentIdentityReply,
   detectAgentIdentityQuestion
 } from "../AiHelpers";
@@ -25,8 +24,10 @@ describe("AiHelpers identity", () => {
     expect(detectAgentIdentityQuestion("qual o nome do produto")).toBe(false);
   });
 
-  it("returns the fixed Webin identity reply when no agent is provided", () => {
-    expect(buildAgentIdentityReply()).toBe(AI_ASSISTANT_IDENTITY_REPLY);
+  it("returns a neutral identity reply when no agent is provided", () => {
+    expect(buildAgentIdentityReply()).toBe(
+      "Sou o assistente virtual deste canal."
+    );
   });
 
   it("returns identity from agent basePrompt", () => {

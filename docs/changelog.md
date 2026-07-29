@@ -6,6 +6,34 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.82] — 2026-07-29
+
+### Corrigido (configuração real Nível multifila)
+
+- **Wiring Nível** — preserva as filas Consumidor, Empresa e Recuperação, liga todas exclusivamente ao Nivelton e mapeia cada fila para a base correspondente; vínculos cruzados com o agente Fortmax são removidos.
+- **Concierge multi-marca** — seleciona a persona pela marca das filas permitidas, inclui vocabulário de consumidor/empresa/recuperação e nunca apresenta Webin na conexão Nível.
+- **Auditoria operacional** — valida todas as filas de ambas as marcas e contabiliza fontes CMS publicadas, além de documentos legados.
+- **Protocolo Nível** — recuperação usa links oficiais da base; pedido geral de suporte externo usa `nivelvelo.com/chamado`, sem telefone ou promessa de transferência interna.
+- **Backfill CMS** — chunks legados preservam o domínio real da base durante a migração.
+- **Ingestão/RAG** — claim atômico impede jobs concorrentes de duplicarem chunks; recuperação elimina conteúdo idêntico da mesma versão antes de montar o contexto.
+- **Manual 1.5.82** — seções §8–§9 e índices `ai.md`/`database.md` sincronizados.
+
+---
+
+## [1.5.81] — 2026-07-29
+
+### Corrigido (isolamento de marcas + precisão RAG)
+
+- **`AgentPersonaService`** — identidade, saudação, fallback, regras operacionais e contato são derivados do agente ativo; texto do cliente não altera a marca.
+- **Nível × Fortmax** — removidos fallbacks e hints globais da Nível nos caminhos WhatsApp, inbound e Copilot; testes cruzados impedem Nivelton em respostas Webin.
+- **Respostas anexas** — gravação e vínculos separados em `respostas-anexas-nivel` e `respostas-anexas-fortmax`; base compartilhada antiga deixa de ser autorizada aos agentes das marcas.
+- **RAG seguro** — threshold mínimo aplicado ao prompt; removido fallback dos primeiros 24 chunks; conteúdo indexado e enviado usa o mesmo limite de 1800 caracteres.
+- **RAG `structured-v2`** — chunking por páginas/títulos/parágrafos, metadata de página/capítulo/seção, 24 candidatos, reranking híbrido e recuperação de vizinhos da mesma fonte publicada.
+- **Compatibilidade** — chunks existentes continuam válidos; documentos substituídos/reindexados recebem o pipeline novo.
+- **Manual 1.5.81** — seções §8, §22, §28, §29, §33, §41–§44 e índices temáticos atualizados.
+
+---
+
 ## [1.5.80] — 2026-07-29
 
 ### Adicionado (concierge IA para WhatsApp Fortmax multifila)

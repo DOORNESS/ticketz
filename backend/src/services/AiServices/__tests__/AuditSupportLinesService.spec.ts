@@ -6,6 +6,7 @@ const mockAgentQueueFindAll = jest.fn();
 const mockAgentKbFindAll = jest.fn();
 const mockDomainFindOne = jest.fn();
 const mockDocumentCount = jest.fn();
+const mockChunkCount = jest.fn();
 
 jest.mock("../../../models/Whatsapp", () => ({
   __esModule: true,
@@ -32,10 +33,16 @@ jest.mock("../../../models/KnowledgeDocument", () => ({
   default: { count: (...args: unknown[]) => mockDocumentCount(...args) }
 }));
 
+jest.mock("../../../models/KnowledgeChunk", () => ({
+  __esModule: true,
+  default: { count: (...args: unknown[]) => mockChunkCount(...args) }
+}));
+
 describe("AuditSupportLinesService", () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDocumentCount.mockResolvedValue(3);
+    mockChunkCount.mockResolvedValue(0);
     mockDomainFindOne.mockResolvedValue(null);
   });
 
@@ -75,7 +82,7 @@ describe("AuditSupportLinesService", () => {
     });
 
     mockAgentQueueFindAll.mockImplementation(async ({ where }) => {
-      if (where.queueId === 10) {
+      if (where.queueId === 10 || where.queueId === 11) {
         return [
           {
             aiAgent: {
@@ -140,6 +147,45 @@ describe("AuditSupportLinesService", () => {
     expect(audit.lines[0].queue?.name).toBe("Suporte WebG3");
     expect(audit.lines[1].agent?.name).toBe("Nivelton");
     expect(audit.lines[1].knowledgeBases).toHaveLength(2);
+  });
+
+  it("accepts multiple Nível queues when all use the Nível agent", async () => {
+    jest
+      .spyOn(WireSupportLinesService, "findWhatsappByBrand")
+      .mockImplementation(async (_companyId, brand) =>
+        brand === "nivel" ? ({ id: 2, name: "Nível" } as never) : null
+      );
+    mockWhatsappFindByPk.mockResolvedValue({
+      id: 2,
+      name: "Nível",
+      queues: [
+        { id: 20, name: "01 - Suporte Consumidor Nível" },
+        { id: 21, name: "02 - Suporte Empresa Nível" },
+        { id: 22, name: "03 - Recuperar Conta Nível" }
+      ]
+    });
+    mockAgentQueueFindAll.mockResolvedValue([
+      {
+        aiAgent: { id: 200, name: "Nivelton", active: true }
+      }
+    ]);
+    mockAgentKbFindAll.mockResolvedValue([
+      {
+        knowledgeBase: {
+          id: 2000,
+          name: "Nivel clientes",
+          knowledgeDomainId: 600,
+          knowledgeDomain: { id: 600, name: "Nível Cashback" }
+        }
+      }
+    ]);
+    mockChunkCount.mockResolvedValue(1);
+
+    const audit = await auditSupportLinesForCompany(1);
+    const nivel = audit.lines.find(row => row.line === "nivel");
+
+    expect(nivel?.ok).toBe(true);
+    expect(nivel?.issues).toHaveLength(0);
   });
 
   it("flags cross-brand agent on queue", async () => {

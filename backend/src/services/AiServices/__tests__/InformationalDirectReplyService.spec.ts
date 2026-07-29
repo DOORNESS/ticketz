@@ -8,8 +8,7 @@ import {
 
 jest.mock("../AiHelpers", () => ({
   getKnowledgeBaseIdsForAgent: jest.fn(async () => [10, 11]),
-  detectRequiresHumanAccountEscalation: jest.fn(() => false),
-  NIVEL_SUPPORT_WHATSAPP_DISPLAY: "(17) 99165-8811"
+  detectRequiresHumanAccountEscalation: jest.fn(() => false)
 }));
 
 jest.mock("../KnowledgeContextService", () => ({
@@ -105,7 +104,7 @@ describe("InformationalDirectReplyService", () => {
     expect(result.body).toBeTruthy();
     expect(result.body!.length).toBeGreaterThanOrEqual(20);
     expect(result.reason).toBe("informational_brand_fallback");
-    expect(result.body).toMatch(/Nível Cashback/i);
+    expect(result.body).toMatch(/Nivelton/i);
     expect(result.body).not.toMatch(/rob[oô]/i);
   });
 
@@ -157,19 +156,19 @@ describe("InformationalDirectReplyService", () => {
 
     expect(result.replied).toBe(true);
     expect(result.reason).toBe("informational_brand_fallback");
-    expect(result.body).toMatch(/Nível Cashback/i);
+    expect(result.body).toMatch(/Nivelton/i);
     expect(result.body).not.toMatch(/base deste canal ainda está limitada/i);
   });
 
   it("uses brand fallback when knowledge lookup times out", async () => {
-    jest.spyOn(withAiTimeoutModule, "withAiTimeout").mockImplementationOnce(
-      async () => {
+    jest
+      .spyOn(withAiTimeoutModule, "withAiTimeout")
+      .mockImplementationOnce(async () => {
         throw new withAiTimeoutModule.AiOperationTimeoutError(
           "informational_knowledge_lookup",
           8000
         );
-      }
-    );
+      });
 
     const result = await tryInformationalDirectReply({
       companyId: 1,
@@ -180,7 +179,34 @@ describe("InformationalDirectReplyService", () => {
 
     expect(result.replied).toBe(true);
     expect(result.reason).toBe("informational_brand_fallback");
-    expect(result.body).toMatch(/Nível Cashback/i);
+    expect(result.body).toMatch(/Nivelton/i);
+  });
+
+  it("does not switch a Fortmax agent to Nível from customer text", async () => {
+    const { buildKnowledgeContextForQuery } = jest.requireMock(
+      "../KnowledgeContextService"
+    );
+    buildKnowledgeContextForQuery.mockResolvedValueOnce({
+      contextBlock: "",
+      usedChunks: [],
+      hasReadyDocuments: false,
+      reingestedDocuments: 0
+    });
+    const fortmaxAgent = {
+      ...agent,
+      name: "Webin",
+      basePrompt: "Você é o Webin, assistente virtual da Fortmax."
+    } as Parameters<typeof tryInformationalDirectReply>[0]["agent"];
+
+    const result = await tryInformationalDirectReply({
+      companyId: 1,
+      ticket,
+      agent: fortmaxAgent,
+      userText: "qual é o nível de suporte do sistema?"
+    });
+
+    expect(result.body).toMatch(/Webin/i);
+    expect(result.body).not.toMatch(/Nivelton|Nível Cashback/i);
   });
 
   it("always replies even when model returns almost nothing", async () => {

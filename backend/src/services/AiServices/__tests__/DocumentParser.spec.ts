@@ -9,7 +9,10 @@ jest.mock("pdf-parse", () => ({
   PDFParse: mockPDFParse
 }));
 
-import { extractTextFromBuffer } from "../DocumentParser";
+import {
+  extractStructuredTextFromBuffer,
+  extractTextFromBuffer
+} from "../DocumentParser";
 
 describe("DocumentParser PDF v2 adapter", () => {
   beforeEach(() => {
@@ -38,5 +41,26 @@ describe("DocumentParser PDF v2 adapter", () => {
       extractTextFromBuffer(Buffer.from("invalid"), "pdf")
     ).rejects.toThrow("invalid pdf");
     expect(mockDestroy).toHaveBeenCalledTimes(1);
+  });
+
+  it("preserves page numbers when PDFParse exposes page text", async () => {
+    mockGetText.mockResolvedValueOnce({
+      text: "Capítulo 1\nCapítulo 2",
+      pages: [
+        { pageNumber: 1, text: "Capítulo 1" },
+        { pageNumber: 2, text: "Capítulo 2" }
+      ]
+    });
+
+    const extracted = await extractStructuredTextFromBuffer(
+      Buffer.from("%PDF-1.7 pages"),
+      "pdf"
+    );
+
+    expect(extracted.pages).toEqual([
+      { pageNumber: 1, text: "Capítulo 1" },
+      { pageNumber: 2, text: "Capítulo 2" }
+    ]);
+    expect(extracted.format).toBe("pdf");
   });
 });

@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.80 — auditada contra o código
+**Versão:** 1.5.82 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -342,8 +342,8 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 
 ### IA multi-marca (Fortmax vs Nível Cashback)
 - Cadeia obrigatória: **WhatsApp** → **fila** (`WhatsappQueues`) → **agente** (`AiAgentQueues`) → **bases** (`AiAgentKnowledgeBases`) → **domínio CMS** (`KnowledgeDomain`)
-- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔Fortmax e WhatsApp Nível↔Suporte Nível↔Nivelton↔bases do domínio Nível Cashback; **Fortmax e Nível são ligados de forma independente** (falha em uma linha não impede a outra); preserva as filas departamentais Fortmax já ligadas ao WebG3 e garante `Suporte Fortmax` no conjunto; cria/vincula base **Respostas anexas** (`EnsureAnnexResponsesKnowledgeBase`, slug `respostas-anexas`) a todos os agentes legacy/specialist
-- Auditoria: `AuditSupportLinesService.auditSupportLinesForCompany(companyId)` — valida a cadeia completa por linha; Fortmax aceita múltiplas filas da marca, mas exige uma fila principal de suporte com Webin; Nível permanece com uma única fila; `GET /ai/audit-support-lines` (master); `npm run audit:support-lines`
+- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔filas Fortmax↔agente Fortmax e WhatsApp Nível↔filas Consumidor/Empresa/Recuperação↔Nivelton; cada fila Nível recebe a base correspondente e o agente acumula somente bases do domínio Nível Cashback. **Fortmax e Nível são ligados de forma independente**; filas departamentais já ligadas à conexão são preservadas e vínculos cruzados de agentes são removidos. Cria/vincula bases cumulativas separadas **Respostas anexas — Nível** (`respostas-anexas-nivel`) e **Respostas anexas — Fortmax** (`respostas-anexas-fortmax`)
+- Auditoria: `AuditSupportLinesService.auditSupportLinesForCompany(companyId)` — valida todas as filas ligadas à conexão, exige exatamente um agente compatível por fila, rejeita vínculo cruzado Nível×Fortmax e contabiliza fontes prontas tanto no legado quanto no CMS publicado; ambas as marcas aceitam múltiplas filas próprias; `GET /ai/audit-support-lines` (master); `npm run audit:support-lines`
 - `POST /ai/wire-support-lines` executa wire + auditoria + reengajamento de tickets presos
 - Executado no **startup** (`bootstrapAiPlatform`, aguarda wiring antes do first-responder; env `WIRE_SUPPORT_LINES=0` desliga) e via **`POST /ai/wire-support-lines`** (admin)
 - **Schema IA/triage:** `ApplyAiSchemaService.applyAiSchema()` (script `apply-db-schema.js`) garante tabelas IA, `AiCopilotSuggestions` e colunas triage v2 (`aiCorrelationId`, `aiProcessingState`, `aiAssist*`, `AiTicketTimelineEvents`); validado em `verify-runtime-ready.js` e `validate-triage-v2-schema.js` no deploy VPS
@@ -352,7 +352,7 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Manual ops: `COMPANY_ID=1 npm run wire:support-lines`
 - `EnsureAiFirstResponderService` **não** liga Webin automaticamente em nenhuma fila cujo nome identifique Nível, Fortmax ou WebG3; os vínculos dessas marcas são administrados explicitamente
 - `resolveQueueIdForTicket`: conexões com várias filas nunca escolhem silenciosamente a primeira fila com agente; o ticket permanece sem `queueId` até a escolha explícita ou classificação do concierge
-- Identidade do bot (`buildAgentIdentityReply`) e regras operacionais do prompt vêm do `basePrompt` do agente (Nivelton ≠ Webin)
+- Identidade, saudação, fallback informativo e regras operacionais são resolvidos por `AgentPersonaService` a partir do agente ativo (Nivelton ≠ Webin); texto do cliente nunca determina a marca. Na Nível, recuperação segue os links oficiais da base e o pedido geral de humano aponta para `https://nivelvelo.com/chamado`, sem prometer transferência interna ou injetar telefone
 
 ### Filtro por linha WhatsApp (lista de tickets)
 - Barra de chips abaixo das abas Abertas/Resolvidos: **Todos**, **Web G3**, **Nível**, etc. (nome da conexão em Administração → Conexões)
@@ -388,7 +388,7 @@ Se conexão tem **uma fila**, IA habilitada e agente ativo → não mostra menu 
 
 `AiQueueConciergeService` atua antes da escolha de departamento:
 
-1. encontra um agente ativo ligado a uma das filas permitidas, preferindo Webin;
+1. infere a marca somente pelas filas permitidas e encontra um agente ativo da mesma marca;
 2. gera uma apresentação curta pelo modelo; em timeout/erro usa apresentação local segura;
 3. acrescenta uma lista determinística contendo **somente** as filas ligadas à conexão;
 4. aceita o número exibido, palavras-chave inequívocas ou classificação LLM;
@@ -399,7 +399,7 @@ Se conexão tem **uma fila**, IA habilitada e agente ativo → não mostra menu 
 flowchart TD
     A[Mensagem em WhatsApp multifila] --> B{Ticket já tem queueId?}
     B -- sim --> C[Agente/fluxo da fila atual]
-    B -- não --> D[Webin apresenta filas conectadas]
+    B -- não --> D[Agente da marca apresenta filas conectadas]
     D --> E[Cliente responde número ou descreve necessidade]
     E --> F{Número ou palavras-chave inequívocas?}
     F -- sim --> G[Selecionar fila permitida]
@@ -413,7 +413,7 @@ flowchart TD
     K -- não --> M[Aguardar atendimento humano]
 ```
 
-No WebG3, o menu reflete a configuração da conexão. Com Financeiro, Gerência e Suporte selecionados, a ordem alfabética exibida é:
+O menu reflete a configuração de cada conexão. No WebG3, com Financeiro, Gerência e Suporte selecionados, a ordem alfabética exibida é:
 
 ```text
 1 - Financeiro Fortmax
@@ -422,6 +422,8 @@ No WebG3, o menu reflete a configuração da conexão. Com Financeiro, Gerência
 ```
 
 `syncExclusiveAgentQueueLinks` remove vínculos antigos ao trocar ou limpar a fila de atendimento do agente. A tela envia `queueLinks: []` quando “Nenhuma” é selecionada, evitando vínculos ocultos.
+
+Na conexão Nível, as filas **Suporte Consumidor**, **Suporte Empresa** e **Recuperar Conta** usam o Nivelton e são associadas, respectivamente, às bases de consumidores, empresas e recuperação. Palavras como *cashback*, *empresa* e *recuperar senha* participam da seleção determinística antes do classificador LLM.
 
 ### Auditoria §9
 
@@ -795,7 +797,7 @@ Postgres local :5432, Redis :6379, `cp .env.dev .env`
 ## 22. O que está pronto vs. em evolução
 
 ### ✅ Operacional (código presente)
-Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot/playground), concierge IA para conexões multifila, contatos, tags, schedules, chat interno, campanhas (flag), SaaS (planos/faturas), API externa, Socket.io, i18n, Docker deploys, storage B2.
+Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot/playground), RAG `structured-v2` com threshold efetivo/reranking/vizinhos, isolamento de persona e anexos Nível×Fortmax, concierge IA para conexões multifila, contatos, tags, schedules, chat interno, campanhas (flag), SaaS (planos/faturas), API externa, Socket.io, i18n, Docker deploys, storage B2.
 
 ### ⚠️ Parcial
 | Item | Evidência |
@@ -803,7 +805,7 @@ Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot/playground), concierge
 | Orquestrador multi-agente | Implementado mas desligado por padrão (env + Setting) |
 | Memória contato + tools | Implementados (Fase 3) mas desligados por padrão (env + Setting) |
 | UI memória contato | API pronta; painel de listagem/export **não** implementado |
-| Schema IA readiness | `AI_MIGRATION_NAMES` só lista **2** de **8** migrations IA |
+| Schema IA readiness | `AI_MIGRATION_NAMES` só lista **2** de **9** migrations IA |
 | Providers gemini/anthropic | `ProviderFactory` → 501 |
 | Playground RAG | Só busca vetorial; sem merge keyword |
 | Múltiplos agentes | `getActiveAgent` → primeiro ativo por `id ASC` ou fila |
@@ -962,9 +964,12 @@ flowchart LR
   Q[Query do usuário] --> E[createEmbedding\ntext-embedding-3-small]
   E --> V[searchKnowledgeChunks\npgvector cosine HNSW]
   Q --> K[searchKnowledgeChunksByText\nLIKE keyword]
-  V --> M[retrieveKnowledgeForQuery\nmerge by id, top limit]
+  V --> M[retrieveKnowledgeForQuery\n24 candidatos]
   K --> M
-  M --> C[KnowledgeContextService\nbuildKnowledgeContextForQuery]
+  M --> T[threshold mínimo]
+  T --> R[rerank híbrido\nvetor + termos + metadata]
+  R --> N[chunks vizinhos\nchunkIndex ± janela]
+  N --> C[KnowledgeContextService\ntop 8]
   C --> P[Prompt + chunks no systemPrompt]
 ```
 
@@ -972,10 +977,18 @@ flowchart LR
 |-----------|--------------|
 | Embedding model | `text-embedding-3-small` (`OpenAIProvider.ts:61`) |
 | Dimensão vector | 1536 (`migration 20260707100000`) |
+| Tamanho / overlap | 1800 / 200 caracteres (`RagConfig`) |
+| Candidatos pré-rerank | 24 chunks |
 | Limit inbound | 8 chunks (`KnowledgeContextService`) |
-| Limit retrieve default | 5 (`RetrievalEngine.ts`) |
-| Threshold confiável | similarity ≥ **0.25** (`ProcessInboundMessageService`) |
-| Keyword fallback fixo | `"fortmax webg3 mercado 1998 esquadrias vidro"` (`KnowledgeContextService.ts:197`) |
+| Threshold efetivo | similarity ≥ **0.25** (`AI_RAG_MIN_SIMILARITY` opcional); chunk abaixo não entra no prompt |
+| Reranking | 75% similaridade + 20% termos da query + 5% capítulo/seção |
+| Vizinhos | ±1 por padrão (`AI_RAG_NEIGHBOR_WINDOW`, 0–2), respeitando versão publicada/documento ready |
+| Deduplicação | mesmo conteúdo na mesma versão/fonte entra uma única vez no contexto |
+
+A ingestão de uma versão faz *claim* atômico do status antes de extrair e gerar embeddings. Jobs concorrentes para a mesma versão não inserem conjuntos duplicados de chunks.
+| Contexto máximo | 20.000 caracteres |
+
+Não existe mais fallback automático que injeta os primeiros 24 chunks por ordem de ID quando a busca não encontra relevância. Nesse caso o contexto fica vazio e o agente solicita detalhe sem afirmar fatos. `loadStrategy=full` permanece apenas como opção explícita administrativa.
 
 ---
 
@@ -996,9 +1009,9 @@ sequenceDiagram
   C->>I: ingestKnowledgeDocument
   I->>I: status=processing
   I->>S: download (se arquivo)
-  I->>P: extractTextFromBuffer
+  I->>P: extractStructuredTextFromBuffer
   Note over P: pdf, docx, txt, md, html
-  I->>I: splitTextIntoChunks
+  I->>I: splitTextIntoChunks structured-v2
   loop cada chunk
     I->>M: createEmbedding
     I->>I: INSERT KnowledgeChunks + vector
@@ -1007,6 +1020,8 @@ sequenceDiagram
 ```
 
 **Formatos suportados** (`DocumentParser.ts`): pdf, docx, txt, md, markdown, html, text.
+
+**Chunking `structured-v2`:** preserva limites de página quando o parser PDF fornece `pages`, reconhece títulos Markdown, títulos numerados, cabeçalhos em caixa alta e parágrafos; só usa janela 1800/overlap 200 para blocos semânticos maiores. Cada chunk grava em JSONB: `chunkIndex`, `chunkingVersion`, `format`, `page/pageStart/pageEnd` quando disponível, `chapter`, `section`, `sectionLevel`, `paragraphStart/paragraphEnd` e offsets de caracteres. O mesmo conteúdo (até 1800 caracteres) é usado no embedding e no prompt.
 
 ### CMS — Ativos de conhecimento (`/ai/assets`)
 
@@ -1026,7 +1041,7 @@ Painel administrativo para bases editoriais (Fase 2 CMS). Diferente de `/ai/docu
 | Arquivar | `POST /ai/assets/:id/archive` — rascunho, revisão, aprovado ou publicado |
 | Excluir | `DELETE /ai/assets/:id` — permanente; publicados devem ser arquivados antes |
 
-**Indexação:** job Bull grava chunks em `KnowledgeChunks` (`knowledgeDocumentId` nullable desde migration `20260725180000` — CMS não exige documento legado); só versões **publicadas** e **indexadas** entram na busca (`KnowledgeRetrievalPolicy`). Falhas gravam `errorMessage` na versão (ex.: download B2 corrompido, texto vazio no DOCX, embedding). Ativos com status **Falhou** devem usar **Substituir arquivo** (reupload) — download de arquivos corrompidos no storage antigo pode falhar.
+**Indexação:** job Bull grava chunks em `KnowledgeChunks` (`knowledgeDocumentId` nullable desde migration `20260725180000` — CMS não exige documento legado); só versões **publicadas** e **indexadas** entram na busca (`KnowledgeRetrievalPolicy`). A versão registra `chunkSize=1800`, `chunkOverlap=200` e `ingestionPipeline=structured-v2`. Falhas gravam `errorMessage` na versão (ex.: download B2 corrompido, texto vazio no DOCX, embedding). Ativos com status **Falhou** devem usar **Substituir arquivo** (reupload). Chunks antigos continuam compatíveis; para receber metadata estrutural devem ser substituídos ou reindexados.
 
 **Storage:** chaves B2 usam `companies/{id}/knowledge/...`; handlers resolvem URL pública via `extractStorageKeyFromUrl` (`mediaStorage.ts`).
 
@@ -1169,7 +1184,7 @@ flowchart TD
 
 ## 33. Banco de dados — módulo IA
 
-### Migrations IA (8 arquivos)
+### Migrations IA (9 arquivos)
 
 | Migration | Conteúdo |
 |-----------|----------|
@@ -1192,7 +1207,7 @@ flowchart TD
 | `AiAgentKnowledgeBases` | Agente ↔ KB (orquestrador) |
 | `KnowledgeBases` | Bases de conhecimento |
 | `KnowledgeDocuments` | Documentos (status: pending/processing/ready/error) |
-| `KnowledgeChunks` | Chunks + embedding vector(1536) |
+| `KnowledgeChunks` | Chunks + embedding vector(1536) + metadata JSONB estrutural (`page`, `chapter`, `section`, `chunkIndex`, `chunkingVersion`) |
 | `AiConversationLogs` | Log por interação |
 | `AiCopilotSuggestions` | Sugestões copilot |
 | `AiKnowledgeSuggestions` | Sugestões FAQ |
@@ -1342,6 +1357,8 @@ frontend/src/
 | `AI_ORCHESTRATOR_PROVIDER` | `openai` | idem |
 | `AI_PROVIDER_MAX_RETRIES` | `1` | `OpenAIProvider.ts` |
 | `AI_PROVIDER_TIMEOUT_MS` | `45000` | idem |
+| `AI_RAG_MIN_SIMILARITY` | `0.25` | `RagConfig.ts` — filtro efetivo antes do prompt |
+| `AI_RAG_NEIGHBOR_WINDOW` | `1` (0–2) | `RagConfig.ts` — vizinhos por âncora |
 | `AI_QUEUE_DEBOUNCE_MS` | **`0`** | `AiInboundQueueService.ts` |
 | `AI_QUEUE_MAX_ATTEMPTS` | `3` | idem |
 | `AI_QUEUE_BACKOFF_MS` | `3000` | idem |
@@ -1403,10 +1420,10 @@ frontend/src/
 
 ## 41. Dívidas técnicas
 
-1. **`AI_MIGRATION_NAMES`** só inclui 2 migrations — diagnóstico incompleto vs 8 migrations IA reais
+1. **`AI_MIGRATION_NAMES`** só inclui 2 migrations — diagnóstico incompleto vs 9 migrations IA reais
 2. **`KnowledgeChunk.embedding`** ausente no model Sequelize (só SQL raw)
 3. **UI memória contato** — API Fase 3 pronta; painel admin não implementado
-4. **Query fallback RAG** hardcoded em `KnowledgeContextService.ts:197`
+4. **OCR de manuais** — PDFs escaneados/imagens ainda não passam por OCR estrutural na ingestão de conhecimento
 5. **Debounce default mismatch** — queue usa 0, metrics reporta 2000
 8. **`AiAgentQueues.knowledgeBaseId`** sem FK na migration inicial
 9. **To-Do List** só localStorage — sem sync entre dispositivos
@@ -1422,6 +1439,7 @@ frontend/src/
 |---------|-------|---------|
 | Embedding síncrono por chunk | `IngestKnowledgeDocumentService` loop sequencial | Upload KB lento |
 | RAG double search | Vector + keyword em paralelo por mensagem | Latência IA |
+| Rerank + vizinhos RAG | Até 24 candidatos e consultas de vizinhos para 3 âncoras | Mais precisão com consultas SQL adicionais |
 | AI queue lock por ticket | Redis lock TTL 300s | Serialização por ticket (intencional) |
 | ScheduleMonitor 5s | Poll contínuo | Carga Redis/DB leve constante |
 | Invoice cron cada minuto | Scan todas companies | Carga DB em many-tenant |
@@ -1446,6 +1464,8 @@ frontend/src/
 | Sem rate limit IA | Média | Custo OpenAI não limitado por tenant no código |
 | Company 1 bypass compliance | Baixa | Tenant admin sempre "compliant" |
 | LLM indisponível no concierge | Baixa | Saudação e números possuem fallback local; escolhas naturais ambíguas repetem o menu sem atribuir fila indevida |
+| RAG sem trecho acima do threshold | Baixa | Contexto fica vazio por segurança; fallback pede detalhe e não injeta início irrelevante do manual |
+| PDF sem estrutura de páginas | Média | `page` só é gravada quando `pdf-parse` fornece páginas; OCR/visão permanece evolução |
 
 ---
 
@@ -1453,8 +1473,8 @@ frontend/src/
 
 1. **Expandir `AI_MIGRATION_NAMES`** para todas as 6 migrations IA
 2. **Unificar debounce default** (0 vs 2000) entre queue e metrics
-3. **Remover/parametrizar branding Fortmax** nos system prompts
-4. **Remover query fallback hardcoded** do RAG
+3. **Adicionar OCR/visão à ingestão de PDFs escaneados**, tabelas e diagramas
+4. **Criar avaliação RAG por manual** com perguntas gabarito, recall@10, fidelidade e teste de contaminação entre marcas
 5. **Implementar ou documentar ToolRegistry** — registrar ao menos 1 tool piloto
 6. **Adicionar `embedding` ao model Sequelize** ou documentar uso exclusivo raw SQL
 7. **Playground usar `retrieveKnowledgeForQuery`** para paridade com inbound

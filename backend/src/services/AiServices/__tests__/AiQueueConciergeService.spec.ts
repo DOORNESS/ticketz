@@ -63,6 +63,48 @@ describe("AiQueueConciergeService", () => {
     expect(menu).toContain("número ou explicar brevemente");
   });
 
+  it("uses Nivelton and Nível identity for the Nível queue menu", async () => {
+    mockAgentQueueFindAll.mockResolvedValue([
+      {
+        aiAgent: {
+          id: 20,
+          name: "Nivelton",
+          basePrompt:
+            'Você é o Nivelton, assistente virtual da Nível Cashback. Quando perguntarem seu nome, responda: "Me chamo Nivelton."',
+          active: true,
+          role: "legacy",
+          textModel: "gpt-4o-mini",
+          provider: "openai"
+        }
+      },
+      {
+        aiAgent: {
+          id: 10,
+          name: "Webin",
+          basePrompt: "Você é o Webin da Fortmax.",
+          active: true,
+          role: "legacy",
+          textModel: "gpt-4o-mini",
+          provider: "openai"
+        }
+      }
+    ]);
+    mockedChatCompletion.mockRejectedValue(new Error("provider unavailable"));
+
+    const menu = await buildIntelligentQueueMenu({
+      companyId: 1,
+      queues: [
+        { id: 20, name: "01 - Suporte Consumidor Nível" },
+        { id: 21, name: "02 - Suporte Empresa Nível" },
+        { id: 22, name: "03 - Recuperar Conta Nível" }
+      ] as never
+    });
+
+    expect(menu).toMatch(/Nivelton/i);
+    expect(menu).toMatch(/Nível Cashback/i);
+    expect(menu).not.toMatch(/Fortmax|Webin/i);
+  });
+
   it("resolves a numeric choice deterministically", async () => {
     const selection = await resolveIntelligentQueueSelection({
       companyId: 1,
@@ -86,6 +128,22 @@ describe("AiQueueConciergeService", () => {
     });
 
     expect(selection?.queueId).toBe(1);
+    expect(selection?.method).toBe("keyword");
+    expect(mockedChatCompletion).not.toHaveBeenCalled();
+  });
+
+  it("routes account recovery to the dedicated Nível queue", async () => {
+    const selection = await resolveIntelligentQueueSelection({
+      companyId: 1,
+      customerText: "Troquei de telefone e preciso recuperar minha senha",
+      queues: [
+        { id: 20, name: "01 - Suporte Consumidor Nível" },
+        { id: 21, name: "02 - Suporte Empresa Nível" },
+        { id: 22, name: "03 - Recuperar Conta Nível" }
+      ] as never
+    });
+
+    expect(selection?.queueId).toBe(22);
     expect(selection?.method).toBe("keyword");
     expect(mockedChatCompletion).not.toHaveBeenCalled();
   });
