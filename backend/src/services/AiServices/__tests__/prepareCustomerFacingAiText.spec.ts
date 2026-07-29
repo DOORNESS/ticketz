@@ -1,4 +1,3 @@
-import { detectRequiresHumanAccountEscalation } from "../AiHelpers";
 import { prepareCustomerFacingAiText } from "../prepareCustomerFacingAiText";
 import { sanitizeAiOutboundText } from "../sanitizeAiOutboundText";
 
@@ -15,16 +14,24 @@ describe("prepareCustomerFacingAiText", () => {
     expect(output).not.toMatch(/99165/);
   });
 
-  it("includes support phone for password reset requests", () => {
+  it("never includes support phone for password reset requests", () => {
     const output = prepareCustomerFacingAiText(
       "Entendi, vou te orientar.",
       "preciso resetar minha senha"
     );
 
-    expect(detectRequiresHumanAccountEscalation("preciso resetar minha senha")).toBe(
-      true
+    expect(output).not.toMatch(/99165-8811/);
+  });
+
+  it("normalizes duplicated markdown links", () => {
+    const output = prepareCustomerFacingAiText(
+      "Acesse [https://nivelevelo.com/recuperar-senha](https://nivelevelo.com/recuperar-senha).",
+      "esqueci minha senha"
     );
-    expect(output).toMatch(/99165-8811/);
+
+    expect(output).toBe(
+      "Acesse https://nivelevelo.com/recuperar-senha."
+    );
   });
 });
 

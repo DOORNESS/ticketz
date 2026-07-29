@@ -9,6 +9,7 @@ const PROACTIVE_HANDOFF_PATTERNS = [
 
 const SUPPORT_PHONE_PATTERNS = [
   /\(?\s*17\s*\)?\s*99165[\s-]?8811/gi,
+  /(?:\+?55\s*)?\(?\d{2}\)?\s*9?\d{4}[\s-]?\d{4}/g,
   /WhatsApp\s+(?:do\s+)?suporte/gi
 ];
 
@@ -57,6 +58,18 @@ const stripSupportPhoneReferences = (text: string): string => {
     .trim();
 };
 
+const normalizeCustomerLinks = (text: string): string => {
+  const markdownAsPlainUrl = text.replace(
+    /\[(https?:\/\/[^\]\s]+)\]\(\1\)/gi,
+    "$1"
+  );
+
+  return markdownAsPlainUrl.replace(
+    /(https?:\/\/[^\s),.;]+)(?:[\s]*[\])(.]*\s*)+\1/gi,
+    "$1"
+  );
+};
+
 export const sanitizeAiOutboundText = (
   text: string,
   options: { allowHandoffLanguage?: boolean; allowSupportPhone?: boolean } = {}
@@ -66,6 +79,7 @@ export const sanitizeAiOutboundText = (
   }
 
   let sanitized = text.trim();
+  sanitized = normalizeCustomerLinks(sanitized);
 
   if (!options.allowSupportPhone) {
     sanitized = stripSupportPhoneReferences(sanitized);
