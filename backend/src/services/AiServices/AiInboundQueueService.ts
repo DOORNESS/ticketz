@@ -409,25 +409,11 @@ export const processBufferedAiInbound = async (
     );
     if (!revalidated) {
       const pendingCount = await redis.llen(bufferKey(ticketId));
-      if (pendingCount > 0) {
-        logger.warn(
-          { ticketId, companyId, pendingCount },
-          "AI inbound buffer retained — ticket could not be revalidated"
-        );
-        if (job) {
-          await persistAiDecisionLog({
-            companyId,
-            ticketId,
-            action: "job_cancelled",
-            reason: "ticket_no_longer_eligible_for_ai"
-          });
-          await recordAiJobCompleted(job, "cancelled");
-        }
-        await scheduleDebouncedJob(companyId, ticketId);
-        return;
-      }
-
       await redis.del(bufferKey(ticketId));
+      logger.info(
+        { ticketId, companyId, discardedPayloads: pendingCount },
+        "AI inbound buffer cleared because ticket is no longer eligible"
+      );
       if (job) {
         await persistAiDecisionLog({
           companyId,
