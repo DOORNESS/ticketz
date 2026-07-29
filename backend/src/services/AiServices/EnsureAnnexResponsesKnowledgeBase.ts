@@ -3,6 +3,7 @@ import AiAgent from "../../models/AiAgent";
 import KnowledgeBase from "../../models/KnowledgeBase";
 import KnowledgeCategory from "../../models/KnowledgeCategory";
 import KnowledgeDomain from "../../models/KnowledgeDomain";
+import KnowledgeAsset from "../../models/KnowledgeAsset";
 import Ticket from "../../models/Ticket";
 import Whatsapp from "../../models/Whatsapp";
 import {
@@ -175,13 +176,25 @@ export const ensureAnnexResponsesKnowledgeBase = async (
         })
       : [];
   const legacyBaseIds = legacyBases.map(item => item.id);
+  const cumulativeAsset =
+    brand === "default"
+      ? await KnowledgeAsset.findOne({
+          where: {
+            companyId,
+            knowledgeBaseId: base.id,
+            slug: "historico-respostas-validadas"
+          },
+          attributes: ["id"]
+        })
+      : null;
+  const canConsolidateLegacy = Boolean(cumulativeAsset);
 
   await Promise.all(
     targetAgents.map(async agent => {
       const linkedIds = await listAgentKnowledgeBaseIds(companyId, agent.id);
-      const consolidatedIds = linkedIds.filter(
-        id => !legacyBaseIds.includes(id)
-      );
+      const consolidatedIds = canConsolidateLegacy
+        ? linkedIds.filter(id => !legacyBaseIds.includes(id))
+        : linkedIds;
       if (
         consolidatedIds.includes(base.id) &&
         consolidatedIds.length === linkedIds.length
@@ -196,7 +209,7 @@ export const ensureAnnexResponsesKnowledgeBase = async (
     })
   );
 
-  if (legacyBaseIds.length) {
+  if (legacyBaseIds.length && canConsolidateLegacy) {
     await KnowledgeBase.update(
       { active: false },
       { where: { companyId, id: { [Op.in]: legacyBaseIds } } }

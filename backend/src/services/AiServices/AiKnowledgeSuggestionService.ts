@@ -447,6 +447,7 @@ export const annexHumanResponseToBase = async ({
       content: normalizedContent,
       userId
     });
+    await ensureAnnexResponsesKnowledgeBase(companyId, "default");
 
     await AiKnowledgeSuggestion.create({
       companyId,
