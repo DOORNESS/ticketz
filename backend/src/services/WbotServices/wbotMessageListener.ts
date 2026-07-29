@@ -2421,6 +2421,46 @@ const filterMessages = (msg: WAMessage): boolean => {
 };
 
 const MESSAGE_LISTENER_ATTACHED = Symbol("messageListenerAttached");
+const RECENT_MESSAGE_EVENT_TTL_MS = 10 * 60 * 1000;
+const recentMessageEvents = new Map<string, number>();
+
+const claimMessageEvent = (wbot: Session, message: WAMessage): boolean => {
+  if (
+    message.message?.protocolMessage?.editedMessage ||
+    message.message?.protocolMessage?.type === 0
+  ) {
+    return true;
+  }
+
+  const messageId = message.key.id;
+  if (!messageId) {
+    return true;
+  }
+
+  const now = Date.now();
+  const key = `${wbot.id}:${message.key.remoteJid || ""}:${messageId}`;
+  const previous = recentMessageEvents.get(key);
+  if (previous && now - previous < RECENT_MESSAGE_EVENT_TTL_MS) {
+    return false;
+  }
+
+  recentMessageEvents.set(key, now);
+  if (recentMessageEvents.size > 5000) {
+    for (const [storedKey, storedAt] of recentMessageEvents) {
+      if (now - storedAt >= RECENT_MESSAGE_EVENT_TTL_MS) {
+        recentMessageEvents.delete(storedKey);
+      }
+    }
+  }
+  return true;
+};
+
+const releaseMessageEvent = (wbot: Session, message: WAMessage): void => {
+  if (!message.key.id) return;
+  recentMessageEvents.delete(
+    `${wbot.id}:${message.key.remoteJid || ""}:${message.key.id}`
+  );
+};
 
 export const ensureWbotMessageListener = (
   wbot: Session,
@@ -2451,30 +2491,62 @@ const wbotMessageListener = async (
 
       if (!messages) return;
 
-      messages.forEach(async (message: proto.IWebMessageInfo) => {
-        if (!message?.message) {
-          logger.warn(
-            { message },
-            "wbotMessageListener: messages.upsert without supported content"
-          );
-          return;
-        }
+      void Promise.all(
+        messages.map(async (message: proto.IWebMessageInfo) => {
+          if (!message?.message) {
+            logger.warn(
+              { message },
+              "wbotMessageListener: messages.upsert without supported content"
+            );
+            return;
+          }
 
-        if (!message.key.fromMe) {
-          logger.info(
-            {
-              whatsappId: wbot.id,
-              remoteJid: message.key.remoteJid,
-              messageId: message.key.id
-            },
-            "Inbound WhatsApp message received"
-          );
-        }
+          if (!claimMessageEvent(wbot, message as WAMessage)) {
+            logger.debug(
+              {
+                whatsappId: wbot.id,
+                remoteJid: message.key.remoteJid,
+                messageId: message.key.id
+              },
+              "Duplicate WhatsApp message event ignored"
+            );
+            return;
+          }
 
-        if (await verifyRecentCampaign(message, companyId)) {
-          return;
-        }
-        await handleMessage(message, wbot, companyId);
+          try {
+            if (!message.key.fromMe) {
+              logger.info(
+                {
+                  whatsappId: wbot.id,
+                  remoteJid: message.key.remoteJid,
+                  messageId: message.key.id
+                },
+                "Inbound WhatsApp message received"
+              );
+            }
+
+            if (await verifyRecentCampaign(message, companyId)) {
+              return;
+            }
+            await handleMessage(message, wbot, companyId);
+          } catch (error) {
+            releaseMessageEvent(wbot, message as WAMessage);
+            logger.error(
+              {
+                error,
+                whatsappId: wbot.id,
+                remoteJid: message.key.remoteJid,
+                messageId: message.key.id
+              },
+              "Failed to process WhatsApp message event"
+            );
+          }
+        })
+      ).catch(error => {
+        logger.error(
+          { error, whatsappId: wbot.id },
+          "Failed to process WhatsApp message batch"
+        );
       });
     });
 

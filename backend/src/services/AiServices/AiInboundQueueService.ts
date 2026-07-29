@@ -212,7 +212,7 @@ const scheduleDebouncedJob = async (
     const state = await existingJob.getState();
     if (isRemovableDebounceJobState(state)) {
       await existingJob.remove();
-      logger.info(
+      logger.debug(
         { companyId, ticketId, queueId: jobId, state },
         "Removed existing AI debounce job before scheduling"
       );

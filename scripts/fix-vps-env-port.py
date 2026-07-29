@@ -24,12 +24,15 @@ if ($c -notmatch '(?m)^HOST=') { $c = "HOST=127.0.0.1`n" + $c } else { $c = $c -
 if ($c -notmatch '(?m)^FRONTEND_URL=') { $c += "`nFRONTEND_URL=https://suporte.fortmax.com.br`n" } else { $c = $c -replace '(?m)^FRONTEND_URL=.*','FRONTEND_URL=https://suporte.fortmax.com.br' }
 if ($c -notmatch '(?m)^BACKEND_URL=') { $c += "BACKEND_URL=https://api.fortmax.com.br`n" } else { $c = $c -replace '(?m)^BACKEND_URL=.*','BACKEND_URL=https://api.fortmax.com.br' }
 if ($c -notmatch '(?m)^WHATSAPP_AUTO_START=') { $c += "WHATSAPP_AUTO_START=true`n" } else { $c = $c -replace '(?m)^WHATSAPP_AUTO_START=.*','WHATSAPP_AUTO_START=true' }
+if ($c -notmatch '(?m)^DB_MAX_CONNECTIONS=') { $c += "DB_MAX_CONNECTIONS=10`n" } else { $c = $c -replace '(?m)^DB_MAX_CONNECTIONS=.*','DB_MAX_CONNECTIONS=10' }
+if ($c -notmatch '(?m)^DB_MIN_CONNECTIONS=') { $c += "DB_MIN_CONNECTIONS=0`n" } else { $c = $c -replace '(?m)^DB_MIN_CONNECTIONS=.*','DB_MIN_CONNECTIONS=0' }
+if ($c -notmatch '(?m)^DB_ACQUIRE=') { $c += "DB_ACQUIRE=15000`n" } else { $c = $c -replace '(?m)^DB_ACQUIRE=.*','DB_ACQUIRE=15000' }
 if ($c -notmatch '(?m)^TURNSTILE_ENABLED=') { $c += "`nTURNSTILE_ENABLED=true`n" }
 if ($c -notmatch '(?m)^TURNSTILE_SITE_KEY=') { $c += "TURNSTILE_SITE_KEY=0x4AAAAAADhSILt9PsBiVeID`n" }
 if ($c -notmatch '(?m)^TURNSTILE_SECRET_KEY=') { $c += "TURNSTILE_SECRET_KEY=0x4AAAAAADhSIMRIuil81syEGDWePGiCHeE`n" }
 [System.IO.File]::WriteAllText($envFile, $c.TrimEnd() + "`n")
 Copy-Item $envFile $backup -Force
-Select-String -Path $envFile -Pattern '^(HOST|PORT|FRONTEND_URL|BACKEND_URL|WHATSAPP_AUTO_START|TURNSTILE_)' | ForEach-Object { $_.Line }
+Select-String -Path $envFile -Pattern '^(HOST|PORT|FRONTEND_URL|BACKEND_URL|WHATSAPP_AUTO_START|DB_MAX_CONNECTIONS|DB_MIN_CONNECTIONS|DB_ACQUIRE|TURNSTILE_)' | ForEach-Object { $_.Line }
 """,
     ),
     (
