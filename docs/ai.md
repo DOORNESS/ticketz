@@ -63,7 +63,7 @@ Ver [`AI_PHASE3_ARCHITECTURE.md`](AI_PHASE3_ARCHITECTURE.md) e [`AI_PHASE3_REPOR
 
 Env vars ingestão: `AI_KB_INGESTION_CONCURRENCY`, `AI_KB_INGESTION_MAX_ATTEMPTS`, `AI_KB_INGESTION_BACKOFF_MS`
 
-RAG v2: `RagConfig.ts`, `ChunkingService.ts`, `RetrievalEngine.ts` e `KnowledgeContextService.ts` implementam chunking estrutural, threshold efetivo, reranking e recuperação de vizinhos. Bases cumulativas de respostas supervisionadas são separadas por marca (`respostas-anexas-nivel` / `respostas-anexas-fortmax`).
+RAG v2: `RagConfig.ts`, `ChunkingService.ts`, `RetrievalEngine.ts` e `KnowledgeContextService.ts` implementam chunking estrutural, threshold efetivo, reranking e recuperação de vizinhos. Bases cumulativas de respostas supervisionadas são separadas por marca (`respostas-anexas-nivel` / `respostas-anexas-fortmax`), criadas somente no primeiro **Anexar à base** quando ainda não existem e vinculadas por identidade de marca do agente (inclusive nomes como `Atendente Fortmax`). O wiring não exclui bases existentes.
 
 O concierge multifila identifica a marca pelas filas autorizadas antes de selecionar a persona. A conexão Nível pode operar com filas separadas para consumidor, empresa e recuperação, todas exclusivas do Nivelton e mapeadas para suas respectivas bases.
 

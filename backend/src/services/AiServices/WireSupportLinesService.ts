@@ -9,7 +9,6 @@ import Ticket from "../../models/Ticket";
 import { syncAgentKnowledgeBases } from "./AiAgentKnowledgeBaseService";
 import { syncExclusiveAgentQueueLinks } from "./syncExclusiveAgentQueueLinks";
 import { auditSupportLinesForCompany } from "./AuditSupportLinesService";
-import { ensureAllAnnexResponsesKnowledgeBases } from "./EnsureAnnexResponsesKnowledgeBase";
 import AssociateWhatsappQueue from "../WhatsappService/AssociateWhatsappQueue";
 import { logger } from "../../utils/logger";
 
@@ -526,15 +525,6 @@ export const wireSupportLinesForCompany = async (
   summary.audit = await auditSupportLinesForCompany(companyId);
   if (!summary.audit.ok) {
     summary.ok = false;
-  }
-
-  try {
-    await ensureAllAnnexResponsesKnowledgeBases(companyId);
-  } catch (error) {
-    logger.warn(
-      { error, companyId },
-      "Failed to ensure Respostas anexas knowledge base"
-    );
   }
 
   if (summary.ok) {

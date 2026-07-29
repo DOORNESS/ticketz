@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.83] — 2026-07-29
+
+### Corrigido (ciclo de vida de respostas supervisionadas)
+
+- **Criação sob demanda** — o wiring deixa de criar `Respostas anexas — Nível` e `Respostas anexas — Fortmax`; cada base nasce somente no primeiro **Anexar à base** confirmado para a marca.
+- **Preservação integral** — o wiring não altera nem exclui bases existentes, mesmo quando vazias; somente a confirmação de **Anexar à base** pode criar a base correspondente, caso ainda não exista.
+- **Vínculo Fortmax** — a associação automática usa a identidade de marca da persona, reconhecendo também agentes como `Atendente Fortmax`, em vez de uma lista restrita de nomes.
+- **Manual 1.5.83** — seções §8–§9 e índice `ai.md` sincronizados.
+
+---
+
 ## [1.5.82] — 2026-07-29
 
 ### Corrigido (configuração real Nível multifila)

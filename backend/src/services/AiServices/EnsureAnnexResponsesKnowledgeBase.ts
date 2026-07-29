@@ -10,6 +10,7 @@ import {
   syncAgentKnowledgeBases,
   listAgentKnowledgeBaseIds
 } from "./AiAgentKnowledgeBaseService";
+import { detectAgentBrand } from "./AgentPersonaService";
 import { findByNameLoose } from "./WireSupportLinesService";
 
 export const ANNEX_RESPONSES_BASE_NAME = "Respostas anexas";
@@ -22,26 +23,22 @@ const BRAND_CONFIG: Record<
     name: string;
     slug: string;
     domainNames: string[];
-    agentNames: string[];
   }
 > = {
   nivel: {
     name: "Respostas anexas — Nível",
     slug: "respostas-anexas-nivel",
-    domainNames: ["nivel cashback", "nível cashback"],
-    agentNames: ["nivelton", "agente nivel cashback"]
+    domainNames: ["nivel cashback", "nível cashback"]
   },
   fortmax: {
     name: "Respostas anexas — Fortmax",
     slug: "respostas-anexas-fortmax",
-    domainNames: ["fortmax", "suporte fortmax"],
-    agentNames: ["webin fortmax", "webin", "atendimento geral fortmax"]
+    domainNames: ["fortmax", "suporte fortmax"]
   },
   default: {
     name: ANNEX_RESPONSES_BASE_NAME,
     slug: "respostas-anexas",
-    domainNames: [],
-    agentNames: []
+    domainNames: []
   }
 };
 
@@ -136,28 +133,18 @@ export const ensureAnnexResponsesKnowledgeBase = async (
     }
   }
 
-  const agentFilter =
-    config.agentNames.length > 0
-      ? {
-          companyId,
-          active: true,
-          role: { [Op.in]: ["legacy", "specialist"] as string[] }
-        }
-      : {
-          companyId,
-          active: true,
-          role: { [Op.in]: ["legacy", "specialist"] as string[] }
-        };
-
-  const agents = await AiAgent.findAll({ where: agentFilter });
+  const agents = await AiAgent.findAll({
+    where: {
+      companyId,
+      active: true,
+      role: { [Op.in]: ["legacy", "specialist"] as string[] }
+    }
+  });
 
   const targetAgents =
-    config.agentNames.length > 0
-      ? agents.filter(agent => {
-          const name = agent.name.toLowerCase();
-          return config.agentNames.some(token => name.includes(token));
-        })
-      : agents;
+    brand === "default"
+      ? agents
+      : agents.filter(agent => detectAgentBrand(agent) === brand);
 
   const legacyBases =
     brand === "default"
@@ -250,13 +237,4 @@ export const ensureAnnexCategoryId = async (
   }
 
   return category.id;
-};
-
-export const ensureAllAnnexResponsesKnowledgeBases = async (
-  companyId: number
-): Promise<void> => {
-  await Promise.all([
-    ensureAnnexResponsesKnowledgeBase(companyId, "nivel"),
-    ensureAnnexResponsesKnowledgeBase(companyId, "fortmax")
-  ]);
 };
