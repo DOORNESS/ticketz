@@ -321,13 +321,15 @@ const AiAgents = () => {
       if (form.role === "orchestrator") {
         delete payload.specialty;
         delete payload.knowledgeBaseIds;
-      } else if (form.serviceQueueId) {
-        payload.queueLinks = [
-          {
-            queueId: Number(form.serviceQueueId),
-            knowledgeBaseId: payload.knowledgeBaseIds?.[0] || null
-          }
-        ];
+      } else {
+        payload.queueLinks = form.serviceQueueId
+          ? [
+              {
+                queueId: Number(form.serviceQueueId),
+                knowledgeBaseId: payload.knowledgeBaseIds?.[0] || null
+              }
+            ]
+          : [];
       }
 
       let savedAgentId = editingId;

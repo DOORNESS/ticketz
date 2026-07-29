@@ -6,6 +6,7 @@
  *   COMPANY_ID=1 npm run wire:support-lines
  */
 import "../src/bootstrap";
+import "../src/database";
 import Company from "../src/models/Company";
 import { wireSupportLinesForCompany } from "../src/services/AiServices/WireSupportLinesService";
 import { logger } from "../src/utils/logger";

@@ -143,14 +143,19 @@ const removeAgentFromQueue = async (
 
 const repairOpenTickets = async (
   whatsappId: number,
-  queueId: number
+  queueId: number,
+  allowedQueueIds: number[] = [queueId]
 ): Promise<number> => {
   const [updated] = await Ticket.update(
     { queueId },
     {
       where: {
         whatsappId,
-        status: { [Op.in]: ["open", "pending"] }
+        status: { [Op.in]: ["open", "pending"] },
+        [Op.or]: [
+          { queueId: null },
+          { queueId: { [Op.notIn]: allowedQueueIds } }
+        ]
       }
     }
   );
@@ -251,9 +256,28 @@ const wireFortmaxLine = async (companyId: number) => {
     throw new Error("Fortmax WhatsApp connection not found");
   }
 
-  await AssociateWhatsappQueue(whatsapp, [queue.id]);
+  const whatsappWithQueues = await Whatsapp.findByPk(whatsapp.id, {
+    include: [{ model: Queue, as: "queues", attributes: ["id", "name"] }]
+  });
+  const departmentQueueIds = (whatsappWithQueues?.queues || [])
+    .filter(linkedQueue => {
+      const name = normalizeName(linkedQueue.name);
+      return (
+        name.includes("fortmax") ||
+        name.includes("webg3") ||
+        name.includes("web g3")
+      );
+    })
+    .map(linkedQueue => linkedQueue.id);
+  const allowedQueueIds = [...new Set([...departmentQueueIds, queue.id])];
+
+  await AssociateWhatsappQueue(whatsapp, allowedQueueIds);
   await removeAgentFromQueue(companyId, queue.id, agent.id);
-  const ticketsFixed = await repairOpenTickets(whatsapp.id, queue.id);
+  const ticketsFixed = await repairOpenTickets(
+    whatsapp.id,
+    queue.id,
+    allowedQueueIds
+  );
 
   return {
     domain: fortmaxDomain,

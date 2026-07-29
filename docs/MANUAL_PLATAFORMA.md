@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.65 — auditada contra o código  
+**Versão:** 1.5.80 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -266,9 +266,9 @@ Ordem real em `wbotMessageListener.ts` → `handleMessage` (linhas ~1655–2184)
 1. Validar mensagem → contato → ticket (`FindOrCreateTicketService`)
 2. Persistir mensagem (`verifyMessage` / `verifyMediaMessage`)
 3. **Retorno antecipado** se grupo, `disableBot` ou `fromMe`
-4. **`tryEngageAiOnInboundMessage`** — se true, **return** (IA tem prioridade sobre chatbot)
+4. **`tryEngageAiOnInboundMessage`** — se true, **return** (IA tem prioridade quando o ticket já possui fila ou a conexão possui uma única fila)
 5. Horário / outOfHours + possível segundo engage IA
-6. **`verifyQueue`** — menu de filas (chatbot)
+6. **`verifyQueue`** — em conexão multifila, concierge IA apresenta os departamentos e aceita número ou descrição natural
 7. Saudação debounced
 8. **`handleChartbot`** — opções numéricas
 
@@ -342,16 +342,16 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 
 ### IA multi-marca (Fortmax vs Nível Cashback)
 - Cadeia obrigatória: **WhatsApp** → **fila** (`WhatsappQueues`) → **agente** (`AiAgentQueues`) → **bases** (`AiAgentKnowledgeBases`) → **domínio CMS** (`KnowledgeDomain`)
-- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔Fortmax e WhatsApp Nível↔Suporte Nível↔Nivelton↔bases do domínio Nível Cashback; **Fortmax e Nível são ligados de forma independente** (falha em uma linha não impede a outra); cria/vincula base **Respostas anexas** (`EnsureAnnexResponsesKnowledgeBase`, slug `respostas-anexas`) a todos os agentes legacy/specialist
-- Auditoria: `AuditSupportLinesService.auditSupportLinesForCompany(companyId)` — valida a cadeia completa por linha; `GET /ai/audit-support-lines` (master); `npm run audit:support-lines`
+- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔Fortmax e WhatsApp Nível↔Suporte Nível↔Nivelton↔bases do domínio Nível Cashback; **Fortmax e Nível são ligados de forma independente** (falha em uma linha não impede a outra); preserva as filas departamentais Fortmax já ligadas ao WebG3 e garante `Suporte Fortmax` no conjunto; cria/vincula base **Respostas anexas** (`EnsureAnnexResponsesKnowledgeBase`, slug `respostas-anexas`) a todos os agentes legacy/specialist
+- Auditoria: `AuditSupportLinesService.auditSupportLinesForCompany(companyId)` — valida a cadeia completa por linha; Fortmax aceita múltiplas filas da marca, mas exige uma fila principal de suporte com Webin; Nível permanece com uma única fila; `GET /ai/audit-support-lines` (master); `npm run audit:support-lines`
 - `POST /ai/wire-support-lines` executa wire + auditoria + reengajamento de tickets presos
 - Executado no **startup** (`bootstrapAiPlatform`, aguarda wiring antes do first-responder; env `WIRE_SUPPORT_LINES=0` desliga) e via **`POST /ai/wire-support-lines`** (admin)
 - **Schema IA/triage:** `ApplyAiSchemaService.applyAiSchema()` (script `apply-db-schema.js`) garante tabelas IA, `AiCopilotSuggestions` e colunas triage v2 (`aiCorrelationId`, `aiProcessingState`, `aiAssist*`, `AiTicketTimelineEvents`); validado em `verify-runtime-ready.js` e `validate-triage-v2-schema.js` no deploy VPS
 - Agentes legacy/specialist mantêm `maxTokens=4096` após wiring (evita OOM na completion)
 - Após wiring/restart: `ReengageStuckAiTicketsService` reprocessa tickets abertos/pendentes sem `aiAgentId` mas com agente na fila (última mensagem do cliente)
 - Manual ops: `COMPANY_ID=1 npm run wire:support-lines`
-- `EnsureAiFirstResponderService` **não** liga Webin em filas de marca (`Suporte Nível`, `Suporte Fortmax`, etc.) — só `WireSupportLinesService`
-- `resolveQueueIdForTicket`: se o WhatsApp tiver várias filas, escolhe a que tem agente IA ativo (evita ticket sem fila quando Nivelton já está configurado)
+- `EnsureAiFirstResponderService` **não** liga Webin automaticamente em nenhuma fila cujo nome identifique Nível, Fortmax ou WebG3; os vínculos dessas marcas são administrados explicitamente
+- `resolveQueueIdForTicket`: conexões com várias filas nunca escolhem silenciosamente a primeira fila com agente; o ticket permanece sem `queueId` até a escolha explícita ou classificação do concierge
 - Identidade do bot (`buildAgentIdentityReply`) e regras operacionais do prompt vêm do `basePrompt` do agente (Nivelton ≠ Webin)
 
 ### Filtro por linha WhatsApp (lista de tickets)
@@ -377,12 +377,51 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 `QueueService/*`, `QueueOptionService/*`
 
 ### Chatbot
-- `verifyQueue` — seleção de fila por número
+- `verifyQueue` — seleção de fila por número ou, com IA habilitada, descrição em linguagem natural
 - `handleChartbot` — árvore `QueueOption` (`parentId`, `forwardQueueId`, `exitChatbot`)
 - `startQueue` define `chatbot: queue.options.length > 0`
 
 ### Skip chatbot com IA (`verifyQueue` ~1357–1362)
 Se conexão tem **uma fila**, IA habilitada e agente ativo → não mostra menu de filas.
+
+### Concierge IA em conexão com várias filas
+
+`AiQueueConciergeService` atua antes da escolha de departamento:
+
+1. encontra um agente ativo ligado a uma das filas permitidas, preferindo Webin;
+2. gera uma apresentação curta pelo modelo; em timeout/erro usa apresentação local segura;
+3. acrescenta uma lista determinística contendo **somente** as filas ligadas à conexão;
+4. aceita o número exibido, palavras-chave inequívocas ou classificação LLM;
+5. valida o `queueId` retornado contra o conjunto permitido antes de atualizar o ticket;
+6. se a mensagem natural já descreve o problema e a fila escolhida possui agente, reengaja a IA com o texto original.
+
+```mermaid
+flowchart TD
+    A[Mensagem em WhatsApp multifila] --> B{Ticket já tem queueId?}
+    B -- sim --> C[Agente/fluxo da fila atual]
+    B -- não --> D[Webin apresenta filas conectadas]
+    D --> E[Cliente responde número ou descreve necessidade]
+    E --> F{Número ou palavras-chave inequívocas?}
+    F -- sim --> G[Selecionar fila permitida]
+    F -- não --> H[LLM classifica somente no catálogo permitido]
+    H --> I{queueId válido e confiança >= 0,55?}
+    I -- sim --> G
+    I -- não --> D
+    G --> J[startQueue + persistir Ticket.queueId]
+    J --> K{Fila possui agente IA?}
+    K -- sim --> L[Reengajar IA com a mensagem original]
+    K -- não --> M[Aguardar atendimento humano]
+```
+
+No WebG3, o menu reflete a configuração da conexão. Com Financeiro, Gerência e Suporte selecionados, a ordem alfabética exibida é:
+
+```text
+1 - Financeiro Fortmax
+2 - Gerência Fortmax
+3 - Suporte Fortmax
+```
+
+`syncExclusiveAgentQueueLinks` remove vínculos antigos ao trocar ou limpar a fila de atendimento do agente. A tela envia `queueLinks: []` quando “Nenhuma” é selecionada, evitando vínculos ocultos.
 
 ### Auditoria §9
 
@@ -756,7 +795,7 @@ Postgres local :5432, Redis :6379, `cp .env.dev .env`
 ## 22. O que está pronto vs. em evolução
 
 ### ✅ Operacional (código presente)
-Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot/playground), contatos, tags, schedules, chat interno, campanhas (flag), SaaS (planos/faturas), API externa, Socket.io, i18n, Docker deploys, storage B2.
+Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot/playground), concierge IA para conexões multifila, contatos, tags, schedules, chat interno, campanhas (flag), SaaS (planos/faturas), API externa, Socket.io, i18n, Docker deploys, storage B2.
 
 ### ⚠️ Parcial
 | Item | Evidência |
@@ -1260,6 +1299,7 @@ frontend/src/
 | Serviço | Responsabilidade |
 |---------|------------------|
 | `wbotMessageListener.ts` | Entrada de mensagens WA; roteamento IA/chatbot |
+| `AiQueueConciergeService.ts` | Apresentação e seleção segura de departamento por número, palavras-chave ou LLM |
 | `AiReengagementService.ts` | Gate IA no inbound; enqueue |
 | `AiInboundQueueService.ts` | Fila Bull, debounce, buffer Redis; com debounce `0`, lock ativo reagenda processamento (~750ms) |
 | `WhatsAppSessionWatchdogService.ts` | A cada 5 min verifica sessões Baileys: socket vivo + listener de mensagens; reinicia sessões zombie |
@@ -1405,6 +1445,7 @@ frontend/src/
 | Prompt injection RAG/memória | Média | Mitigado parcialmente via `AiPromptBuilder` + wrapper `[OPERATIONAL_DATA]` |
 | Sem rate limit IA | Média | Custo OpenAI não limitado por tenant no código |
 | Company 1 bypass compliance | Baixa | Tenant admin sempre "compliant" |
+| LLM indisponível no concierge | Baixa | Saudação e números possuem fallback local; escolhas naturais ambíguas repetem o menu sem atribuir fila indevida |
 
 ---
 

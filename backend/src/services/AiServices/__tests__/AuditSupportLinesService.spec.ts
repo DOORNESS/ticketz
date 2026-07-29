@@ -40,9 +40,9 @@ describe("AuditSupportLinesService", () => {
   });
 
   it("normalizeSupportLineName strips accents", () => {
-    expect(WireSupportLinesService.normalizeSupportLineName("Suporte Nível")).toBe(
-      "suporte nivel"
-    );
+    expect(
+      WireSupportLinesService.normalizeSupportLineName("Suporte Nível")
+    ).toBe("suporte nivel");
   });
 
   it("reports ok when fortmax chain is complete", async () => {
@@ -60,7 +60,10 @@ describe("AuditSupportLinesService", () => {
         return {
           id: 1,
           name: "WebG3",
-          queues: [{ id: 10, name: "Suporte WebG3" }]
+          queues: [
+            { id: 11, name: "Financeiro Fortmax" },
+            { id: 10, name: "Suporte WebG3" }
+          ]
         };
       }
 
@@ -134,6 +137,7 @@ describe("AuditSupportLinesService", () => {
     expect(audit.ok).toBe(true);
     expect(audit.lines).toHaveLength(2);
     expect(audit.lines[0].whatsapp?.name).toBe("WebG3");
+    expect(audit.lines[0].queue?.name).toBe("Suporte WebG3");
     expect(audit.lines[1].agent?.name).toBe("Nivelton");
     expect(audit.lines[1].knowledgeBases).toHaveLength(2);
   });

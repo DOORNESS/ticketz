@@ -132,14 +132,8 @@ export const resolveQueueIdForTicket = async (
     return whatsapp.queues[0].id;
   }
 
-  for (let index = 0; index < whatsapp.queues.length; index += 1) {
-    const queue = whatsapp.queues[index];
-    const agent = await getActiveAgent(ticket.companyId, queue.id);
-    if (agent) {
-      return queue.id;
-    }
-  }
-
+  // Multiple departments require an explicit customer choice. The WhatsApp
+  // listener presents the AI concierge menu and resolves number or free text.
   return undefined;
 };
 

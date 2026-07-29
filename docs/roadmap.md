@@ -32,6 +32,7 @@
 - Fase 3: memória de contato verificada + ferramentas executáveis (4 tools piloto)
 - Fase 4: write tools governadas + observabilidade v2 + UI memória/timeline
 - Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot), SaaS, deploy Docker
+- Concierge IA multifila: apresentação Webin + escolha por número ou linguagem natural restrita às filas da conexão
 
 ### Parcial / próximas fases
 

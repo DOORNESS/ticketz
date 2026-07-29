@@ -87,6 +87,10 @@ import {
   ensureTicketQueueFromWhatsapp,
   isAiHandlingTicket
 } from "../AiServices/AiHelpers";
+import {
+  buildIntelligentQueueMenu,
+  resolveIntelligentQueueSelection
+} from "../AiServices/AiQueueConciergeService";
 import { isAiFeaturesEnabled } from "../AiServices/AiPlatformState";
 import { shouldDeferWhatsAppReadReceipt } from "../AiServices/Triage/AiReadReceiptService";
 import { _t } from "../TranslationServices/i18nService";
@@ -1399,20 +1403,48 @@ const verifyQueue = async (
     )) === "enabled";
 
   const selectedOption = msg ? await getBodyMessage(msg?.message) : null;
-  const choosenQueue = selectedOption ? queues[+selectedOption - 1] : null;
+  let choosenQueue = selectedOption ? queues[+selectedOption - 1] : null;
+  let intelligentSelection = false;
+
+  if (
+    !choosenQueue &&
+    selectedOption &&
+    ticket.chatbot &&
+    isAiFeaturesEnabled()
+  ) {
+    const selection = await resolveIntelligentQueueSelection({
+      companyId: ticket.companyId,
+      customerText: selectedOption,
+      queues
+    });
+    choosenQueue = selection
+      ? queues.find(queue => queue.id === selection.queueId)
+      : null;
+    intelligentSelection = Boolean(selection && selection.method !== "number");
+  }
 
   const botText = async () => {
-    let options = "";
+    let body: string;
 
-    queues.forEach((queue, index) => {
-      options += showNumericIcons
-        ? `${emojiNumberOption(index + 1)} - `
-        : `*[ ${index + 1} ]* - `;
-      options += `${queue.name}\n`;
-    });
+    if (isAiFeaturesEnabled()) {
+      body = await buildIntelligentQueueMenu({
+        companyId: ticket.companyId,
+        queues
+      });
+    } else {
+      let options = "";
+
+      queues.forEach((queue, index) => {
+        options += showNumericIcons
+          ? `${emojiNumberOption(index + 1)} - `
+          : `*[ ${index + 1} ]* - `;
+        options += `${queue.name}\n`;
+      });
+      body = `${greetingMessage}\n\n${options}`;
+    }
 
     const textMessage = {
-      text: formatBody(`${greetingMessage}\n\n${options}`, ticket)
+      text: formatBody(body, ticket)
     };
 
     const sendMsg = await wbot.sendMessage(getJidOf(ticket), textMessage);
@@ -1422,8 +1454,17 @@ const verifyQueue = async (
 
   if (choosenQueue) {
     await startQueue(wbot, ticket, choosenQueue);
+    if (intelligentSelection && selectedOption) {
+      await ticket.reload();
+      await tryEngageAiOnInboundMessage({
+        companyId: ticket.companyId,
+        ticket,
+        messageBody: selectedOption,
+        trigger: "intelligent_queue_selection"
+      });
+    }
   } else {
-    botText();
+    await botText();
     await updateTicket(ticket, {
       chatbot: true
     });

@@ -28,10 +28,10 @@ const normalizeQueueName = (value: string): string =>
 const isBrandManagedQueue = (queueName: string): boolean => {
   const name = normalizeQueueName(queueName);
   return (
-    name.includes("suporte nivel") ||
-    name.includes("suporte fortmax") ||
-    name.includes("suporte webg3") ||
-    name.includes("nivel cashback")
+    name.includes("nivel") ||
+    name.includes("fortmax") ||
+    name.includes("webg3") ||
+    name.includes("web g3")
   );
 };
 

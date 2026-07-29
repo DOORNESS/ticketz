@@ -43,8 +43,9 @@ export type AuditSupportLinesSummary = {
   lines: SupportLineAuditRow[];
 };
 
-const FORTMAX_QUEUE_HINTS = ["suporte fortmax", "suporte webg3", "webg3"];
+const FORTMAX_QUEUE_HINTS = ["suporte fortmax", "suporte webg3"];
 const NIVEL_QUEUE_HINTS = ["suporte nivel", "suporte nível"];
+const FORTMAX_DEPARTMENT_HINTS = ["fortmax", "webg3", "web g3"];
 const FORTMAX_DOMAIN_HINTS = ["fortmax"];
 const NIVEL_DOMAIN_HINTS = ["nivel cashback", "nível cashback", "nivel"];
 const FORTMAX_AGENT_HINTS = ["webin", "fortmax"];
@@ -52,7 +53,9 @@ const NIVEL_AGENT_HINTS = ["nivelton", "nivel cashback"];
 
 const matchesAnyHint = (value: string, hints: string[]): boolean => {
   const normalized = normalizeSupportLineName(value);
-  return hints.some(hint => normalized.includes(normalizeSupportLineName(hint)));
+  return hints.some(hint =>
+    normalized.includes(normalizeSupportLineName(hint))
+  );
 };
 
 const countReadyDocuments = async (
@@ -72,9 +75,12 @@ const auditBrandLine = async (
   line: SupportLineBrand
 ): Promise<SupportLineAuditRow> => {
   const issues: SupportLineAuditIssue[] = [];
-  const queueHints = line === "fortmax" ? FORTMAX_QUEUE_HINTS : NIVEL_QUEUE_HINTS;
-  const domainHints = line === "fortmax" ? FORTMAX_DOMAIN_HINTS : NIVEL_DOMAIN_HINTS;
-  const agentHints = line === "fortmax" ? FORTMAX_AGENT_HINTS : NIVEL_AGENT_HINTS;
+  const queueHints =
+    line === "fortmax" ? FORTMAX_QUEUE_HINTS : NIVEL_QUEUE_HINTS;
+  const domainHints =
+    line === "fortmax" ? FORTMAX_DOMAIN_HINTS : NIVEL_DOMAIN_HINTS;
+  const agentHints =
+    line === "fortmax" ? FORTMAX_AGENT_HINTS : NIVEL_AGENT_HINTS;
   const forbiddenAgentHints =
     line === "fortmax" ? NIVEL_AGENT_HINTS : FORTMAX_AGENT_HINTS;
   const forbiddenQueueHints =
@@ -114,7 +120,7 @@ const auditBrandLine = async (
       code: "whatsapp_without_queue",
       message: `WhatsApp "${whatsapp.name}" não tem fila vinculada`
     });
-  } else if (queues.length > 1) {
+  } else if (queues.length > 1 && line === "nivel") {
     issues.push({
       severity: "error",
       line,
@@ -123,7 +129,31 @@ const auditBrandLine = async (
     });
   }
 
-  const queue = queues[0] || null;
+  if (line === "fortmax") {
+    queues.forEach(linkedQueue => {
+      if (!matchesAnyHint(linkedQueue.name, FORTMAX_DEPARTMENT_HINTS)) {
+        issues.push({
+          severity: "error",
+          line,
+          code: "queue_brand_mismatch",
+          message: `Fila "${linkedQueue.name}" não corresponde à linha Fortmax`
+        });
+      }
+    });
+  }
+
+  const queue =
+    queues.find(linkedQueue => matchesAnyHint(linkedQueue.name, queueHints)) ||
+    (queues.length === 1 ? queues[0] : null);
+
+  if (queues.length > 0 && !queue) {
+    issues.push({
+      severity: "error",
+      line,
+      code: "support_queue_missing",
+      message: `WhatsApp "${whatsapp.name}" não tem a fila principal de suporte ${line}`
+    });
+  }
 
   if (queue && !matchesAnyHint(queue.name, queueHints)) {
     issues.push({

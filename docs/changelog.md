@@ -6,6 +6,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.80] — 2026-07-29
+
+### Adicionado (concierge IA para WhatsApp Fortmax multifila)
+
+- **`AiQueueConciergeService`** — Webin apresenta somente os departamentos ligados à conexão e aceita escolha por número, palavras-chave ou classificação LLM restrita ao catálogo permitido.
+- **Roteamento multifila** — `resolveQueueIdForTicket` não escolhe mais silenciosamente a primeira fila com agente; a mensagem natural que seleciona uma fila IA é reaproveitada no reengajamento.
+- **Wiring Fortmax** — preserva Financeiro/Gerência/Suporte configurados no WebG3; bootstrap genérico não liga Webin automaticamente a filas identificadas como Fortmax/WebG3/Nível.
+- **Vínculos de agente** — trocar ou selecionar “Nenhuma” remove associações antigas de `AiAgentQueues`.
+- **Auditoria operacional** — scripts inicializam o Sequelize; auditoria aceita múltiplos departamentos Fortmax e exige a fila principal de suporte.
+- **Manual 1.5.80** — seções §6, §8, §9, §22, §37 e §43 atualizadas; novo diagrama do concierge multifila.
+
+---
+
 ## [1.5.79] — 2026-07-28
 
 ### Corrigido (2º turno IA travando — timeout + dedupe WhatsApp)

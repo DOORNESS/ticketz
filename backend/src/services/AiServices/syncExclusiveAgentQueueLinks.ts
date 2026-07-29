@@ -25,18 +25,30 @@ export const syncExclusiveAgentQueueLinks = async ({
     }));
 
   if (!normalized.length) {
+    await AiAgentQueue.destroy({
+      where: { companyId, aiAgentId }
+    });
     return;
   }
 
   const queueIds = normalized.map(link => link.queueId);
 
-  await AiAgentQueue.destroy({
-    where: {
-      companyId,
-      queueId: { [Op.in]: queueIds },
-      aiAgentId: { [Op.ne]: aiAgentId }
-    }
-  });
+  await Promise.all([
+    AiAgentQueue.destroy({
+      where: {
+        companyId,
+        aiAgentId,
+        queueId: { [Op.notIn]: queueIds }
+      }
+    }),
+    AiAgentQueue.destroy({
+      where: {
+        companyId,
+        queueId: { [Op.in]: queueIds },
+        aiAgentId: { [Op.ne]: aiAgentId }
+      }
+    })
+  ]);
 
   await Promise.all(
     normalized.map(async link => {

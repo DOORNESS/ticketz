@@ -7,6 +7,7 @@
 | Tópico | Seção |
 |--------|-------|
 | Visão geral IA | [§11 — Módulo de IA](MANUAL_PLATAFORMA.md#11-módulo-de-inteligência-artificial) |
+| Concierge multifila | [§9 — Filas e chatbot](MANUAL_PLATAFORMA.md#9-filas-e-chatbot) |
 | Fluxo inbound | [§27 — Fluxo IA](MANUAL_PLATAFORMA.md#27-fluxo-ia-inbound) |
 | Handoff | [§30 — Handoff IA → humano](MANUAL_PLATAFORMA.md#30-fluxo-handoff-ia--humano) |
 | Copilot | [§31 — Fluxo Copilot](MANUAL_PLATAFORMA.md#31-fluxo-copilot) |
