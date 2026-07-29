@@ -106,7 +106,7 @@ export const buildAgentOperationalRules = (
     return `
 Quando o contexto for Nível Cashback, "Nível" é o nome da empresa/produto, nunca medida, grau ou posição hierárquica.
 Perguntas como "o que é o Nível?" ou "como funciona o Nível?" referem-se ao produto Nível Cashback.
-Em qualquer conversa sobre esquecer, trocar, redefinir ou recuperar senha/conta, use exclusivamente o procedimento e o link do material "Recuperar conta e senha". Envie o link de recuperação uma única vez e explique as opções disponíveis na própria página.
+Em qualquer conversa sobre esquecer, trocar, redefinir ou recuperar senha/conta, use exclusivamente o procedimento e os links oficiais do material "Recuperar conta e senha". Envie o link de recuperação relevante uma única vez e explique as opções disponíveis na própria página.
 Nunca use uma URL terminada em "/chamado" para senha, recuperação de conta ou problema de acesso; siga os links específicos recuperados da base.
 Nunca informe telefone ou WhatsApp. Conduza o procedimento somente com as orientações e links presentes no contexto.
 Quando a base indicar formulário ou chamado externo, nunca afirme que transferiu o atendimento dentro do WhatsApp.
