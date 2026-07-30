@@ -299,6 +299,29 @@ app.post(
   }
 );
 
+app.get("/media/access/:token", async (req, res, next) => {
+  try {
+    await import("./database");
+    const { accessByToken } =
+      await import("./controllers/MediaAccessController");
+    return accessByToken(req, res);
+  } catch (error) {
+    if (error instanceof AppError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    return next(error);
+  }
+});
+
+app.get("/media/unavailable/:mediaId", async (req, res, next) => {
+  try {
+    const { unavailable } = await import("./controllers/MediaAccessController");
+    return unavailable(req, res);
+  } catch (error) {
+    return next(error);
+  }
+});
+
 app.post("/auth/login", async (req, res) => {
   try {
     if (isLoginRateLimited(req)) {
@@ -445,6 +468,8 @@ const isFastShellPath = (req: express.Request): boolean =>
   req.path.startsWith("/public/") ||
   req.path.startsWith("/public-settings/") ||
   req.path.startsWith("/escalation/") ||
+  req.path.startsWith("/media/access/") ||
+  req.path.startsWith("/media/unavailable/") ||
   (req.method === "POST" && req.path === "/auth/login");
 
 const isCoreAuthPath = (req: express.Request): boolean =>

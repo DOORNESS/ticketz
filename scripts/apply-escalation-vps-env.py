@@ -67,6 +67,7 @@ foreach ($k in $keys) {{
 $block = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{b64}'))
 $content = ($content.TrimEnd() + "`n" + $block + "`n")
 Set-Content -Path $EnvFile -Value $content -Encoding UTF8
+Copy-Item $EnvFile "$Root\.env-backend-vps" -Force
 Write-Output 'Escalation env vars written (values not echoed)'
 
 Push-Location "$Root\\backend"

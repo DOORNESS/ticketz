@@ -92,9 +92,6 @@ export const resolveMessageMediaUrls = async ({
       }
 
       if (!media) {
-        if (StorageService.shouldUsePrivateAccess()) {
-          setMediaUrl(message, null);
-        }
         return;
       }
 
@@ -106,7 +103,7 @@ export const resolveMessageMediaUrls = async ({
         });
         setMediaUrl(message, await buildClientMediaUrl({ media, user }));
       } catch {
-        setMediaUrl(message, null);
+        // Keep the existing /public URL rather than blanking media in the UI.
       }
     })
   );

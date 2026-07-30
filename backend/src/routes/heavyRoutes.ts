@@ -32,6 +32,7 @@ import ticketzOSSRoutes from "./ticketzOSSRoutes";
 import i18nRoutes from "./i18nRoutes";
 import wavoipRoutes from "./wavoipRoutes";
 import aiRoutes from "./aiRoutes";
+import mediaRoutes from "./mediaRoutes";
 
 const heavyRoutes = Router();
 
@@ -67,5 +68,6 @@ heavyRoutes.use(ticketzOSSRoutes);
 heavyRoutes.use(i18nRoutes);
 heavyRoutes.use(wavoipRoutes);
 heavyRoutes.use(aiRoutes);
+heavyRoutes.use(mediaRoutes);
 
 export default heavyRoutes;

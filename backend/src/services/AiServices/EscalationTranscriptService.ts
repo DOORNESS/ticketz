@@ -3,6 +3,9 @@ import { ptBR } from "date-fns/locale";
 import Ticket from "../../models/Ticket";
 import Message from "../../models/Message";
 import MessageMediaFile from "../../models/MessageMediaFile";
+import StorageService from "../StorageService/StorageService";
+
+const EMAIL_MEDIA_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export type EscalationTranscriptMessage = {
   id: string;
@@ -38,6 +41,29 @@ const isVisualMedia = (mediaType: string | null): boolean =>
 
 const formatTimestamp = (date: Date): string =>
   format(date, "dd/MM/yyyy HH:mm", { locale: ptBR });
+
+const resolveEmailMediaUrl = async (
+  media: MessageMediaFile,
+  companyId: number
+): Promise<string | null> => {
+  if (!media.storageKey) {
+    return null;
+  }
+
+  try {
+    await StorageService.ensureReady(companyId);
+    if (StorageService.shouldUsePrivateAccess()) {
+      return StorageService.getSignedUrl(
+        media.storageKey,
+        companyId,
+        EMAIL_MEDIA_TTL_SECONDS
+      );
+    }
+    return StorageService.getPublicUrl(media.storageKey);
+  } catch {
+    return null;
+  }
+};
 
 const renderMessageHtml = (message: EscalationTranscriptMessage): string => {
   const author = message.fromMe ? "Atendimento (IA/Humano)" : "Cliente";
@@ -86,28 +112,59 @@ export const buildEscalationTranscript = async (
     }),
     MessageMediaFile.findAll({
       where: { ticketId: ticket.id, companyId: ticket.companyId },
-      attributes: ["messageId", "visionSummary"]
+      attributes: [
+        "messageId",
+        "visionSummary",
+        "storageKey",
+        "mimeType",
+        "mediaType",
+        "status"
+      ]
     })
   ]);
 
   const visionByMessageId = new Map<string, string>();
+  const mediaByMessageId = new Map<string, MessageMediaFile>();
   mediaFiles.forEach(file => {
     if (file.messageId && file.visionSummary?.trim()) {
       visionByMessageId.set(file.messageId, file.visionSummary.trim());
     }
+    if (file.messageId) {
+      mediaByMessageId.set(file.messageId, file);
+    }
   });
 
-  const transcriptMessages: EscalationTranscriptMessage[] = messages
-    .filter(message => message.mediaType !== "reactionMessage")
-    .map(message => ({
-      id: message.id,
-      fromMe: message.fromMe,
-      body: message.body || "",
-      mediaType: message.mediaType || null,
-      mediaUrl: message.mediaUrl || null,
-      createdAt: message.createdAt,
-      visionSummary: visionByMessageId.get(message.id) || null
-    }));
+  const transcriptMessages: EscalationTranscriptMessage[] = await Promise.all(
+    messages
+      .filter(message => message.mediaType !== "reactionMessage")
+      .map(async message => {
+        const mediaFile = mediaByMessageId.get(message.id);
+        let mediaUrl = message.mediaUrl || null;
+
+        if (
+          mediaFile &&
+          isVisualMedia(message.mediaType || mediaFile.mediaType)
+        ) {
+          const signedUrl = await resolveEmailMediaUrl(
+            mediaFile,
+            ticket.companyId
+          );
+          if (signedUrl) {
+            mediaUrl = signedUrl;
+          }
+        }
+
+        return {
+          id: message.id,
+          fromMe: message.fromMe,
+          body: message.body || "",
+          mediaType: message.mediaType || null,
+          mediaUrl,
+          createdAt: message.createdAt,
+          visionSummary: visionByMessageId.get(message.id) || null
+        };
+      })
+  );
 
   const plainLines = transcriptMessages.map(message => {
     const author = message.fromMe ? "Atendimento" : "Cliente";

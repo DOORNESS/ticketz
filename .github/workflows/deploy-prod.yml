@@ -179,6 +179,29 @@ jobs:
           export CONTABO_HOST
           python3 scripts/fix-vps-env-port.py
 
+      - name: Configurar e-mail de escalação (Resend) na VPS
+        if: env.DEPLOY_BACKEND == 'true'
+        env:
+          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          SEND_EMAIL_HOOK_SECRET: ${{ secrets.SEND_EMAIL_HOOK_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${RESEND_API_KEY:-}" ] || [ -z "${SEND_EMAIL_HOOK_SECRET:-}" ]; then
+            echo "::warning::RESEND_API_KEY ou SEND_EMAIL_HOOK_SECRET ausentes — e-mail de escalação não configurado na VPS."
+            exit 0
+          fi
+          pip install pywinrm
+          if [ -z "${CONTABO_PASSWORD:-}" ]; then unset CONTABO_PASSWORD; fi
+          CONTABO_HOST="${CONTABO_HOST:-31.220.103.226}"
+          CONTABO_HOST="${CONTABO_HOST#https://}"
+          CONTABO_HOST="${CONTABO_HOST#http://}"
+          CONTABO_HOST="${CONTABO_HOST%%/*}"
+          CONTABO_HOST="${CONTABO_HOST%%:*}"
+          export CONTABO_HOST
+          python3 scripts/apply-escalation-vps-env.py
+
       - name: Corrigir IIS proxy (api.fortmax.com.br)
         if: env.DEPLOY_BACKEND == 'true'
         env:

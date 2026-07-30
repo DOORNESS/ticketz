@@ -1175,6 +1175,30 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
     }
 
     if (!document && mediaKind === "image") {
+      const thumbnail = data?.message?.imageMessage?.jpegThumbnail;
+      const imageSrc =
+        message.mediaUrl ||
+        (thumbnail ? `data:image/jpeg;base64,${thumbnail}` : null);
+
+      if (!imageSrc) {
+        return (
+          <>
+            <Typography variant="caption" color="textSecondary">
+              Imagem indisponível no momento.
+            </Typography>
+            {message.body && (
+              <div
+                className={clsx(classes.textContentItem, {
+                  [classes.textContentItemDeleted]: message.isDeleted
+                })}
+              >
+                <WhatsMarked>{message.body}</WhatsMarked>
+              </div>
+            )}
+          </>
+        );
+      }
+
       return (
         <>
           <img
@@ -1185,7 +1209,7 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
                 [classes.messageMediaDeleted]: message.isDeleted
               }
             )}
-            src={message.mediaUrl}
+            src={imageSrc}
             alt="midia da mensagem"
             onClick={() => openLightboxForMessage(message.id)}
           />

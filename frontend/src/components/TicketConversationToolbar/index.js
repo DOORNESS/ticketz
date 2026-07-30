@@ -65,7 +65,6 @@ const TicketConversationToolbar = ({
   onParticipate,
   onStopParticipating,
   onEscalateEmail,
-  escalateEmailLoading,
   onSuggestResponse,
   onResumeAi,
   resumeLoading,
@@ -125,10 +124,9 @@ const TicketConversationToolbar = ({
             color="secondary"
             className={classes.supervisionButton}
             startIcon={<MailOutlineIcon fontSize="small" />}
-            disabled={escalateEmailLoading}
             onClick={onEscalateEmail}
           >
-            {escalateEmailLoading ? "Enviando…" : "Solicitar conserto"}
+            Enviar Email
           </Button>
         )}
         {canSupervise && supervisionParticipating && (

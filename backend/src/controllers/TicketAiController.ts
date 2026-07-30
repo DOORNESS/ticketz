@@ -267,7 +267,7 @@ export const escalateEmail = async (
   res: Response
 ): Promise<Response> => {
   const { ticket, user } = await loadTicketForUser(req);
-  const { notes } = req.body || {};
+  const { notes, emailTo } = req.body || {};
 
   if (!canAccessTicketAiData(ticket, user)) {
     throw new AppError("ERR_FORBIDDEN", 403);
@@ -276,7 +276,8 @@ export const escalateEmail = async (
   const escalation = await sendTicketEscalationEmail({
     ticket,
     requestedByUser: user,
-    requestNotes: typeof notes === "string" ? notes : undefined
+    requestNotes: typeof notes === "string" ? notes : undefined,
+    emailTo: typeof emailTo === "string" ? emailTo : undefined
   });
 
   return res.status(200).json({

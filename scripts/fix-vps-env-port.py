@@ -16,8 +16,10 @@ STEPS = [
 $Root = 'C:\ticketz'
 $envFile = "$Root\backend\.env"
 $backup = "$Root\.env-backend-vps"
-if (Test-Path $backup) { Copy-Item $backup $envFile -Force }
 $c = Get-Content $envFile -Raw -EA SilentlyContinue
+if (-not $c) {
+  if (Test-Path $backup) { Copy-Item $backup $envFile -Force; $c = Get-Content $envFile -Raw }
+}
 if (-not $c) { Write-Output 'env missing'; exit 1 }
 if ($c -notmatch '(?m)^PORT=') { $c = "PORT=8080`n" + $c }
 if ($c -notmatch '(?m)^HOST=') { $c = "HOST=127.0.0.1`n" + $c } else { $c = $c -replace '(?m)^HOST=.*','HOST=127.0.0.1' }

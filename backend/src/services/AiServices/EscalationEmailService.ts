@@ -33,17 +33,30 @@ const getEscalationEmailTo = (): string => {
   return "fernandofortmax@gmail.com";
 };
 
+const normalizeEmailTo = (value?: string | null): string => {
+  const normalized = value?.trim().toLowerCase();
+  if (!normalized) {
+    return getEscalationEmailTo();
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) {
+    throw new AppError("ERR_INVALID_ESCALATION_EMAIL", 400);
+  }
+  return normalized;
+};
+
 const isEscalationEmailEnabled = (): boolean =>
   process.env.ESCALATION_EMAIL_ENABLED !== "false";
 
 export const sendTicketEscalationEmail = async ({
   ticket,
   requestedByUser,
-  requestNotes
+  requestNotes,
+  emailTo
 }: {
   ticket: Ticket;
   requestedByUser?: User | null;
   requestNotes?: string | null;
+  emailTo?: string | null;
 }): Promise<AiEscalationEmail> => {
   if (!isEscalationEmailEnabled()) {
     throw new AppError("ERR_ESCALATION_EMAIL_DISABLED", 503);
@@ -53,13 +66,15 @@ export const sendTicketEscalationEmail = async ({
     include: ["contact", "queue", "whatsapp"]
   });
 
+  const destinationEmail = normalizeEmailTo(emailTo);
+
   const escalation = await AiEscalationEmail.create({
     companyId: ticket.companyId,
     ticketId: ticket.id,
     requestedByUserId: requestedByUser?.id || null,
     requestNotes: requestNotes?.trim() || null,
     status: "pending",
-    emailTo: getEscalationEmailTo()
+    emailTo: destinationEmail
   });
 
   const token = createEscalationToken({
@@ -92,7 +107,7 @@ export const sendTicketEscalationEmail = async ({
       "https://api.resend.com/emails",
       {
         from: getEscalationEmailFrom(),
-        to: [getEscalationEmailTo()],
+        to: [destinationEmail],
         subject,
         html,
         text: [
@@ -131,7 +146,7 @@ export const sendTicketEscalationEmail = async ({
       reason: "manual_escalation_email",
       details: {
         escalationId: escalation.id,
-        emailTo: getEscalationEmailTo(),
+        emailTo: destinationEmail,
         requestedByUserId: requestedByUser?.id || null
       }
     });
