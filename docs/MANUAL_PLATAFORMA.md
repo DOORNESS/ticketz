@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.88 — auditada contra o código
+**Versão:** 1.5.89 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -319,7 +319,7 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Barra de ticket fechado: apenas ícones (Reabrir / Reabrir e chamar IA)
 - `TicketConversationToolbar`: ícones para Repositório, Tags (colapsável), Painel administrativo e estado IA
 - Diagnóstico IA (timeline, explicabilidade, copiloto) concentrados no drawer `TicketAdminPanel`, não no topo da conversa
-- **Supervisão / observação:** `MessagesList` com `markAsRead={false}` carrega automaticamente todas as páginas de histórico e exibe botão **Carregar mensagens anteriores** quando houver mais registros; polling **1s** no chat + indicador **IA digitando…** quando `aiProcessingState=processing`; barra com **Participar**, **Sugerir resposta** e dialog para anexar à base **Respostas anexas** (`POST /tickets/:id/ai/annex-response`). Abrir o dialog não grava conhecimento: a base da marca só é criada no primeiro **Anexar à base**, quando também é vinculada automaticamente aos agentes ativos cuja persona pertence à mesma marca
+- **Supervisão / observação:** `MessagesList` com `markAsRead={false}` carrega automaticamente todas as páginas de histórico e exibe botão **Carregar mensagens anteriores** quando houver mais registros; polling **1s** no chat + indicador **IA digitando…** quando `aiProcessingState=processing`; barra com **Participar**, **Solicitar conserto** (e-mail técnico via Resend), **Ensinar IA** e dialog para anexar à base **Respostas anexas** (`POST /tickets/:id/ai/annex-response`). Abrir o dialog não grava conhecimento: a base da marca só é criada no primeiro **Anexar à base**, quando também é vinculada automaticamente aos agentes ativos cuja persona pertence à mesma marca
 - **Lista IA:** ao assumir ticket (`userId` preenchido), o socket remove o item da aba **IA** imediatamente (`TicketsListCustom`)
 
 ### Controllers
@@ -455,6 +455,7 @@ IA só opera quando `AiPlatformState.aiFeaturesEnabled === true` (setado em `boo
 | ACK por agente | `AiInboundQueueService` + campos `ackEnabled` | ✅ |
 | SLA handoff | `AiSlaMonitorService` | ✅ |
 | Follow-up proativo | `AiProactiveFollowUpService` | ✅ |
+| E-mail de conserto técnico | `EscalationEmailService`, `EscalationResolutionService` | ✅ (Resend + formulário público) |
 
 Imagens recebidas no WhatsApp passam por `MediaInboundResolver` e pelo `visionModel` do agente. A análise visual roda já no ingest (`verifyMediaMessage` → `analyzeAndPersistInboundImageVision`), usando buffer local em data URL base64; o resumo fica em `MessageMediaFiles.visionSummary` e entra no turno como `[Imagem enviada pelo cliente]: …`. O turno IA preserva esse bloco mesmo quando a legenda é escolhida como texto principal (`InboundImageContext`). Com falha de leitura/análise, o turno ainda registra que houve imagem — a IA não deve dizer que “não vê imagens”.
 
@@ -498,6 +499,22 @@ Spec: `docs/AI_PHASE3_ARCHITECTURE.md` · Relatório: `docs/AI_PHASE3_REPORT.md`
 **Provider Gemini:** via endpoint OpenAI-compatible + Setting `geminiApiKey`.
 
 Relatório: `docs/AI_PHASE4_REPORT.md`
+
+### E-mail de conserto técnico (jul/2026)
+
+Quando um humano identifica bug sistêmico, pode solicitar conserto por e-mail sem sair do ticket.
+
+| Etapa | Comportamento |
+|-------|----------------|
+| Disparo manual | Botão **Solicitar conserto** na barra do ticket (`TicketConversationToolbar`) → `POST /tickets/:ticketId/ai/escalate-email` |
+| E-mail HTML | Resend envia histórico completo (texto, imagens, `visionSummary`) para `ESCALATION_EMAIL_TO` a partir de `ESCALATION_EMAIL_FROM` |
+| Formulário externo | Link assinado (`SEND_EMAIL_HOOK_SECRET`) abre `GET /escalation/:token` — página HTML fora do painel |
+| Orientação interna | Humano descreve o que foi corrigido; texto **não** vai literalmente ao cliente |
+| Follow-up IA | `POST /escalation/:token` salva orientação e aciona IA para avisar o cliente no mesmo WhatsApp pedindo teste |
+
+**Persistência:** tabela `AiEscalationEmails` (migration `20260730120000-ai-escalation-emails.ts`).
+
+**Env obrigatórios:** `RESEND_API_KEY`, `SEND_EMAIL_HOOK_SECRET`, `BACKEND_URL`. **Opcionais:** `ESCALATION_EMAIL_FROM` (default `aviso@emails.doorness.com`), `ESCALATION_EMAIL_TO`, `ESCALATION_EMAIL_ENABLED`, `ESCALATION_EMAIL_TOKEN_TTL_HOURS` (default 168).
 
 ### Auditoria §11
 
@@ -1360,6 +1377,12 @@ frontend/src/
 | `B2_*` / `b2*` | via Settings aliases | `StorageConfigService.ts` |
 | `REDIS_URI` | — | `queues.ts`, `AiInboundQueueService.ts` |
 | `BACKEND_URL` | `http://localhost:8080` | `MediaInboundResolver.ts` |
+| `RESEND_API_KEY` | — | `EscalationEmailService.ts` |
+| `SEND_EMAIL_HOOK_SECRET` | — | `EscalationEmailTokenService.ts` |
+| `ESCALATION_EMAIL_FROM` | `aviso@emails.doorness.com` | `EscalationEmailService.ts` |
+| `ESCALATION_EMAIL_TO` | `fernandofortmax@gmail.com` | idem |
+| `ESCALATION_EMAIL_ENABLED` | `true` (unless `"false"`) | idem |
+| `ESCALATION_EMAIL_TOKEN_TTL_HOURS` | `168` | `EscalationEmailTokenService.ts` |
 
 **Não existe:** `AI_REENGAGEMENT_ENABLED`, `GROQ_API_KEY` (Groq via provider ID `groq` em Settings).
 

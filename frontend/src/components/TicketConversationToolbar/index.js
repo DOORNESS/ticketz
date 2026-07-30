@@ -13,6 +13,7 @@ import LocalOfferOutlinedIcon from "@material-ui/icons/LocalOfferOutlined";
 import AndroidIcon from "@material-ui/icons/Android";
 import EditIcon from "@material-ui/icons/Edit";
 import EmojiObjectsIcon from "@material-ui/icons/EmojiObjects";
+import MailOutlineIcon from "@material-ui/icons/MailOutline";
 import {
   getOperationalLabel,
   isAiHandlingTicket,
@@ -63,6 +64,8 @@ const TicketConversationToolbar = ({
   supervisionParticipating,
   onParticipate,
   onStopParticipating,
+  onEscalateEmail,
+  escalateEmailLoading,
   onSuggestResponse,
   onResumeAi,
   resumeLoading,
@@ -85,6 +88,9 @@ const TicketConversationToolbar = ({
     ticket?.status !== "closed" &&
     (canUserOperateTicket(ticket, user) || isAiHandlingTicket(ticket));
   const canTeachAi = canSupervise || canUserOperateTicket(ticket, user);
+  const canEscalateEmail =
+    ticket?.status !== "closed" &&
+    (canSupervise || canUserOperateTicket(ticket, user));
 
   return (
     <Box className={classes.root}>
@@ -110,6 +116,19 @@ const TicketConversationToolbar = ({
             onClick={onParticipate}
           >
             Participar
+          </Button>
+        )}
+        {canEscalateEmail && (
+          <Button
+            size="small"
+            variant="outlined"
+            color="secondary"
+            className={classes.supervisionButton}
+            startIcon={<MailOutlineIcon fontSize="small" />}
+            disabled={escalateEmailLoading}
+            onClick={onEscalateEmail}
+          >
+            {escalateEmailLoading ? "Enviando…" : "Solicitar conserto"}
           </Button>
         )}
         {canSupervise && supervisionParticipating && (

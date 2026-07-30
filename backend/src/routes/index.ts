@@ -35,6 +35,7 @@ import i18nRoutes from "./i18nRoutes";
 import wavoipRoutes from "./wavoipRoutes";
 import aiRoutes from "./aiRoutes";
 import mediaRoutes from "./mediaRoutes";
+import escalationRoutes from "./escalationRoutes";
 
 const routes = Router();
 
@@ -74,5 +75,6 @@ routes.use(i18nRoutes);
 routes.use(wavoipRoutes);
 routes.use(aiRoutes);
 routes.use(mediaRoutes);
+routes.use(escalationRoutes);
 
 export default routes;

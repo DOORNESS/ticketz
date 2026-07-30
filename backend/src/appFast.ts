@@ -267,6 +267,38 @@ app.get("/public-settings/:settingKey", (req, res) => {
   return res.status(200).json(null);
 });
 
+app.get("/escalation/:token", async (req, res, next) => {
+  try {
+    await import("./database");
+    const { showEscalationForm } =
+      await import("./controllers/EscalationEmailController");
+    return showEscalationForm(req, res);
+  } catch (error) {
+    if (error instanceof AppError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+    return next(error);
+  }
+});
+
+app.post(
+  "/escalation/:token",
+  express.urlencoded({ extended: false, limit: "32kb" }),
+  async (req, res, next) => {
+    try {
+      await import("./database");
+      const { submitEscalationForm } =
+        await import("./controllers/EscalationEmailController");
+      return submitEscalationForm(req, res);
+    } catch (error) {
+      if (error instanceof AppError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
+      return next(error);
+    }
+  }
+);
+
 app.post("/auth/login", async (req, res) => {
   try {
     if (isLoginRateLimited(req)) {
@@ -412,6 +444,7 @@ const isFastShellPath = (req: express.Request): boolean =>
   req.path === "/version" ||
   req.path.startsWith("/public/") ||
   req.path.startsWith("/public-settings/") ||
+  req.path.startsWith("/escalation/") ||
   (req.method === "POST" && req.path === "/auth/login");
 
 const isCoreAuthPath = (req: express.Request): boolean =>

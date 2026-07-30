@@ -161,6 +161,13 @@ ticketRoutes.post(
 );
 
 ticketRoutes.post(
+  "/tickets/:ticketId/ai/escalate-email",
+  isAuth,
+  isCompliant,
+  TicketAiController.escalateEmail
+);
+
+ticketRoutes.post(
   "/tickets/:ticketId/ai/learning/draft",
   isAuth,
   isCompliant,

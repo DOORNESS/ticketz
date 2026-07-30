@@ -8,6 +8,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.89] — 2026-07-30
+
+### Adicionado (e-mail de conserto técnico)
+
+- **`EscalationEmailService`** — envia e-mail HTML via Resend com histórico completo da conversa, imagens e análises visuais (`visionSummary`).
+- **`EscalationResolutionService`** — formulário público assinado (`GET/POST /escalation/:token`) recebe orientação interna do humano e aciona a IA para avisar o cliente no WhatsApp pedindo teste.
+- **`AiEscalationEmails`** — migration `20260730120000-ai-escalation-emails.ts`.
+- **Frontend** — botão **Solicitar conserto** ao lado de **Participar** (`TicketConversationToolbar`).
+- **API** — `POST /tickets/:ticketId/ai/escalate-email`.
+- **Manual 1.5.89** — §11, §38 e índice `ai.md` sincronizados.
+
+---
+
 ## [1.5.88] — 2026-07-30
 
 ### Corrigido (visão descartada no turno IA)

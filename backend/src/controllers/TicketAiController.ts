@@ -25,6 +25,7 @@ import User from "../models/User";
 import { listToolExecutionLogs } from "../services/AiServices/tools/ToolExecutorService";
 import canAccessTicketAiData from "../helpers/canAccessTicketAiData";
 import { serializeTicketWithOperationalState } from "../services/TicketServices/TicketOperationalStateService";
+import { sendTicketEscalationEmail } from "../services/AiServices/EscalationEmailService";
 
 const loadTicketForUser = async (req: Request) => {
   const { ticketId } = req.params;
@@ -259,6 +260,31 @@ export const approveKnowledge = async (
   });
 
   return res.status(200).json(suggestion);
+};
+
+export const escalateEmail = async (
+  req: Request,
+  res: Response
+): Promise<Response> => {
+  const { ticket, user } = await loadTicketForUser(req);
+  const { notes } = req.body || {};
+
+  if (!canAccessTicketAiData(ticket, user)) {
+    throw new AppError("ERR_FORBIDDEN", 403);
+  }
+
+  const escalation = await sendTicketEscalationEmail({
+    ticket,
+    requestedByUser: user,
+    requestNotes: typeof notes === "string" ? notes : undefined
+  });
+
+  return res.status(200).json({
+    success: true,
+    escalationId: escalation.id,
+    status: escalation.status,
+    emailTo: escalation.emailTo
+  });
 };
 
 export const annexResponse = async (

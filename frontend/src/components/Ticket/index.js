@@ -109,6 +109,7 @@ const Ticket = () => {
   const [supervisionParticipating, setSupervisionParticipating] =
     useState(false);
   const [resumeLoading, setResumeLoading] = useState(false);
+  const [escalateEmailLoading, setEscalateEmailLoading] = useState(false);
   const [annexDialogOpen, setAnnexDialogOpen] = useState(false);
   const [annexSuggestedText, setAnnexSuggestedText] = useState("");
   const messageInputRef = useRef(null);
@@ -198,9 +199,7 @@ const Ticket = () => {
     const fetchTicket = async () => {
       try {
         const isUuid =
-          ticketId &&
-          String(ticketId).includes("-") &&
-          !/^\d+$/.test(ticketId);
+          ticketId && String(ticketId).includes("-") && !/^\d+$/.test(ticketId);
         const endpoint = isUuid
           ? `/tickets/u/${ticketId}`
           : `/tickets/${ticketId}`;
@@ -355,6 +354,34 @@ const Ticket = () => {
     setAnnexDialogOpen(true);
   };
 
+  const handleEscalateEmail = async () => {
+    if (!ticket?.id || escalateEmailLoading) return;
+
+    const confirmed = window.confirm(
+      "Enviar e-mail técnico com a conversa completa para solicitar conserto?"
+    );
+    if (!confirmed) return;
+
+    const notes = window.prompt(
+      "Observação opcional para o e-mail (deixe em branco se não quiser):"
+    );
+    if (notes === null) return;
+
+    setEscalateEmailLoading(true);
+    try {
+      await api.post(`/tickets/${ticket.id}/ai/escalate-email`, {
+        notes: notes.trim() || undefined
+      });
+      toast.success(
+        "E-mail de conserto enviado. Quando corrigir, use o link do e-mail para orientar a IA."
+      );
+    } catch (err) {
+      toastError(err);
+    } finally {
+      setEscalateEmailLoading(false);
+    }
+  };
+
   const renderMessagesList = () => {
     if (!ticket?.id) {
       return null;
@@ -407,6 +434,8 @@ const Ticket = () => {
           supervisionParticipating={supervisionParticipating}
           onParticipate={() => setSupervisionParticipating(true)}
           onStopParticipating={handleStopParticipating}
+          onEscalateEmail={handleEscalateEmail}
+          escalateEmailLoading={escalateEmailLoading}
           onResumeAi={handleResumeAi}
           onSuggestResponse={handleSuggestResponse}
           resumeLoading={resumeLoading}

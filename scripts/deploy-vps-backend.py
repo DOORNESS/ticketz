@@ -77,6 +77,7 @@ PATCH_PATHS = [
     "models/AiCopilotSuggestion.js",
     "models/AiKnowledgeSuggestion.js",
     "models/AiReplayLog.js",
+    "models/AiEscalationEmail.js",
     "models/MessageMediaFile.js",
     "models/KnowledgeBase.js",
     "models/KnowledgeDocument.js",
@@ -130,9 +131,11 @@ PATCH_PATHS = [
     "services/AiServices/AiDecisionLogger.js",
     "services/AiServices/HandoffToHumanService.js",
     "controllers/TicketAiController.js",
+    "controllers/EscalationEmailController.js",
     "controllers/TicketController.js",
     "controllers/MessageController.js",
     "routes/ticketRoutes.js",
+    "routes/escalationRoutes.js",
     "services/AiServices/AiTicketActionsService.js",
     "models/AiTicketTimelineEvent.js",
     "services/StorageService/StorageService.js",
@@ -542,6 +545,7 @@ def collect_files() -> List[Path]:
         "services/MediaServices/**/*.js",
         "database/migrations/20260719100000-ai-triage-v2-professional-flow.js",
         "database/migrations/20260723130000-media-lifecycle-b2-private.js",
+        "database/migrations/20260730120000-ai-escalation-emails.js",
     ):
         for path in sorted(DIST.glob(pattern)):
             add(path)

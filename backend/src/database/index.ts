@@ -74,6 +74,7 @@ import ContentRepositoryCategory from "../models/ContentRepositoryCategory";
 import ContentRepositoryUsageLog from "../models/ContentRepositoryUsageLog";
 import ContentRepositoryPermission from "../models/ContentRepositoryPermission";
 import AiMetricsSnapshot from "../models/AiMetricsSnapshot";
+import AiEscalationEmail from "../models/AiEscalationEmail";
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const dbConfig = require("../config/database");
@@ -136,6 +137,7 @@ const models = [
   KnowledgePermission,
   KnowledgeIngestionJob,
   AiConversationLog,
+  AiEscalationEmail,
   MessageMediaFile,
   MediaDeletionAudit,
   AiCopilotSuggestion,
