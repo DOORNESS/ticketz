@@ -49,7 +49,8 @@ export const accessByToken = async (
     mime.lookup(media.originalFilename || media.storageKey || "") ||
     "application/octet-stream";
   res.setHeader("Content-Type", String(contentType));
-  res.setHeader("Cache-Control", "private, max-age=300");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("Pragma", "no-cache");
   if (req.query.inline === "1" || /^image\//i.test(String(contentType))) {
     res.setHeader("Content-Disposition", "inline");
   }

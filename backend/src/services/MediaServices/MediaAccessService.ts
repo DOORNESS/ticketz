@@ -76,16 +76,18 @@ export const resolveMessageMediaUrls = async ({
         return;
       }
 
-      const storageKey = resolveStorageKeyFromMessage(rawMediaUrl);
-      if (!storageKey) {
-        return;
-      }
-
+      // Prefer the durable message relation. `mediaUrl` may already contain a
+      // short-lived /media/access token from an earlier list response; such a
+      // token cannot be converted back into a storage key after it expires.
       let media = await MessageMediaFile.findOne({
         where: { companyId, messageId: message.id }
       });
 
       if (!media) {
+        const storageKey = resolveStorageKeyFromMessage(rawMediaUrl);
+        if (!storageKey) {
+          return;
+        }
         media = await MessageMediaFile.findOne({
           where: { companyId, storageKey }
         });
@@ -95,19 +97,15 @@ export const resolveMessageMediaUrls = async ({
         return;
       }
 
-      if (
-        typeof rawMediaUrl === "string" &&
-        rawMediaUrl.includes("/media/access/")
-      ) {
-        return;
-      }
-
       try {
         await assertMediaAccess({
           user,
           mediaId: media.id,
           companyId
         });
+        // Always issue a fresh private-access token when messages are listed.
+        // Reusing the URL makes the thumbnail survive while the full-size
+        // lightbox fails as soon as the previous token reaches its TTL.
         setMediaUrl(message, await buildClientMediaUrl({ media, user }));
       } catch {
         // Keep the existing /public URL rather than blanking media in the UI.
