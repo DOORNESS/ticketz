@@ -97,6 +97,23 @@ describe("WhatsAppAiTurnService", () => {
     expect(resolved).toBe("oi");
   });
 
+  it("keeps image vision context when caption is selected as primary turn", async () => {
+    mockFindAll.mockResolvedValueOnce([]);
+
+    const resolved = await resolveCustomerTurnText({
+      ticketId: 42,
+      rawUserText:
+        "veja o erro que estou tendo com o meu login, consegue ver a imagem ?\n\n[Imagem enviada pelo cliente]: Mensagem em vermelho: E-mail ou senha incorretos.",
+      messageParts: [
+        "veja o erro que estou tendo com o meu login, consegue ver a imagem ?",
+        "[Imagem enviada pelo cliente]: Mensagem em vermelho: E-mail ou senha incorretos."
+      ]
+    });
+
+    expect(resolved).toContain("consegue ver a imagem");
+    expect(resolved).toContain("E-mail ou senha incorretos");
+  });
+
   it("replays last real question on cadê vc", async () => {
     mockFindAll.mockResolvedValueOnce([
       {

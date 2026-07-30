@@ -162,6 +162,39 @@ const resolveExistingUpload = (mediaUrl: string) => {
   };
 };
 
+const VISION_SUMMARY_WAIT_MS = 8000;
+const VISION_SUMMARY_POLL_MS = 400;
+
+const waitForStoredVisionSummary = async ({
+  companyId,
+  messageId,
+  maxWaitMs = VISION_SUMMARY_WAIT_MS
+}: {
+  companyId: number;
+  messageId?: string;
+  maxWaitMs?: number;
+}): Promise<string | null> => {
+  if (!messageId) {
+    return null;
+  }
+
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    const existingMedia = await MessageMediaFile.findOne({
+      where: { companyId, messageId },
+      attributes: ["visionSummary"]
+    });
+
+    if (existingMedia?.visionSummary?.trim()) {
+      return existingMedia.visionSummary.trim();
+    }
+
+    await new Promise(resolve => setTimeout(resolve, VISION_SUMMARY_POLL_MS));
+  }
+
+  return null;
+};
+
 export const resolveInboundMessageText = async ({
   companyId,
   ticket,
@@ -198,6 +231,17 @@ export const resolveInboundMessageText = async ({
       messageText,
       existingMedia.visionSummary
     );
+  }
+
+  if (isVisualMediaType(message.mediaType) && message.messageId) {
+    const pendingVision = await waitForStoredVisionSummary({
+      companyId,
+      messageId: message.messageId
+    });
+
+    if (pendingVision) {
+      return formatInboundImageContext(messageText, pendingVision);
+    }
   }
 
   const mediaBuffer = await loadInboundMediaBuffer({ companyId, message });

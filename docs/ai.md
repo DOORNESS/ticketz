@@ -67,7 +67,7 @@ RAG v2: `RagConfig.ts`, `ChunkingService.ts`, `RetrievalEngine.ts`, `KnowledgeCo
 
 Conexões multifila com agente IA não exibem menu: a Nível entra silenciosamente pela fila Consumidor e a Fortmax pela fila Suporte, sem limitar o RAG àquela fila. Todas as bases ativas do domínio da marca continuam elegíveis. Respostas usam URL simples uma única vez, fallback concreto por marca e linguagem curta/natural.
 
-Imagens de WhatsApp são analisadas no ingest e no turno IA (`analyzeAndPersistInboundImageVision` + `MediaInboundResolver`); o resumo visual entra como `[Imagem enviada pelo cliente]` e alimenta RAG/resposta. Buffer local vai em data URL base64; negar visão (“não consigo ver imagens”) é bloqueado quando há contexto visual.
+Imagens de WhatsApp são analisadas no ingest e no turno IA; o bloco `[Imagem enviada pelo cliente]` é preservado no texto do turno e alimenta RAG/resposta.
 
 ## Diretório no código
 

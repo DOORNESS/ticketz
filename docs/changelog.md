@@ -8,6 +8,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.88] — 2026-07-30
+
+### Corrigido (visão descartada no turno IA)
+
+- **`resolveCustomerTurnText`** — preserva blocos `[Imagem enviada pelo cliente]` ao escolher a legenda principal; antes a descrição visual era removida e o modelo respondia “não consigo ver imagens”.
+- **`MediaInboundResolver`** — aguarda `visionSummary` persistido no ingest antes de desistir da análise.
+- **`ProcessInboundMessageService`** — caminho rápido informativo não roda em mensagens com imagem sem contexto visual.
+- **`prepareCustomerFacingAiText`** — remove negações de visão também quando o cliente pergunta “consegue ver a imagem?”.
+- **Manual 1.5.88** — §11 e índice `ai.md` sincronizados.
+
+---
+
 ## [1.5.87] — 2026-07-30
 
 ### Corrigido (visão de imagens no WhatsApp)

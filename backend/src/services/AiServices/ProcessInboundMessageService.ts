@@ -22,6 +22,7 @@ import {
   isInformationalIntent
 } from "./Triage/CaseCompletenessEngine";
 import { resolveCustomerTurnText } from "./WhatsAppCustomerTurnResolver";
+import { hasInboundImageContext } from "./InboundImageContext";
 import { runWhatsAppAiTurn } from "./WhatsAppAiTurnService";
 import {
   buildAiSchedulePromptBlock,
@@ -608,6 +609,8 @@ const ProcessInboundMessageService = async ({
 
     const useDirectWhatsAppTurn =
       !forceHandoff &&
+      !messages.some(message => message.mediaType === "image") &&
+      !hasInboundImageContext(userText) &&
       (informationalQuery ||
         isPureGreetingMessage(userText.trim()) ||
         isShortHelpRequest(userText) ||

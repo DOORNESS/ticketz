@@ -228,6 +228,37 @@ export const getActiveAgentForTicket = async (
   return getActiveAgent(ticket.companyId, queueId);
 };
 
+export const resolveVisionAgentForTicket = async (
+  ticket: Pick<Ticket, "companyId" | "whatsappId" | "queueId">
+): Promise<AiAgent | null> => {
+  const assigned = await getActiveAgentForTicket(ticket as Ticket);
+  if (assigned) {
+    return assigned;
+  }
+
+  if (!ticket.whatsappId) {
+    return null;
+  }
+
+  const whatsapp = await Whatsapp.findByPk(ticket.whatsappId, {
+    include: [{ model: Queue, as: "queues", attributes: ["id", "name"] }]
+  });
+
+  if (!whatsapp?.queues?.length) {
+    return null;
+  }
+
+  const rankedQueues = rankQueuesForAutomaticAiRouting(whatsapp.queues);
+  for (const queue of rankedQueues) {
+    const agent = await getActiveAgent(ticket.companyId, queue.id);
+    if (agent) {
+      return agent;
+    }
+  }
+
+  return null;
+};
+
 export const resolveProcessingAgent = async (
   ticket: Ticket,
   fallbackAgent?: AiAgent | null

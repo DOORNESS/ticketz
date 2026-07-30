@@ -86,6 +86,7 @@ import {
   getActiveAgent,
   getActiveAgentForTicket,
   ensureTicketQueueFromWhatsapp,
+  resolveVisionAgentForTicket,
   isAiHandlingTicket
 } from "../AiServices/AiHelpers";
 import { isAiFeaturesEnabled } from "../AiServices/AiPlatformState";
@@ -879,7 +880,7 @@ export const verifyMediaMessage = async (
     !msg.key.fromMe &&
     isAiFeaturesEnabled()
   ) {
-    const aiAgentForImage = await getActiveAgentForTicket(ticket);
+    const aiAgentForImage = await resolveVisionAgentForTicket(ticket);
     if (aiAgentForImage && storedMediaUrl) {
       try {
         const imageBuffer = Buffer.isBuffer(media.data)

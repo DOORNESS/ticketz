@@ -6,6 +6,10 @@ import {
   isWaitingForBotNudge,
   pickPrimaryCustomerText
 } from "./Triage/CaseCompletenessEngine";
+import {
+  extractInboundImageContextParts,
+  mergeInboundImageContextParts
+} from "./InboundImageContext";
 import { logger } from "../../utils/logger";
 
 export const findUnansweredCustomerQuestion = async (
@@ -60,6 +64,8 @@ export const resolveCustomerTurnText = async ({
   rawUserText: string;
   messageParts: string[];
 }): Promise<string> => {
+  const imageContextParts = extractInboundImageContextParts(messageParts);
+
   let userText =
     messageParts.length > 1
       ? pickPrimaryCustomerText(messageParts)
@@ -80,7 +86,9 @@ export const resolveCustomerTurnText = async ({
     }
   }
 
-  if (isWaitingForBotNudge(userText)) {
+  userText = mergeInboundImageContextParts(userText, messageParts);
+
+  if (isWaitingForBotNudge(userText) && !imageContextParts.length) {
     const recent = await Message.findAll({
       where: { ticketId, fromMe: false },
       order: [["createdAt", "DESC"]],
@@ -104,7 +112,7 @@ export const resolveCustomerTurnText = async ({
   }
 
   const unanswered = await findUnansweredCustomerQuestion(ticketId);
-  if (unanswered) {
+  if (unanswered && !imageContextParts.length) {
     const incomingIsOnlySocial =
       isPureGreetingMessage(userText) ||
       isShortHelpRequest(userText) ||

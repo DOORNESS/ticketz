@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.87 — auditada contra o código
+**Versão:** 1.5.88 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -456,7 +456,7 @@ IA só opera quando `AiPlatformState.aiFeaturesEnabled === true` (setado em `boo
 | SLA handoff | `AiSlaMonitorService` | ✅ |
 | Follow-up proativo | `AiProactiveFollowUpService` | ✅ |
 
-Imagens recebidas no WhatsApp passam por `MediaInboundResolver` e pelo `visionModel` do agente. A análise visual roda já no ingest (`verifyMediaMessage` → `analyzeAndPersistInboundImageVision`), usando buffer local em data URL base64; o resumo fica em `MessageMediaFiles.visionSummary` e entra no turno como `[Imagem enviada pelo cliente]: …`. Com falha de leitura/análise, o turno ainda registra que houve imagem — a IA não deve dizer que “não vê imagens”. A descrição visual alimenta o RAG e a resposta final.
+Imagens recebidas no WhatsApp passam por `MediaInboundResolver` e pelo `visionModel` do agente. A análise visual roda já no ingest (`verifyMediaMessage` → `analyzeAndPersistInboundImageVision`), usando buffer local em data URL base64; o resumo fica em `MessageMediaFiles.visionSummary` e entra no turno como `[Imagem enviada pelo cliente]: …`. O turno IA preserva esse bloco mesmo quando a legenda é escolhida como texto principal (`InboundImageContext`). Com falha de leitura/análise, o turno ainda registra que houve imagem — a IA não deve dizer que “não vê imagens”.
 
 ### Orquestrador — condição real
 Requer **ambos**:

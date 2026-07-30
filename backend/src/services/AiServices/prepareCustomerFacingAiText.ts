@@ -9,7 +9,13 @@ const UNSUPPORTED_PROCEDURE_PATTERN =
   /n[aã]o (?:tenho|encontrei|possuo|consigo).{0,50}(?:link|procedimento|informa[cç][aã]o|agend)|n[aã]o (?:é|e) poss[ií]vel.{0,30}agend/i;
 
 const VISION_DENIAL_PATTERN =
-  /infelizmente,? n[aã]o consigo ver imagens?|n[aã]o consigo ver (?:a )?imagem/i;
+  /(?:infelizmente,?|desculpe,? mas)? n[aã]o consigo ver imagens?|n[aã]o consigo ver (?:a )?imagem|n[aã]o (?:tenho|posso) ver imagens?/i;
+
+const mentionsInboundImage = (text: string): boolean =>
+  /\[Imagem enviada pelo cliente\]/i.test(text) ||
+  /\b(?:consegue|pode) ver (?:a )?imagem\b/i.test(text) ||
+  /\bveja (?:a )?imagem\b/i.test(text) ||
+  /\benviei (?:a )?imagem\b/i.test(text);
 
 export const prepareCustomerFacingAiText = (
   text: string,
@@ -22,10 +28,11 @@ export const prepareCustomerFacingAiText = (
   }).trim();
 
   if (
-    /\[Imagem enviada pelo cliente\]/i.test(userText) &&
+    (mentionsInboundImage(userText) || mentionsInboundImage(text)) &&
     VISION_DENIAL_PATTERN.test(sanitized)
   ) {
     sanitized = sanitized.replace(VISION_DENIAL_PATTERN, "").trim();
+    sanitized = sanitized.replace(/^\s*[,.\-–—]+\s*/, "");
     if (!sanitized || sanitized.length < 24) {
       return resolveAgentInformationalFallback(agent, userText);
     }

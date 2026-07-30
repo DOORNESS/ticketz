@@ -102,6 +102,19 @@ describe("prepareCustomerFacingAiText", () => {
     expect(output).not.toMatch(/n[aã]o consigo ver imagens/i);
     expect(output).toMatch(/e-mail ou senha incorretos/i);
   });
+
+  it("removes false image blindness when customer asks if bot can see the image", () => {
+    const output = prepareCustomerFacingAiText(
+      "Desculpe, mas não consigo ver imagens. Vamos resolver seu problema de login juntos.",
+      "veja o erro que estou tendo com o meu login, consegue ver a imagem ?",
+      {
+        name: "Webin",
+        basePrompt: "Você é o Webin, assistente virtual da Fortmax."
+      }
+    );
+
+    expect(output).not.toMatch(/n[aã]o consigo ver imagens/i);
+  });
 });
 
 describe("sanitizeAiOutboundText phone stripping", () => {
