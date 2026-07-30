@@ -72,8 +72,37 @@ export const buildAgentGreetingReply = ({
 };
 
 export const resolveAgentInformationalFallback = (
-  agent?: Partial<AgentPersonaHint> | null
+  agent?: Partial<AgentPersonaHint> | null,
+  userText = ""
 ): string => {
+  const brand = detectAgentBrand(agent);
+  if (brand === "nivel") {
+    const normalized = userText
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    if (/senha|login|acesso|recuper|conta|cpf/.test(normalized)) {
+      return "Não encontrei agora o link oficial de recuperação na base e não vou improvisar um endereço. Você ainda tem acesso ao e-mail ou telefone cadastrado? Com essa informação, tento localizar o procedimento correto.";
+    }
+
+    return "Não encontrei uma orientação segura para esse caso nos materiais disponíveis. Para que a equipe analise sua solicitação sem eu arriscar uma informação incorreta, abra um chamado em https://nivelvelo.com/chamado e descreva o que aconteceu.";
+  }
+
+  if (brand === "fortmax") {
+    const normalized = userText
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const financeOrManagement =
+      /boleto|financeir|fatura|cobranca|pagamento|gerencia|contrato/.test(
+        normalized
+      );
+
+    return financeOrManagement
+      ? "Não encontrei esse procedimento com segurança na base. A Cristiane pode orientar você sobre financeiro e gerência pelo WhatsApp 17 99605-8041."
+      : "Não encontrei esse procedimento com segurança na base. O Thiago pode orientar você no suporte pelo WhatsApp 17 98833-8760. Para assuntos financeiros ou de gerência, fale com a Cristiane no 17 99605-8041.";
+  }
+
   const identity = buildAgentIdentityReply(agent);
   return `${identity} Não encontrei um trecho seguro da base para responder com precisão. Pode detalhar um pouco mais sua dúvida?`;
 };
@@ -88,13 +117,19 @@ export const resolveAgentGenericFallback = (
 };
 
 export const resolveAgentExternalSupportReply = (
-  agent?: Partial<AgentPersonaHint> | null
+  agent?: Partial<AgentPersonaHint> | null,
+  userText = ""
 ): string | null => {
-  if (detectAgentBrand(agent) !== "nivel") {
-    return null;
+  const brand = detectAgentBrand(agent);
+  if (brand === "nivel") {
+    return "Para continuar com uma pessoa da equipe, abra um chamado em https://nivelvelo.com/chamado. Descreva o que aconteceu e anexe os comprovantes necessários diretamente no formulário.";
   }
 
-  return "Para uma análise individual da sua solicitação, abra um chamado no canal oficial: https://nivelvelo.com/chamado. Descreva o ocorrido e anexe os comprovantes necessários diretamente no formulário. Por este atendimento, esse é o procedimento disponível para a continuidade da sua solicitação.";
+  if (brand === "fortmax") {
+    return resolveAgentInformationalFallback(agent, userText);
+  }
+
+  return null;
 };
 
 export const buildAgentOperationalRules = (
@@ -110,6 +145,7 @@ Em qualquer conversa sobre esquecer, trocar, redefinir ou recuperar senha/conta,
 Nunca use uma URL terminada em "/chamado" para senha, recuperação de conta ou problema de acesso; siga os links específicos recuperados da base.
 Nunca informe telefone ou WhatsApp. Conduza o procedimento somente com as orientações e links presentes no contexto.
 Quando a base indicar formulário ou chamado externo, nunca afirme que transferiu o atendimento dentro do WhatsApp.
+Se os materiais recuperados não trouxerem um procedimento seguro para concluir o caso, encaminhe naturalmente para https://nivelvelo.com/chamado. Não sugira demonstração, agendamento ou contato futuro sem fornecer o procedimento real disponível.
 `.trim();
   }
 
@@ -117,6 +153,8 @@ Quando a base indicar formulário ou chamado externo, nunca afirme que transferi
     return `
 Atue exclusivamente como assistente da Fortmax e de seus produtos presentes na base deste canal.
 Não atribua à Fortmax informações, contatos, políticas ou funcionalidades da Nível Cashback.
+Nunca invente portal do cliente, link, procedimento ou funcionalidade ausente da base.
+Quando faltar uma orientação segura, ofereça uma saída concreta e cordial: Thiago atende suporte no WhatsApp 17 98833-8760; Cristiane atende gerência e financeiro no WhatsApp 17 99605-8041.
 `.trim();
   }
 

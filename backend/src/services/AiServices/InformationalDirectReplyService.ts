@@ -3,12 +3,13 @@ import Ticket from "../../models/Ticket";
 import { chatCompletion } from "./ModelGateway";
 import { getKnowledgeBaseIdsForAgent } from "./AiHelpers";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
-import { sanitizeAiOutboundText } from "./sanitizeAiOutboundText";
 import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
 import { logger } from "../../utils/logger";
 import Message from "../../models/Message";
 import { parsePositiveInt, withAiTimeout } from "./withAiTimeout";
 import { resolveAgentInformationalFallback } from "./AgentPersonaService";
+import { buildDefaultOperationalRules } from "./AiPromptBuilder";
+import { buildContextualRetrievalQuery } from "./ContextualRetrievalQuery";
 
 const getKnowledgeLookupTimeoutMs = (): number =>
   parsePositiveInt(process.env.AI_INFORMATIONAL_KNOWLEDGE_TIMEOUT_MS, 8000);
@@ -75,8 +76,8 @@ const buildConversationHistory = async (
     }));
 };
 
-export const resolveBrandFallback = (agent: AiAgent, _userText = ""): string =>
-  resolveAgentInformationalFallback(agent);
+export const resolveBrandFallback = (agent: AiAgent, userText = ""): string =>
+  resolveAgentInformationalFallback(agent, userText);
 
 /**
  * Caminho estável para dúvidas informativas.
@@ -103,13 +104,15 @@ export const tryInformationalDirectReply = async ({
   let chunkCount = 0;
   let hasReadyDocuments = false;
   let contextBlock = "";
+  const history = await buildConversationHistory(ticket.id, 6);
+  const retrievalQuery = buildContextualRetrievalQuery(userText, history);
 
   try {
     const knowledgeContext = await withAiTimeout(
       buildKnowledgeContextForQuery({
         companyId,
         knowledgeBaseIds,
-        userText,
+        userText: retrievalQuery,
         provider: agent.provider,
         loadStrategy: "auto",
         skipReingest: true
@@ -127,7 +130,7 @@ export const tryInformationalDirectReply = async ({
         : "A base deste canal ainda está limitada. Explique de forma geral e cordial o que puder; peça mais detalhes se necessário.");
 
     if (!hasRealKnowledgeContext(contextBlock)) {
-      const brandFallback = resolveBrandFallback(agent);
+      const brandFallback = resolveBrandFallback(agent, userText);
       return {
         replied: true,
         body: brandFallback,
@@ -137,8 +140,6 @@ export const tryInformationalDirectReply = async ({
         reason: "informational_brand_fallback"
       };
     }
-
-    const history = await buildConversationHistory(ticket.id, 4);
 
     try {
       const completion = await withAiTimeout(
@@ -156,6 +157,7 @@ export const tryInformationalDirectReply = async ({
                 "Responda em português, de forma clara e conversacional.",
                 "Use o material da base de conhecimento abaixo.",
                 "Não invente políticas, valores ou procedimentos que não estejam no material.",
+                buildDefaultOperationalRules(agent),
                 `Material da base:\n${contextBlock.slice(0, 12000)}`
               ].join("\n\n")
             },
@@ -171,7 +173,7 @@ export const tryInformationalDirectReply = async ({
       );
 
       const reply = prepareCustomerFacingAiText(
-        sanitizeAiOutboundText(completion.content?.trim() || ""),
+        completion.content?.trim() || "",
         userText,
         agent
       );
@@ -198,7 +200,7 @@ export const tryInformationalDirectReply = async ({
     );
   }
 
-  const brandFallback = resolveBrandFallback(agent);
+  const brandFallback = resolveBrandFallback(agent, userText);
   return {
     replied: true,
     body:

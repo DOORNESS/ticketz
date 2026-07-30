@@ -189,7 +189,7 @@ export const runWhatsAppAiTurn = async ({
     return {
       replied: true,
       body: isInformationalIntent(trimmed)
-        ? resolveAgentInformationalFallback(agent)
+        ? resolveAgentInformationalFallback(agent, trimmed)
         : resolveAgentGenericFallback(agent),
       knowledgeBaseIds: [] as number[],
       chunkCount: 0,
@@ -202,7 +202,7 @@ export const runWhatsAppAiTurn = async ({
     prepareCustomerFacingAiText(direct.body || "", trimmed, agent) ||
     direct.body ||
     (isInformationalIntent(trimmed)
-      ? resolveAgentInformationalFallback(agent)
+      ? resolveAgentInformationalFallback(agent, trimmed)
       : resolveAgentGenericFallback(agent));
 
   await completeTurnDelivery({

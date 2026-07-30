@@ -41,7 +41,7 @@ describe("Agent brand isolation", () => {
 
   it("never derives the brand from customer text", () => {
     expect(detectAgentBrand(fortmax)).toBe("fortmax");
-    expect(resolveAgentInformationalFallback(fortmax)).toMatch(/Webin/i);
+    expect(resolveAgentInformationalFallback(fortmax)).toMatch(/Thiago/i);
     expect(resolveAgentInformationalFallback(fortmax)).not.toMatch(
       /Nivelton|Nível Cashback/i
     );
@@ -52,18 +52,21 @@ describe("Agent brand isolation", () => {
     expect(buildAgentOperationalRules(nivel)).toMatch(/links oficiais/i);
     expect(buildAgentOperationalRules(nivel)).not.toMatch(/99165/i);
     expect(buildAgentOperationalRules(fortmax)).toMatch(/Fortmax/i);
+    expect(buildAgentOperationalRules(fortmax)).toMatch(/98833|99605/i);
     expect(buildAgentOperationalRules(fortmax)).not.toMatch(/99165|Nivelton/i);
     expect(resolveSupportPhoneForAgent(nivel)).toBeNull();
     expect(resolveSupportPhoneForAgent(fortmax)).toBeNull();
   });
 
-  it("uses the Nível external support protocol without affecting Fortmax", () => {
+  it("uses each brand external support protocol", () => {
     expect(resolveAgentExternalSupportReply(nivel)).toMatch(
       /nivelvelo\.com\/chamado/i
     );
     expect(resolveAgentExternalSupportReply(nivel)).not.toMatch(
       /transfer|99165/i
     );
-    expect(resolveAgentExternalSupportReply(fortmax)).toBeNull();
+    expect(
+      resolveAgentExternalSupportReply(fortmax, "segunda via boleto")
+    ).toMatch(/Cristiane.*99605/i);
   });
 });

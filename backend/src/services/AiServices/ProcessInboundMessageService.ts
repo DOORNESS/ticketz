@@ -73,6 +73,7 @@ import {
   resolveAgentInformationalFallback
 } from "./AgentPersonaService";
 import { getRagMinimumSimilarity } from "./RagConfig";
+import { buildContextualRetrievalQuery } from "./ContextualRetrievalQuery";
 
 export type InboundMessageItem = {
   messageBody: string;
@@ -627,7 +628,7 @@ const ProcessInboundMessageService = async ({
     const requestedHumanSupport = detectHumanHandoffRequest(userText);
     const externalSupportReply =
       !forceHandoff && requestedHumanSupport
-        ? resolveAgentExternalSupportReply(agent)
+        ? resolveAgentExternalSupportReply(agent, userText)
         : null;
 
     if (externalSupportReply) {
@@ -741,11 +742,12 @@ const ProcessInboundMessageService = async ({
       ticket.queueId,
       { orchestratorMode }
     );
+    const history = await buildConversationHistory(ticket.id, 6);
+    const retrievalQuery = buildContextualRetrievalQuery(userText, history);
 
     const [
       scheduleContext,
       knowledgeContext,
-      history,
       verifiedMemory,
       memoryEnabled,
       toolsEnabled
@@ -754,11 +756,10 @@ const ProcessInboundMessageService = async ({
       buildKnowledgeContextForQuery({
         companyId,
         knowledgeBaseIds,
-        userText,
+        userText: retrievalQuery,
         provider: agent.provider,
         loadStrategy: "auto"
       }),
-      buildConversationHistory(ticket.id, 4),
       loadVerifiedMemoryForPrompt(companyId, ticket.contactId),
       isContactMemoryEnabledForCompany(companyId),
       isToolsEnabledForCompany(companyId)
@@ -870,7 +871,7 @@ const ProcessInboundMessageService = async ({
           : "low_confidence_fallback",
         userText,
         body: informationalQuery
-          ? resolveAgentInformationalFallback(agent)
+          ? resolveAgentInformationalFallback(agent, userText)
           : AI_CUSTOMER_FALLBACK,
         markSent: markCustomerReply
       });
@@ -890,7 +891,7 @@ const ProcessInboundMessageService = async ({
         reason: "empty_sanitized_response",
         userText,
         body: informationalQuery
-          ? resolveAgentInformationalFallback(agent)
+          ? resolveAgentInformationalFallback(agent, userText)
           : AI_CUSTOMER_FALLBACK,
         markSent: markCustomerReply
       });
@@ -1202,7 +1203,7 @@ const ProcessInboundMessageService = async ({
           reason: "mandatory_reply_guard",
           userText,
           body: isInformationalIntent(userText)
-            ? resolveAgentInformationalFallback(agent)
+            ? resolveAgentInformationalFallback(agent, userText)
             : AI_CUSTOMER_FALLBACK,
           skipDedupe: true,
           markSent: markCustomerReply

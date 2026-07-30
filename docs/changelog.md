@@ -6,6 +6,20 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.84] — 2026-07-30
+
+### Corrigido (atendimento natural e conhecimento contextual)
+
+- **Multifila sem menu** — removido `AiQueueConciergeService`; conexões Nível e Fortmax entram silenciosamente em uma fila com agente IA, sem pedir números nem repetir apresentação.
+- **Cobertura de conhecimento** — a fila técnica não restringe o RAG: vínculos do agente e bases irmãs do domínio continuam disponíveis; perguntas curtas como “qual é o site?” recuperam usando até três perguntas recentes do cliente.
+- **Respostas naturais** — prompt evita listas e encerramentos repetitivos, não oferece procedimento inexistente e URLs em Markdown/duplicadas são reduzidas a uma URL simples.
+- **Saída concreta por marca** — Nível usa `nivelvelo.com/chamado` quando não há procedimento seguro (preservando recuperação de conta); Fortmax usa Thiago para suporte e Cristiane para gerência/financeiro, sem inventar portal.
+- **Horário** — ao assumir automaticamente o ticket multifila, a IA responde antes do aviso legado isolado de fora do expediente.
+- **Visão** — imagens recebidas no WhatsApp são analisadas pelo modelo visual; fatos e hipóteses ficam separados e dados sensíveis são mascarados antes de compor a consulta RAG.
+- **Manual 1.5.84** — seções §6, §8–§11, §22, §28, §37 e §43, além do índice `ai.md`, sincronizadas.
+
+---
+
 ## [1.5.83] — 2026-07-29
 
 ### Corrigido (ciclo de vida de respostas supervisionadas)

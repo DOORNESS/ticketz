@@ -104,7 +104,7 @@ describe("InformationalDirectReplyService", () => {
     expect(result.body).toBeTruthy();
     expect(result.body!.length).toBeGreaterThanOrEqual(20);
     expect(result.reason).toBe("informational_brand_fallback");
-    expect(result.body).toMatch(/Nivelton/i);
+    expect(result.body).toMatch(/nivelvelo\.com\/chamado/i);
     expect(result.body).not.toMatch(/rob[oô]/i);
   });
 
@@ -156,7 +156,7 @@ describe("InformationalDirectReplyService", () => {
 
     expect(result.replied).toBe(true);
     expect(result.reason).toBe("informational_brand_fallback");
-    expect(result.body).toMatch(/Nivelton/i);
+    expect(result.body).toMatch(/nivelvelo\.com\/chamado/i);
     expect(result.body).not.toMatch(/base deste canal ainda está limitada/i);
   });
 
@@ -179,7 +179,7 @@ describe("InformationalDirectReplyService", () => {
 
     expect(result.replied).toBe(true);
     expect(result.reason).toBe("informational_brand_fallback");
-    expect(result.body).toMatch(/Nivelton/i);
+    expect(result.body).toMatch(/nivelvelo\.com\/chamado/i);
   });
 
   it("does not switch a Fortmax agent to Nível from customer text", async () => {
@@ -205,7 +205,7 @@ describe("InformationalDirectReplyService", () => {
       userText: "qual é o nível de suporte do sistema?"
     });
 
-    expect(result.body).toMatch(/Webin/i);
+    expect(result.body).toMatch(/Thiago|Cristiane/i);
     expect(result.body).not.toMatch(/Nivelton|Nível Cashback/i);
   });
 

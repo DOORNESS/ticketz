@@ -111,6 +111,48 @@ export const shouldAiHandleTicket = async (
   return !!agent;
 };
 
+type AutomaticAiQueueCandidate = Pick<Queue, "id" | "name">;
+
+const normalizeQueueName = (value: string): string =>
+  value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+export const rankQueuesForAutomaticAiRouting = (
+  queues: AutomaticAiQueueCandidate[]
+): AutomaticAiQueueCandidate[] => {
+  const names = queues.map(queue => normalizeQueueName(queue.name)).join(" ");
+  const nivel = names.includes("nivel");
+  const fortmax =
+    names.includes("fortmax") ||
+    names.includes("webg3") ||
+    names.includes("web g3");
+
+  const score = (queue: AutomaticAiQueueCandidate): number => {
+    const name = normalizeQueueName(queue.name);
+
+    if (nivel) {
+      if (name.includes("consumidor")) return 100;
+      if (name.includes("suporte")) return 90;
+      if (name.includes("empresa")) return 80;
+      if (name.includes("recuper")) return 70;
+    }
+
+    if (fortmax) {
+      if (name.includes("suporte")) return 100;
+      if (name.includes("finance")) return 90;
+      if (name.includes("gerencia")) return 80;
+    }
+
+    return name.includes("suporte") ? 60 : 10;
+  };
+
+  return [...queues].sort(
+    (left, right) => score(right) - score(left) || left.id - right.id
+  );
+};
+
 export const resolveQueueIdForTicket = async (
   ticket: Pick<Ticket, "queueId" | "whatsappId" | "companyId">
 ): Promise<number | undefined> => {
@@ -123,20 +165,23 @@ export const resolveQueueIdForTicket = async (
   }
 
   const whatsapp = await Whatsapp.findByPk(ticket.whatsappId, {
-    include: [{ model: Queue, as: "queues", attributes: ["id"] }]
+    include: [{ model: Queue, as: "queues", attributes: ["id", "name"] }]
   });
 
   if (!whatsapp?.queues?.length) {
     return undefined;
   }
 
-  if (whatsapp.queues.length === 1) {
-    return whatsapp.queues[0].id;
-  }
+  const rankedQueues = rankQueuesForAutomaticAiRouting(whatsapp.queues);
+  const queuesWithAgent = await Promise.all(
+    rankedQueues.map(async queue => ({
+      queue,
+      agent: await getActiveAgent(ticket.companyId, queue.id)
+    }))
+  );
+  const selected = queuesWithAgent.find(candidate => Boolean(candidate.agent));
 
-  // Multiple departments require an explicit customer choice. The WhatsApp
-  // listener presents the AI concierge menu and resolves number or free text.
-  return undefined;
+  return selected?.queue.id;
 };
 
 export const ensureTicketQueueFromWhatsapp = async (
@@ -145,8 +190,9 @@ export const ensureTicketQueueFromWhatsapp = async (
   const queueId = await resolveQueueIdForTicket(ticket);
 
   if (queueId && ticket.queueId !== queueId) {
-    await ticket.update({ queueId });
+    await ticket.update({ queueId, chatbot: false });
     ticket.queueId = queueId;
+    ticket.chatbot = false;
   }
 
   return queueId ?? ticket.queueId ?? undefined;

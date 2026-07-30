@@ -41,7 +41,9 @@ export const isInternalKnowledgeSection = (text: string): boolean =>
 
 const stripInternalKnowledgeSections = (text: string): string => {
   const sections = text.split(/\n(?=#{1,3}\s)/);
-  const safe = sections.filter(section => !containsInternalKnowledgeLeak(section));
+  const safe = sections.filter(
+    section => !containsInternalKnowledgeLeak(section)
+  );
   return safe.join("\n").trim();
 };
 
@@ -59,15 +61,28 @@ const stripSupportPhoneReferences = (text: string): string => {
 };
 
 const normalizeCustomerLinks = (text: string): string => {
-  const markdownAsPlainUrl = text.replace(
-    /\[(https?:\/\/[^\]\s]+)\]\(\1\)/gi,
-    "$1"
-  );
+  const markdownAsPlainUrl = text
+    .replace(/\[[^\]]*]\((https?:\/\/[^)\s]+)\)/gi, "$1")
+    .replace(/<(https?:\/\/[^>\s]+)>/gi, "$1");
+  const seen = new Set<string>();
 
-  return markdownAsPlainUrl.replace(
-    /(https?:\/\/[^\s),.;]+)(?:[\s]*[\])(.]*\s*)+\1/gi,
-    "$1"
-  );
+  return markdownAsPlainUrl
+    .replace(/https?:\/\/[^\s)\],;]+/gi, url => {
+      const trailingPunctuation = url.match(/[.!?]+$/)?.[0] || "";
+      const cleanUrl = trailingPunctuation
+        ? url.slice(0, -trailingPunctuation.length)
+        : url;
+      const canonical = cleanUrl.replace(/\/+$/, "").toLowerCase();
+      if (seen.has(canonical)) {
+        return "";
+      }
+      seen.add(canonical);
+      return `${cleanUrl}${trailingPunctuation}`;
+    })
+    .replace(/\(\s*\)/g, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\s+([,.;!?])/g, "$1")
+    .trim();
 };
 
 export const sanitizeAiOutboundText = (
@@ -87,10 +102,7 @@ export const sanitizeAiOutboundText = (
 
   if (containsInternalKnowledgeLeak(sanitized)) {
     const stripped = stripInternalKnowledgeSections(sanitized);
-    if (
-      stripped.length >= 20 &&
-      !containsInternalKnowledgeLeak(stripped)
-    ) {
+    if (stripped.length >= 20 && !containsInternalKnowledgeLeak(stripped)) {
       sanitized = stripped;
     } else {
       return "";

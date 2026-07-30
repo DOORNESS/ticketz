@@ -29,11 +29,11 @@ describe("prepareCustomerFacingAiText", () => {
 
   it("normalizes duplicated markdown links", () => {
     const output = prepareCustomerFacingAiText(
-      "Acesse [https://nivelevelo.com/recuperar-senha](https://nivelevelo.com/recuperar-senha).",
+      "O site é [Nível Cashback](https://nivelvelo.com) (https://nivelvelo.com).",
       "esqueci minha senha"
     );
 
-    expect(output).toBe("Acesse https://nivelevelo.com/recuperar-senha.");
+    expect(output).toBe("O site é https://nivelvelo.com.");
   });
 
   it("does not inject the Nível support phone into Fortmax replies", () => {
@@ -47,6 +47,46 @@ describe("prepareCustomerFacingAiText", () => {
     );
 
     expect(output).not.toMatch(/99165/);
+  });
+
+  it("preserves official Fortmax contacts for the Fortmax agent", () => {
+    const output = prepareCustomerFacingAiText(
+      "Para financeiro, fale com a Cristiane no WhatsApp 17 99605-8041.",
+      "preciso atualizar meu boleto",
+      {
+        name: "Atendente Fortmax",
+        basePrompt: "Você é o assistente virtual da Fortmax."
+      }
+    );
+
+    expect(output).toMatch(/Cristiane.*99605-8041/i);
+  });
+
+  it("gives Nível a concrete support route when an offered procedure is unavailable", () => {
+    const output = prepareCustomerFacingAiText(
+      "Desculpe, mas não tenho um link específico para agendar a demonstração.",
+      "então quero agendar a demonstração",
+      {
+        name: "Nivelton",
+        basePrompt: "Você é o Nivelton, assistente da Nível Cashback."
+      }
+    );
+
+    expect(output).toMatch(/nivelvelo\.com\/chamado/i);
+  });
+
+  it("replaces an unsupported Fortmax portal with the correct human channel", () => {
+    const output = prepareCustomerFacingAiText(
+      "Você pode acessar o portal de clientes da Fortmax para atualizar o boleto.",
+      "quero atualizar meu boleto",
+      {
+        name: "Atendente Fortmax",
+        basePrompt: "Você é o assistente virtual da Fortmax."
+      }
+    );
+
+    expect(output).toMatch(/Cristiane.*99605-8041/i);
+    expect(output).not.toMatch(/portal de clientes/i);
   });
 });
 

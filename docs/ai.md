@@ -63,9 +63,11 @@ Ver [`AI_PHASE3_ARCHITECTURE.md`](AI_PHASE3_ARCHITECTURE.md) e [`AI_PHASE3_REPOR
 
 Env vars ingestão: `AI_KB_INGESTION_CONCURRENCY`, `AI_KB_INGESTION_MAX_ATTEMPTS`, `AI_KB_INGESTION_BACKOFF_MS`
 
-RAG v2: `RagConfig.ts`, `ChunkingService.ts`, `RetrievalEngine.ts` e `KnowledgeContextService.ts` implementam chunking estrutural, threshold efetivo, reranking e recuperação de vizinhos. Bases cumulativas de respostas supervisionadas são separadas por marca (`respostas-anexas-nivel` / `respostas-anexas-fortmax`), criadas somente no primeiro **Anexar à base** quando ainda não existem e vinculadas por identidade de marca do agente (inclusive nomes como `Atendente Fortmax`). O wiring não exclui bases existentes.
+RAG v2: `RagConfig.ts`, `ChunkingService.ts`, `RetrievalEngine.ts`, `KnowledgeContextService.ts` e `ContextualRetrievalQuery.ts` implementam chunking estrutural, threshold efetivo, reranking, recuperação de vizinhos e busca com as perguntas recentes do cliente. Bases cumulativas de respostas supervisionadas são separadas por marca (`respostas-anexas-nivel` / `respostas-anexas-fortmax`), criadas somente no primeiro **Anexar à base** quando ainda não existem e vinculadas por identidade de marca do agente (inclusive nomes como `Atendente Fortmax`). O wiring não exclui bases existentes.
 
-O concierge multifila identifica a marca pelas filas autorizadas antes de selecionar a persona. A conexão Nível pode operar com filas separadas para consumidor, empresa e recuperação, todas exclusivas do Nivelton e mapeadas para suas respectivas bases.
+Conexões multifila com agente IA não exibem menu: a Nível entra silenciosamente pela fila Consumidor e a Fortmax pela fila Suporte, sem limitar o RAG àquela fila. Todas as bases ativas do domínio da marca continuam elegíveis. Respostas usam URL simples uma única vez, fallback concreto por marca e linguagem curta/natural.
+
+Imagens de WhatsApp já são analisadas pelo `visionModel` em `MediaInboundResolver`/`AiVisionOcrService`; a descrição visual entra na pergunta para busca na base. A visão mascara dados sensíveis e trata causas aparentes como hipóteses, não diagnósticos.
 
 ## Diretório no código
 

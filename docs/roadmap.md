@@ -32,9 +32,10 @@
 - Fase 3: memória de contato verificada + ferramentas executáveis (4 tools piloto)
 - Fase 4: write tools governadas + observabilidade v2 + UI memória/timeline
 - Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot), SaaS, deploy Docker
-- Concierge IA multifila: apresentação Webin + escolha por número ou linguagem natural restrita às filas da conexão
+- Roteamento IA multifila silencioso: fila técnica automática, sem menu repetitivo e sem limitar as bases do domínio
 - Isolamento runtime Nível×Fortmax: persona/fallback/telefone pelo agente ativo e bases de respostas anexas separadas
-- RAG `structured-v2`: metadata página/capítulo/seção, threshold efetivo, reranking híbrido e chunks vizinhos
+- RAG `structured-v2`: metadata página/capítulo/seção, threshold efetivo, reranking híbrido, chunks vizinhos e consulta contextual por perguntas recentes
+- Visão inbound: imagens de WhatsApp descritas com proteção de dados e hipóteses confrontadas com o RAG
 
 ### Parcial / próximas fases
 

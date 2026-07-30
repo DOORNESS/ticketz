@@ -1,6 +1,7 @@
 import {
   buildAgentIdentityReply,
-  detectAgentIdentityQuestion
+  detectAgentIdentityQuestion,
+  rankQueuesForAutomaticAiRouting
 } from "../AiHelpers";
 
 describe("AiHelpers identity", () => {
@@ -38,5 +39,25 @@ describe("AiHelpers identity", () => {
           'Você é o Nivelton. Quando perguntarem seu nome, responda: "Me chamo Nivelton, assistente da Nível Cashback."'
       })
     ).toBe("Me chamo Nivelton, assistente da Nível Cashback.");
+  });
+
+  it("routes Nível silently to consumer support by default", () => {
+    const ranked = rankQueuesForAutomaticAiRouting([
+      { id: 3, name: "03 - Recuperar Conta Nível" },
+      { id: 2, name: "02 - Suporte Empresa Nível" },
+      { id: 1, name: "01 - Suporte Consumidor Nível" }
+    ]);
+
+    expect(ranked.map(queue => queue.id)).toEqual([1, 2, 3]);
+  });
+
+  it("routes Fortmax silently to support by default", () => {
+    const ranked = rankQueuesForAutomaticAiRouting([
+      { id: 1, name: "Financeiro Fortmax" },
+      { id: 2, name: "Gerência Fortmax" },
+      { id: 3, name: "Suporte Fortmax" }
+    ]);
+
+    expect(ranked.map(queue => queue.id)).toEqual([3, 1, 2]);
   });
 });

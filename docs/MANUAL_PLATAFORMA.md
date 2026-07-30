@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.83 — auditada contra o código
+**Versão:** 1.5.84 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -266,9 +266,9 @@ Ordem real em `wbotMessageListener.ts` → `handleMessage` (linhas ~1655–2184)
 1. Validar mensagem → contato → ticket (`FindOrCreateTicketService`)
 2. Persistir mensagem (`verifyMessage` / `verifyMediaMessage`)
 3. **Retorno antecipado** se grupo, `disableBot` ou `fromMe`
-4. **`tryEngageAiOnInboundMessage`** — se true, **return** (IA tem prioridade quando o ticket já possui fila ou a conexão possui uma única fila)
+4. **`tryEngageAiOnInboundMessage`** — se true, **return** (IA tem prioridade; em conexão multifila escolhe silenciosamente uma fila com agente da marca)
 5. Horário / outOfHours + possível segundo engage IA
-6. **`verifyQueue`** — em conexão multifila, concierge IA apresenta os departamentos e aceita número ou descrição natural
+6. **`verifyQueue`** — menu numérico permanece apenas para conexões sem agente IA elegível
 7. Saudação debounced
 8. **`handleChartbot`** — opções numéricas
 
@@ -351,8 +351,8 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Após wiring/restart: `ReengageStuckAiTicketsService` reprocessa tickets abertos/pendentes sem `aiAgentId` mas com agente na fila (última mensagem do cliente)
 - Manual ops: `COMPANY_ID=1 npm run wire:support-lines`
 - `EnsureAiFirstResponderService` **não** liga Webin automaticamente em nenhuma fila cujo nome identifique Nível, Fortmax ou WebG3; os vínculos dessas marcas são administrados explicitamente
-- `resolveQueueIdForTicket`: conexões com várias filas nunca escolhem silenciosamente a primeira fila com agente; o ticket permanece sem `queueId` até a escolha explícita ou classificação do concierge
-- Identidade, saudação, fallback informativo e regras operacionais são resolvidos por `AgentPersonaService` a partir do agente ativo (Nivelton ≠ Webin); texto do cliente nunca determina a marca. Na Nível, recuperação segue os links oficiais da base e o pedido geral de humano aponta para `https://nivelvelo.com/chamado`, sem prometer transferência interna ou injetar telefone
+- `resolveQueueIdForTicket`: conexões com várias filas IA não exibem menu. O roteamento técnico escolhe silenciosamente uma fila com agente ativo (Consumidor na Nível; Suporte na Fortmax), desliga `ticket.chatbot` e preserva todas as bases vinculadas ao agente/domínio para a resposta
+- Identidade, saudação, fallback informativo e regras operacionais são resolvidos por `AgentPersonaService` a partir do agente ativo (Nivelton ≠ Webin); texto do cliente nunca determina a marca. Na Nível, recuperação segue os links oficiais da base e casos sem procedimento seguro apontam para `https://nivelvelo.com/chamado`. Na Fortmax, ausência de procedimento usa Thiago (suporte) ou Cristiane (gerência/financeiro), sem inventar portal
 
 ### Filtro por linha WhatsApp (lista de tickets)
 - Barra de chips abaixo das abas Abertas/Resolvidos: **Todos**, **Web G3**, **Nível**, etc. (nome da conexão em Administração → Conexões)
@@ -377,53 +377,28 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 `QueueService/*`, `QueueOptionService/*`
 
 ### Chatbot
-- `verifyQueue` — seleção de fila por número ou, com IA habilitada, descrição em linguagem natural
+- `verifyQueue` — seleção por número somente no fluxo legado, quando não há agente IA elegível
 - `handleChartbot` — árvore `QueueOption` (`parentId`, `forwardQueueId`, `exitChatbot`)
 - `startQueue` define `chatbot: queue.options.length > 0`
 
-### Skip chatbot com IA (`verifyQueue` ~1357–1362)
-Se conexão tem **uma fila**, IA habilitada e agente ativo → não mostra menu de filas.
+### Roteamento IA sem menu
 
-### Concierge IA em conexão com várias filas
-
-`AiQueueConciergeService` atua antes da escolha de departamento:
-
-1. infere a marca somente pelas filas permitidas e encontra um agente ativo da mesma marca;
-2. gera uma apresentação curta pelo modelo; em timeout/erro usa apresentação local segura;
-3. acrescenta uma lista determinística contendo **somente** as filas ligadas à conexão;
-4. aceita o número exibido, palavras-chave inequívocas ou classificação LLM;
-5. valida o `queueId` retornado contra o conjunto permitido antes de atualizar o ticket;
-6. se a mensagem natural já descreve o problema e a fila escolhida possui agente, reengaja a IA com o texto original.
+Com uma ou várias filas, IA habilitada e agente ativo, `resolveQueueIdForTicket` escolhe uma fila operacional sem pedir `1`, `2` ou `3` ao cliente. A escolha serve apenas para o ticket entrar no fluxo; a IA continua consultando todas as bases ativas vinculadas ao agente e todas as bases irmãs do mesmo domínio.
 
 ```mermaid
 flowchart TD
     A[Mensagem em WhatsApp multifila] --> B{Ticket já tem queueId?}
     B -- sim --> C[Agente/fluxo da fila atual]
-    B -- não --> D[Agente da marca apresenta filas conectadas]
-    D --> E[Cliente responde número ou descreve necessidade]
-    E --> F{Número ou palavras-chave inequívocas?}
-    F -- sim --> G[Selecionar fila permitida]
-    F -- não --> H[LLM classifica somente no catálogo permitido]
-    H --> I{queueId válido e confiança >= 0,55?}
-    I -- sim --> G
-    I -- não --> D
-    G --> J[startQueue + persistir Ticket.queueId]
-    J --> K{Fila possui agente IA?}
-    K -- sim --> L[Reengajar IA com a mensagem original]
-    K -- não --> M[Aguardar atendimento humano]
-```
-
-O menu reflete a configuração de cada conexão. No WebG3, com Financeiro, Gerência e Suporte selecionados, a ordem alfabética exibida é:
-
-```text
-1 - Financeiro Fortmax
-2 - Gerência Fortmax
-3 - Suporte Fortmax
+    B -- não --> D[Ordenar filas técnicas da marca]
+    D --> E{Há agente IA ativo?}
+    E -- sim --> F[Persistir queueId e desativar chatbot]
+    F --> G[Responder naturalmente à mensagem original]
+    E -- não --> H[Fluxo legado de seleção de fila]
 ```
 
 `syncExclusiveAgentQueueLinks` remove vínculos antigos ao trocar ou limpar a fila de atendimento do agente. A tela envia `queueLinks: []` quando “Nenhuma” é selecionada, evitando vínculos ocultos.
 
-Na conexão Nível, as filas **Suporte Consumidor**, **Suporte Empresa** e **Recuperar Conta** usam o Nivelton e são associadas, respectivamente, às bases de consumidores, empresas e recuperação. Palavras como *cashback*, *empresa* e *recuperar senha* participam da seleção determinística antes do classificador LLM.
+Na conexão Nível, as filas **Suporte Consumidor**, **Suporte Empresa** e **Recuperar Conta** permanecem associadas às bases específicas, mas a fila técnica padrão é **Suporte Consumidor**. Na Fortmax, a fila técnica padrão é **Suporte**. Como o agente também recupera as bases do domínio da própria marca, uma pergunta de empresa, recuperação ou financeiro não fica limitada à fila técnica escolhida.
 
 ### Auditoria §9
 
@@ -480,6 +455,8 @@ IA só opera quando `AiPlatformState.aiFeaturesEnabled === true` (setado em `boo
 | ACK por agente | `AiInboundQueueService` + campos `ackEnabled` | ✅ |
 | SLA handoff | `AiSlaMonitorService` | ✅ |
 | Follow-up proativo | `AiProactiveFollowUpService` | ✅ |
+
+Imagens recebidas no WhatsApp passam por `MediaInboundResolver` e pelo `visionModel` do agente. A descrição visual é adicionada à pergunta antes do RAG, para que a IA compare erro, tela ou equipamento com a base da marca. O prompt de visão separa fatos visíveis de hipóteses, mascara dados sensíveis e proíbe diagnóstico conclusivo baseado apenas na imagem.
 
 ### Orquestrador — condição real
 Requer **ambos**:
@@ -797,7 +774,7 @@ Postgres local :5432, Redis :6379, `cp .env.dev .env`
 ## 22. O que está pronto vs. em evolução
 
 ### ✅ Operacional (código presente)
-Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot/playground), RAG `structured-v2` com threshold efetivo/reranking/vizinhos, isolamento de persona e anexos Nível×Fortmax, concierge IA para conexões multifila, contatos, tags, schedules, chat interno, campanhas (flag), SaaS (planos/faturas), API externa, Socket.io, i18n, Docker deploys, storage B2.
+Atendimento WA, tickets, chatbot, IA (RAG/handoff/copilot/playground), RAG `structured-v2` com threshold efetivo/reranking/vizinhos e consulta contextual, isolamento de persona e anexos Nível×Fortmax, roteamento IA multifila sem menu, visão segura de imagens, contatos, tags, schedules, chat interno, campanhas (flag), SaaS (planos/faturas), API externa, Socket.io, i18n, Docker deploys, storage B2.
 
 ### ⚠️ Parcial
 | Item | Evidência |
@@ -984,11 +961,12 @@ flowchart LR
 | Reranking | 75% similaridade + 20% termos da query + 5% capítulo/seção |
 | Vizinhos | ±1 por padrão (`AI_RAG_NEIGHBOR_WINDOW`, 0–2), respeitando versão publicada/documento ready |
 | Deduplicação | mesmo conteúdo na mesma versão/fonte entra uma única vez no contexto |
-
-A ingestão de uma versão faz *claim* atômico do status antes de extrair e gerar embeddings. Jobs concorrentes para a mesma versão não inserem conjuntos duplicados de chunks.
+| Consulta contextual | pergunta atual + até 3 perguntas recentes do cliente; respostas anteriores da IA não contaminam a busca |
 | Contexto máximo | 20.000 caracteres |
 
-Não existe mais fallback automático que injeta os primeiros 24 chunks por ordem de ID quando a busca não encontra relevância. Nesse caso o contexto fica vazio e o agente solicita detalhe sem afirmar fatos. `loadStrategy=full` permanece apenas como opção explícita administrativa.
+A ingestão de uma versão faz *claim* atômico do status antes de extrair e gerar embeddings. Jobs concorrentes para a mesma versão não inserem conjuntos duplicados de chunks.
+
+Não existe mais fallback automático que injeta os primeiros 24 chunks por ordem de ID quando a busca não encontra relevância. Nesse caso o contexto fica vazio e o fallback da marca oferece um próximo passo concreto sem inventar procedimento: chamado oficial na Nível (exceto recuperação de acesso, que mantém fluxo próprio) ou os contatos responsáveis da Fortmax. `loadStrategy=full` permanece apenas como opção explícita administrativa.
 
 ---
 
@@ -1314,7 +1292,8 @@ frontend/src/
 | Serviço | Responsabilidade |
 |---------|------------------|
 | `wbotMessageListener.ts` | Entrada de mensagens WA; roteamento IA/chatbot |
-| `AiQueueConciergeService.ts` | Apresentação e seleção segura de departamento por número, palavras-chave ou LLM |
+| `AiHelpers.resolveQueueIdForTicket` | Roteamento silencioso para fila com agente IA em conexão multifila |
+| `ContextualRetrievalQuery.ts` | Inclui perguntas recentes do cliente na recuperação de conhecimento de continuações curtas |
 | `AiReengagementService.ts` | Gate IA no inbound; enqueue |
 | `AiInboundQueueService.ts` | Fila Bull, debounce, buffer Redis; com debounce `0`, lock ativo reagenda processamento (~750ms) |
 | `WhatsAppSessionWatchdogService.ts` | A cada 5 min verifica sessões Baileys: socket vivo + listener de mensagens; reinicia sessões zombie |
@@ -1463,7 +1442,7 @@ frontend/src/
 | Prompt injection RAG/memória | Média | Mitigado parcialmente via `AiPromptBuilder` + wrapper `[OPERATIONAL_DATA]` |
 | Sem rate limit IA | Média | Custo OpenAI não limitado por tenant no código |
 | Company 1 bypass compliance | Baixa | Tenant admin sempre "compliant" |
-| LLM indisponível no concierge | Baixa | Saudação e números possuem fallback local; escolhas naturais ambíguas repetem o menu sem atribuir fila indevida |
+| Fila técnica padrão inadequada | Baixa | Priorização determinística usa Consumidor na Nível e Suporte na Fortmax; recuperação continua cobrindo todas as bases do domínio |
 | RAG sem trecho acima do threshold | Baixa | Contexto fica vazio por segurança; fallback pede detalhe e não injeta início irrelevante do manual |
 | PDF sem estrutura de páginas | Média | `page` só é gravada quando `pdf-parse` fornece páginas; OCR/visão permanece evolução |
 

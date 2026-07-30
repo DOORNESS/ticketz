@@ -7,9 +7,9 @@ const VISION_PROMPTS: Record<string, string> = {
   error_screen:
     "Esta imagem parece ser um print de erro ou tela de sistema. Descreva o erro, códigos, mensagens e contexto visível em português.",
   boleto:
-    "Esta imagem parece ser um boleto ou cobrança. Extraia vencimento, valor, beneficiário, linha digitável e instruções visíveis.",
+    "Esta imagem parece ser um boleto ou cobrança. Extraia vencimento, valor, beneficiário, status e instruções visíveis, sem reproduzir a linha digitável completa.",
   receipt:
-    "Esta imagem parece ser um comprovante. Extraia valor, data, origem, destino e demais dados relevantes.",
+    "Esta imagem parece ser um comprovante. Extraia valor, data, status e dados relevantes, mascarando CPF, conta e identificadores sensíveis.",
   document:
     "Esta imagem contém um documento. Extraia todo o texto legível e descreva o tipo de documento.",
   equipment:
@@ -17,6 +17,9 @@ const VISION_PROMPTS: Record<string, string> = {
   default:
     "Descreva objetivamente o conteúdo desta imagem em português. Se houver texto, transcreva-o."
 };
+
+const VISION_SAFETY_RULES =
+  "Separe fatos visíveis de hipóteses. Não afirme a causa de um problema como certeza apenas pela imagem. Destaque mensagens e códigos úteis para consultar a base de conhecimento. Oculte senhas, tokens, códigos de autenticação, linha digitável completa e outros dados sensíveis na descrição.";
 
 const detectImageContext = (caption?: string): string => {
   const text = (caption || "").toLowerCase();
@@ -50,7 +53,9 @@ export const analyzeInboundImage = async ({
   caption?: string;
 }): Promise<VisionAnalysisResult> => {
   const contextType = detectImageContext(caption);
-  const prompt = VISION_PROMPTS[contextType] || VISION_PROMPTS.default;
+  const prompt = `${
+    VISION_PROMPTS[contextType] || VISION_PROMPTS.default
+  }\n\n${VISION_SAFETY_RULES}`;
 
   logger.info(
     { companyId, imageUrl, contextType, visionModel },
