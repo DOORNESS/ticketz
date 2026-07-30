@@ -2,32 +2,17 @@ import { evaluateAudioTranscriptionPolicy } from "./Triage/AudioTranscriptionPol
 import Message from "../../models/Message";
 import MessageMediaFile from "../../models/MessageMediaFile";
 import StorageService from "../StorageService/StorageService";
-import { analyzeInboundImage } from "./AiVisionOcrService";
+import {
+  analyzeInboundImage,
+  resolveVisionImageSource
+} from "./AiVisionOcrService";
 import { extractTextFromBuffer } from "./DocumentParser";
 import { logger } from "../../utils/logger";
 import { resolveInboundAudioText } from "./AudioInboundResolver";
 import AiAgent from "../../models/AiAgent";
 import Ticket from "../../models/Ticket";
 import { InboundMessageItem } from "./ProcessInboundMessageService";
-import {
-  readMediaBuffer,
-  extractStorageKeyFromUrl
-} from "../../helpers/mediaStorage";
-
-const buildPublicMediaUrl = (mediaUrl: string): string => {
-  if (mediaUrl.startsWith("http")) {
-    const storageKey = extractStorageKeyFromUrl(mediaUrl);
-    if (storageKey) {
-      return `${process.env.BACKEND_URL || "http://localhost:8080"}/public/${storageKey}`;
-    }
-    return mediaUrl;
-  }
-
-  const publicUrl = StorageService.getPublicUrl(mediaUrl);
-  return publicUrl.startsWith("http")
-    ? publicUrl
-    : `${process.env.BACKEND_URL || "http://localhost:8080"}${publicUrl}`;
-};
+import { readMediaBuffer } from "../../helpers/mediaStorage";
 
 const isDocumentMedia = (mediaType?: string, mimeType?: string): boolean => {
   const mime = (mimeType || "").toLowerCase();
@@ -230,7 +215,11 @@ export const resolveInboundMessageText = async ({
 
   if (message.mediaType === "image") {
     try {
-      const imageUrl = buildPublicMediaUrl(message.mediaUrl);
+      const imageUrl = resolveVisionImageSource({
+        mediaUrl: message.mediaUrl,
+        mediaBuffer,
+        mimeType: message.mediaMimeType
+      });
       const vision = await analyzeInboundImage({
         companyId,
         imageUrl,

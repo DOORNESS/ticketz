@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.84 — auditada contra o código
+**Versão:** 1.5.85 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -351,7 +351,7 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Após wiring/restart: `ReengageStuckAiTicketsService` reprocessa tickets abertos/pendentes sem `aiAgentId` mas com agente na fila (última mensagem do cliente)
 - Manual ops: `COMPANY_ID=1 npm run wire:support-lines`
 - `EnsureAiFirstResponderService` **não** liga Webin automaticamente em nenhuma fila cujo nome identifique Nível, Fortmax ou WebG3; os vínculos dessas marcas são administrados explicitamente
-- `resolveQueueIdForTicket`: conexões com várias filas IA não exibem menu. O roteamento técnico escolhe silenciosamente uma fila com agente ativo (Consumidor na Nível; Suporte na Fortmax), desliga `ticket.chatbot` e preserva todas as bases vinculadas ao agente/domínio para a resposta
+- `resolveQueueIdForTicket`: conexões com várias filas IA não exibem menu. O roteamento técnico escolhe silenciosamente uma fila com agente ativo (Consumidor na Nível; Suporte na Fortmax), desliga `ticket.chatbot` e preserva todas as bases vinculadas ao agente/domínio para a resposta. Com IA ativa, `startQueue` não envia `Queue.greetingMessage` legado (ex.: “Você foi direcionado…”), alinhado ao bypass de fora do expediente
 - Identidade, saudação, fallback informativo e regras operacionais são resolvidos por `AgentPersonaService` a partir do agente ativo (Nivelton ≠ Webin); texto do cliente nunca determina a marca. Na Nível, recuperação segue os links oficiais da base e casos sem procedimento seguro apontam para `https://nivelvelo.com/chamado`. Na Fortmax, ausência de procedimento usa Thiago (suporte) ou Cristiane (gerência/financeiro), sem inventar portal
 
 ### Filtro por linha WhatsApp (lista de tickets)
@@ -456,7 +456,7 @@ IA só opera quando `AiPlatformState.aiFeaturesEnabled === true` (setado em `boo
 | SLA handoff | `AiSlaMonitorService` | ✅ |
 | Follow-up proativo | `AiProactiveFollowUpService` | ✅ |
 
-Imagens recebidas no WhatsApp passam por `MediaInboundResolver` e pelo `visionModel` do agente. A descrição visual é adicionada à pergunta antes do RAG, para que a IA compare erro, tela ou equipamento com a base da marca. O prompt de visão separa fatos visíveis de hipóteses, mascara dados sensíveis e proíbe diagnóstico conclusivo baseado apenas na imagem.
+Imagens recebidas no WhatsApp passam por `MediaInboundResolver` e pelo `visionModel` do agente. A descrição visual é adicionada à pergunta antes do RAG, para que a IA compare erro, tela ou equipamento com a base da marca. Com `B2_USE_PRIVATE_ACCESS=true`, o buffer local é enviado ao provedor como `data:image/...;base64,...` em vez de URL pública `/public/...` (403). O prompt de visão separa fatos visíveis de hipóteses, mascara dados sensíveis e proíbe diagnóstico conclusivo baseado apenas na imagem. Respostas IA usam `linkPreview: false` para evitar duplicar URLs no WhatsApp.
 
 ### Orquestrador — condição real
 Requer **ambos**:

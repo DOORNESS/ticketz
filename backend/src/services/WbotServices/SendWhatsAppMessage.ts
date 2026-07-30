@@ -15,13 +15,15 @@ interface Request {
   ticket: Ticket;
   userId?: number;
   quotedMsg?: Message;
+  linkPreview?: any;
 }
 
 const SendWhatsAppMessage = async ({
   body,
   ticket,
   userId,
-  quotedMsg
+  quotedMsg,
+  linkPreview
 }: Request): Promise<Message> => {
   let options = {};
 
@@ -62,7 +64,8 @@ const SendWhatsAppMessage = async ({
     const sentMessage = await wbot.sendMessage(
       getJidOf(ticket),
       {
-        text: formattedBody
+        text: formattedBody,
+        ...(linkPreview === undefined ? {} : { linkPreview })
       },
       {
         ...options

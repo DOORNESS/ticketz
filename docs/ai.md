@@ -67,7 +67,7 @@ RAG v2: `RagConfig.ts`, `ChunkingService.ts`, `RetrievalEngine.ts`, `KnowledgeCo
 
 Conexões multifila com agente IA não exibem menu: a Nível entra silenciosamente pela fila Consumidor e a Fortmax pela fila Suporte, sem limitar o RAG àquela fila. Todas as bases ativas do domínio da marca continuam elegíveis. Respostas usam URL simples uma única vez, fallback concreto por marca e linguagem curta/natural.
 
-Imagens de WhatsApp já são analisadas pelo `visionModel` em `MediaInboundResolver`/`AiVisionOcrService`; a descrição visual entra na pergunta para busca na base. A visão mascara dados sensíveis e trata causas aparentes como hipóteses, não diagnósticos.
+Imagens de WhatsApp já são analisadas pelo `visionModel` em `MediaInboundResolver`/`AiVisionOcrService`; a descrição visual entra na pergunta para busca na base. Com bucket privado B2, a visão usa data URL base64 do buffer local. A visão mascara dados sensíveis e trata causas aparentes como hipóteses, não diagnósticos. Respostas IA desativam preview automático de link no WhatsApp.
 
 ## Diretório no código
 

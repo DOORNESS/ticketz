@@ -51,7 +51,8 @@ export const sendAiWhatsAppReply = async ({
   try {
     await SendWhatsAppMessage({
       body: formatBody(normalized, ticket),
-      ticket
+      ticket,
+      linkPreview: false
     });
     return true;
   } catch (error) {

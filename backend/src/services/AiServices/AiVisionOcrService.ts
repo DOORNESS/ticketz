@@ -1,7 +1,50 @@
 import { analyzeImage } from "./ModelGateway";
 import { extractTextFromBuffer } from "./DocumentParser";
-import { readMediaBuffer } from "../../helpers/mediaStorage";
+import {
+  extractStorageKeyFromUrl,
+  readMediaBuffer
+} from "../../helpers/mediaStorage";
+import StorageService from "../StorageService/StorageService";
 import { logger } from "../../utils/logger";
+
+const DEFAULT_BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
+
+export const buildPublicVisionMediaUrl = (mediaUrl: string): string => {
+  if (mediaUrl.startsWith("http")) {
+    const storageKey = extractStorageKeyFromUrl(mediaUrl);
+    if (storageKey) {
+      return `${DEFAULT_BACKEND_URL}/public/${storageKey}`;
+    }
+    return mediaUrl;
+  }
+
+  const publicUrl = StorageService.getPublicUrl(mediaUrl);
+  return publicUrl.startsWith("http")
+    ? publicUrl
+    : `${DEFAULT_BACKEND_URL}${publicUrl}`;
+};
+
+export const resolveVisionImageSource = ({
+  mediaUrl,
+  mediaBuffer,
+  mimeType
+}: {
+  mediaUrl: string;
+  mediaBuffer?: Buffer;
+  mimeType?: string;
+}): string => {
+  if (
+    StorageService.shouldUsePrivateAccess() &&
+    mediaBuffer &&
+    mediaBuffer.length > 0
+  ) {
+    const normalizedMime =
+      (mimeType || "image/jpeg").split(";")[0].trim() || "image/jpeg";
+    return `data:${normalizedMime};base64,${mediaBuffer.toString("base64")}`;
+  }
+
+  return buildPublicVisionMediaUrl(mediaUrl);
+};
 
 const VISION_PROMPTS: Record<string, string> = {
   error_screen:
@@ -106,13 +149,13 @@ export const extractTextFromStoredMedia = async ({
     normalizedMime.startsWith("image/") ||
     ["jpg", "jpeg", "png", "webp", "gif"].includes(ext)
   ) {
-    const publicUrl = mediaUrl.startsWith("http")
-      ? mediaUrl
-      : `${process.env.BACKEND_URL || "http://localhost:8080"}/public/${mediaUrl.replace(/^\/public\//, "")}`;
-
     const vision = await analyzeInboundImage({
       companyId,
-      imageUrl: publicUrl,
+      imageUrl: resolveVisionImageSource({
+        mediaUrl,
+        mediaBuffer: buffer,
+        mimeType: normalizedMime
+      }),
       visionModel: "gpt-4o-mini",
       caption: "documento com texto"
     });

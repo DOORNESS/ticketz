@@ -6,6 +6,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.85] — 2026-07-30
+
+### Corrigido (follow-up subagentes)
+
+- **Saudação legada de fila** — com IA ativa, `startQueue` deixa de enviar `Queue.greetingMessage` (ex.: “Você foi direcionado…”), alinhado ao bypass já usado fora do expediente.
+- **Visão com B2 privado** — `resolveVisionImageSource` envia buffer local como data URL base64 quando `B2_USE_PRIVATE_ACCESS=true`, evitando 403 em `/public/...`.
+- **Links duplicados no WhatsApp** — respostas IA usam `linkPreview: false` em `sendAiWhatsAppReply`.
+- **Manual 1.5.85** — §8–§11 e índice `ai.md` sincronizados.
+
+---
+
 ## [1.5.84] — 2026-07-30
 
 ### Corrigido (atendimento natural e conhecimento contextual)

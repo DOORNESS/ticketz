@@ -1330,7 +1330,10 @@ export const startQueue = async (
   }
 
   if (queue.options.length === 0) {
-    if (queue.greetingMessage?.trim()) {
+    if (
+      queue.greetingMessage?.trim() &&
+      !(await shouldAiBypassLegacyBotMessages(ticket, companyId))
+    ) {
       const body = formatBody(`${queue.greetingMessage.trim()}`, ticket);
 
       if (filePath) {
