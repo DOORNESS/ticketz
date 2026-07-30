@@ -4,6 +4,7 @@ import MessageMediaFile from "../../models/MessageMediaFile";
 import StorageService from "../StorageService/StorageService";
 import {
   analyzeInboundImage,
+  formatInboundImageContext,
   resolveVisionImageSource
 } from "./AiVisionOcrService";
 import { extractTextFromBuffer } from "./DocumentParser";
@@ -13,6 +14,58 @@ import AiAgent from "../../models/AiAgent";
 import Ticket from "../../models/Ticket";
 import { InboundMessageItem } from "./ProcessInboundMessageService";
 import { readMediaBuffer } from "../../helpers/mediaStorage";
+
+const isVisualMediaType = (mediaType?: string): boolean => {
+  const normalized = (mediaType || "").toLowerCase();
+  return normalized === "image" || normalized === "sticker";
+};
+
+const loadInboundMediaBuffer = async ({
+  companyId,
+  message
+}: {
+  companyId: number;
+  message: InboundMessageItem;
+}): Promise<Buffer | undefined> => {
+  if (message.mediaUrl) {
+    const directBuffer = await readMediaBuffer(message.mediaUrl, companyId);
+    if (directBuffer?.length) {
+      return directBuffer;
+    }
+  }
+
+  if (!message.messageId) {
+    return undefined;
+  }
+
+  const existingMedia = await MessageMediaFile.findOne({
+    where: { companyId, messageId: message.messageId }
+  });
+
+  if (existingMedia?.storageKey) {
+    const storageBuffer = await readMediaBuffer(
+      existingMedia.storageKey,
+      companyId
+    );
+    if (storageBuffer?.length) {
+      return storageBuffer;
+    }
+  }
+
+  return undefined;
+};
+
+const appendImageUnavailableNotice = (
+  messageText: string,
+  reason = "análise indisponível no momento"
+): string => {
+  const notice = `[Imagem enviada pelo cliente — ${reason}]`;
+  if (messageText.includes("[Imagem enviada pelo cliente")) {
+    return messageText;
+  }
+
+  return messageText ? `${messageText}\n\n${notice}` : notice;
+};
 
 const isDocumentMedia = (mediaType?: string, mimeType?: string): boolean => {
   const mime = (mimeType || "").toLowerCase();
@@ -122,8 +175,12 @@ export const resolveInboundMessageText = async ({
 }): Promise<string> => {
   let messageText = message.messageBody?.trim() || "";
 
-  if (!message.mediaUrl) {
+  if (!message.mediaUrl && !isVisualMediaType(message.mediaType)) {
     return messageText;
+  }
+
+  if (!message.mediaUrl && isVisualMediaType(message.mediaType)) {
+    return appendImageUnavailableNotice(messageText);
   }
 
   const existingMedia = message.messageId
@@ -136,14 +193,22 @@ export const resolveInboundMessageText = async ({
     return existingMedia.transcriptionText;
   }
 
-  if (existingMedia?.visionSummary && message.mediaType === "image") {
-    return messageText
-      ? `${messageText}\n\n[Imagem enviada pelo cliente]: ${existingMedia.visionSummary}`
-      : `[Imagem enviada pelo cliente]: ${existingMedia.visionSummary}`;
+  if (existingMedia?.visionSummary && isVisualMediaType(message.mediaType)) {
+    return formatInboundImageContext(
+      messageText,
+      existingMedia.visionSummary
+    );
   }
 
-  const mediaBuffer =
-    (await readMediaBuffer(message.mediaUrl, companyId)) || undefined;
+  const mediaBuffer = await loadInboundMediaBuffer({ companyId, message });
+
+  if (!message.mediaUrl && !mediaBuffer) {
+    return messageText;
+  }
+
+  if (!mediaBuffer && isVisualMediaType(message.mediaType)) {
+    return appendImageUnavailableNotice(messageText);
+  }
 
   if (!mediaBuffer) {
     return messageText;
@@ -213,10 +278,10 @@ export const resolveInboundMessageText = async ({
     return messageText;
   }
 
-  if (message.mediaType === "image") {
+  if (isVisualMediaType(message.mediaType)) {
     try {
       const imageUrl = resolveVisionImageSource({
-        mediaUrl: message.mediaUrl,
+        mediaUrl: message.mediaUrl || "",
         mediaBuffer,
         mimeType: message.mediaMimeType
       });
@@ -228,7 +293,7 @@ export const resolveInboundMessageText = async ({
         caption: messageText
       });
 
-      if (!existingMedia) {
+      if (!existingMedia && message.mediaUrl) {
         const uploadMeta = resolveExistingUpload(message.mediaUrl);
         await persistMediaFile({
           companyId,
@@ -238,19 +303,24 @@ export const resolveInboundMessageText = async ({
           mediaType: "image",
           extras: { visionSummary: vision.summary }
         });
+      } else if (existingMedia && vision.summary) {
+        await existingMedia.update({ visionSummary: vision.summary });
       }
 
-      messageText = messageText
-        ? `${messageText}\n\n[Imagem enviada pelo cliente]: ${vision.summary}`
-        : `[Imagem enviada pelo cliente]: ${vision.summary}`;
+      messageText = formatInboundImageContext(messageText, vision.summary);
+
+      if (!vision.summary?.trim()) {
+        messageText = appendImageUnavailableNotice(
+          messageText,
+          "não foi possível extrair detalhes visuais"
+        );
+      }
     } catch (error) {
       logger.error(
         { error, ticketId: ticket.id, messageId: message.messageId },
         "Image analysis failed"
       );
-      messageText =
-        messageText ||
-        "[Imagem enviada pelo cliente — análise indisponível no momento]";
+      messageText = appendImageUnavailableNotice(messageText);
     }
 
     return messageText;

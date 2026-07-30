@@ -6,6 +6,20 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+---
+
+## [1.5.87] — 2026-07-30
+
+### Corrigido (visão de imagens no WhatsApp)
+
+- **Análise no ingest** — imagens inbound disparam `analyzeAndPersistInboundImageVision` em `verifyMediaMessage`, persistindo `visionSummary` antes do turno IA.
+- **Buffer confiável** — visão usa data URL base64 sempre que o buffer local existe (B2 privado ou não); fallback por `MessageMediaFile.storageKey` quando a leitura direta falha.
+- **Turno IA** — bloco `[Imagem enviada pelo cliente]` entra mesmo com legenda; falhas de análise não deixam só o texto da legenda.
+- **Resposta** — prompt proíbe “não consigo ver imagens”; `prepareCustomerFacingAiText` remove negação falsa quando há contexto visual.
+- **Manual 1.5.87** — §11 e índice `ai.md` sincronizados.
+
+---
+
 ## [1.5.86] — 2026-07-30
 
 ### Corrigido (respostas duplicadas no WhatsApp)

@@ -1,6 +1,7 @@
 import { analyzeImage } from "../ModelGateway";
 import {
   analyzeInboundImage,
+  formatInboundImageContext,
   resolveVisionImageSource
 } from "../AiVisionOcrService";
 
@@ -45,12 +46,7 @@ describe("AiVisionOcrService", () => {
     );
   });
 
-  it("uses base64 data URL for private storage when buffer is available", async () => {
-    const StorageService = require("../../StorageService/StorageService")
-      .default as { shouldUsePrivateAccess: jest.Mock };
-
-    StorageService.shouldUsePrivateAccess.mockReturnValue(true);
-
+  it("uses base64 data URL when buffer is available", async () => {
     const buffer = Buffer.from("fake-image");
     const imageUrl = resolveVisionImageSource({
       mediaUrl: "companies/1/messages/photo.jpg",
@@ -60,6 +56,18 @@ describe("AiVisionOcrService", () => {
 
     expect(imageUrl).toBe(
       `data:image/png;base64,${buffer.toString("base64")}`
+    );
+  });
+
+  it("formats inbound image context with caption", () => {
+    expect(
+      formatInboundImageContext(
+        "veja o erro no login",
+        "Mensagem em vermelho: e-mail ou senha incorretos."
+      )
+    ).toContain("[Imagem enviada pelo cliente]:");
+    expect(formatInboundImageContext("", "Resumo visual")).toBe(
+      "[Imagem enviada pelo cliente]: Resumo visual"
     );
   });
 });

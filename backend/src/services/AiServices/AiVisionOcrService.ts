@@ -5,6 +5,7 @@ import {
   readMediaBuffer
 } from "../../helpers/mediaStorage";
 import StorageService from "../StorageService/StorageService";
+import MessageMediaFile from "../../models/MessageMediaFile";
 import { logger } from "../../utils/logger";
 
 const DEFAULT_BACKEND_URL = process.env.BACKEND_URL || "http://localhost:8080";
@@ -24,6 +25,8 @@ export const buildPublicVisionMediaUrl = (mediaUrl: string): string => {
     : `${DEFAULT_BACKEND_URL}${publicUrl}`;
 };
 
+const DEFAULT_VISION_MODEL = "gpt-4o-mini";
+
 export const resolveVisionImageSource = ({
   mediaUrl,
   mediaBuffer,
@@ -33,11 +36,7 @@ export const resolveVisionImageSource = ({
   mediaBuffer?: Buffer;
   mimeType?: string;
 }): string => {
-  if (
-    StorageService.shouldUsePrivateAccess() &&
-    mediaBuffer &&
-    mediaBuffer.length > 0
-  ) {
+  if (mediaBuffer && mediaBuffer.length > 0) {
     const normalizedMime =
       (mimeType || "image/jpeg").split(";")[0].trim() || "image/jpeg";
     return `data:${normalizedMime};base64,${mediaBuffer.toString("base64")}`;
@@ -66,7 +65,14 @@ const VISION_SAFETY_RULES =
 
 const detectImageContext = (caption?: string): string => {
   const text = (caption || "").toLowerCase();
-  if (text.includes("erro") || text.includes("error")) return "error_screen";
+  if (
+    text.includes("erro") ||
+    text.includes("error") ||
+    text.includes("login") ||
+    text.includes("senha")
+  ) {
+    return "error_screen";
+  }
   if (text.includes("boleto")) return "boleto";
   if (text.includes("comprovante") || text.includes("pix")) return "receipt";
   if (text.includes("documento") || text.includes("rg") || text.includes("cpf"))
@@ -82,6 +88,82 @@ export type VisionAnalysisResult = {
   imageUrl: string;
 };
 
+export const formatInboundImageContext = (
+  caption: string,
+  summary: string
+): string => {
+  const trimmedSummary = summary.trim();
+  const trimmedCaption = caption.trim();
+
+  if (!trimmedSummary) {
+    return trimmedCaption;
+  }
+
+  const imageBlock = `[Imagem enviada pelo cliente]: ${trimmedSummary}`;
+  return trimmedCaption ? `${trimmedCaption}\n\n${imageBlock}` : imageBlock;
+};
+
+export const analyzeAndPersistInboundImageVision = async ({
+  companyId,
+  ticketId,
+  messageId,
+  mediaUrl,
+  imageBuffer,
+  mimeType,
+  caption,
+  visionModel,
+  providerId
+}: {
+  companyId: number;
+  ticketId: number;
+  messageId?: string;
+  mediaUrl: string;
+  imageBuffer: Buffer;
+  mimeType?: string;
+  caption?: string;
+  visionModel?: string | null;
+  providerId?: string;
+}): Promise<string> => {
+  const vision = await analyzeInboundImage({
+    companyId,
+    imageUrl: resolveVisionImageSource({
+      mediaUrl,
+      mediaBuffer: imageBuffer,
+      mimeType
+    }),
+    visionModel: visionModel?.trim() || DEFAULT_VISION_MODEL,
+    providerId,
+    caption
+  });
+
+  const summary = vision.summary?.trim() || "";
+  if (!summary || !messageId) {
+    return summary;
+  }
+
+  try {
+    const [updatedCount] = await MessageMediaFile.update(
+      { visionSummary: summary },
+      { where: { companyId, messageId, ticketId } }
+    );
+
+    if (!updatedCount) {
+      const storageKey = mediaUrl.replace(/^\/public\//, "");
+      await MessageMediaFile.update(
+        { visionSummary: summary, messageId },
+        { where: { companyId, ticketId, storageKey } }
+      );
+    }
+  } catch (error) {
+    logger.warn(
+      { error, ticketId, messageId },
+      "Failed to persist inbound image vision summary"
+    );
+  }
+
+  return summary;
+};
+
 export const analyzeInboundImage = async ({
   companyId,
   imageUrl,
@@ -91,24 +173,25 @@ export const analyzeInboundImage = async ({
 }: {
   companyId: number;
   imageUrl: string;
-  visionModel: string;
+  visionModel?: string | null;
   providerId?: string;
   caption?: string;
 }): Promise<VisionAnalysisResult> => {
+  const resolvedVisionModel = visionModel?.trim() || DEFAULT_VISION_MODEL;
   const contextType = detectImageContext(caption);
   const prompt = `${
     VISION_PROMPTS[contextType] || VISION_PROMPTS.default
   }\n\n${VISION_SAFETY_RULES}`;
 
   logger.info(
-    { companyId, imageUrl, contextType, visionModel },
+    { companyId, imageUrl, contextType, visionModel: resolvedVisionModel },
     "AiVision: analyzing image"
   );
 
   const summary = await analyzeImage(
     companyId,
     imageUrl,
-    visionModel,
+    resolvedVisionModel,
     prompt,
     providerId
   );

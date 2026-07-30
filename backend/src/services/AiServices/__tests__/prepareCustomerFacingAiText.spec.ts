@@ -88,6 +88,20 @@ describe("prepareCustomerFacingAiText", () => {
     expect(output).toMatch(/Cristiane.*99605-8041/i);
     expect(output).not.toMatch(/portal de clientes/i);
   });
+
+  it("removes false image blindness when vision context exists", () => {
+    const output = prepareCustomerFacingAiText(
+      "Infelizmente, não consigo ver imagens. Pelo que você descreveu, o login retornou e-mail ou senha incorretos.",
+      "veja o erro\n\n[Imagem enviada pelo cliente]: Mensagem em vermelho: e-mail ou senha incorretos.",
+      {
+        name: "Webin",
+        basePrompt: "Você é o Webin, assistente virtual da Fortmax."
+      }
+    );
+
+    expect(output).not.toMatch(/n[aã]o consigo ver imagens/i);
+    expect(output).toMatch(/e-mail ou senha incorretos/i);
+  });
 });
 
 describe("sanitizeAiOutboundText phone stripping", () => {

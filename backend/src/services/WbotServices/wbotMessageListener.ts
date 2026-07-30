@@ -63,6 +63,7 @@ import { SimpleObjectCache } from "../../helpers/simpleObjectCache";
 import { Session } from "../../libs/wbot";
 import { checkCompanyCompliant } from "../../helpers/CheckCompanyCompliant";
 import { resolveInboundAudioText } from "../AiServices/AudioInboundResolver";
+import { analyzeAndPersistInboundImageVision } from "../AiServices/AiVisionOcrService";
 import { isAudioPlaceholder } from "../../helpers/mediaPlaceholders";
 import {
   streamToBuffer,
@@ -115,6 +116,14 @@ const ackMutex = new Mutex();
 
 const groupContactCache = new SimpleObjectCache(1000 * 30, logger);
 const outOfHoursCache = new SimpleObjectCache(1000 * 60 * 5, logger);
+
+const inferImageMimeType = (mediaUrl?: string | null): string => {
+  const ext = mediaUrl?.split(".").pop()?.toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  if (ext === "gif") return "image/gif";
+  return "image/jpeg";
+};
 
 const getTypeMessage = (msg: proto.IWebMessageInfo): string => {
   return getContentType(msg.message);
@@ -863,6 +872,38 @@ export const verifyMediaMessage = async (
     mediaUrl,
     thumbnailUrl
   });
+
+  if (
+    media &&
+    mediaType === "image" &&
+    !msg.key.fromMe &&
+    isAiFeaturesEnabled()
+  ) {
+    const aiAgentForImage = await getActiveAgentForTicket(ticket);
+    if (aiAgentForImage && storedMediaUrl) {
+      try {
+        const imageBuffer = Buffer.isBuffer(media.data)
+          ? media.data
+          : await streamToBuffer(media.data);
+        await analyzeAndPersistInboundImageVision({
+          companyId: ticket.companyId,
+          ticketId: ticket.id,
+          messageId: newMessage.id,
+          mediaUrl: storedMediaUrl,
+          imageBuffer,
+          mimeType: mimetype.split(";")[0] || "image/jpeg",
+          caption: body || "",
+          visionModel: aiAgentForImage.visionModel,
+          providerId: aiAgentForImage.provider
+        });
+      } catch (error) {
+        logger.error(
+          { error, ticketId: ticket.id, messageId: newMessage.id },
+          "Inbound image vision failed during WhatsApp media ingest"
+        );
+      }
+    }
+  }
 
   return newMessage;
 };
@@ -2033,7 +2074,7 @@ const handleMessage = async (
         newMessage?.mediaType === "audio"
           ? "audio/ogg; codecs=opus"
           : newMessage?.mediaType === "image"
-            ? "image/jpeg"
+            ? inferImageMimeType(newMessage.getDataValue("mediaUrl"))
             : undefined,
       trigger: "inbound_message"
     });

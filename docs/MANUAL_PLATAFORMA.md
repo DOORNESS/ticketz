@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.86 — auditada contra o código
+**Versão:** 1.5.87 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -456,7 +456,7 @@ IA só opera quando `AiPlatformState.aiFeaturesEnabled === true` (setado em `boo
 | SLA handoff | `AiSlaMonitorService` | ✅ |
 | Follow-up proativo | `AiProactiveFollowUpService` | ✅ |
 
-Imagens recebidas no WhatsApp passam por `MediaInboundResolver` e pelo `visionModel` do agente. A descrição visual é adicionada à pergunta antes do RAG, para que a IA compare erro, tela ou equipamento com a base da marca. Com `B2_USE_PRIVATE_ACCESS=true`, o buffer local é enviado ao provedor como `data:image/...;base64,...` em vez de URL pública `/public/...` (403). O prompt de visão separa fatos visíveis de hipóteses, mascara dados sensíveis e proíbe diagnóstico conclusivo baseado apenas na imagem. Respostas IA usam `linkPreview: false` para evitar duplicar URLs no WhatsApp. Mensagens inbound rápidas são coalescidas na fila Bull (`AiInboundBufferCoalesce`) antes do processamento; acks sociais repetidos são bloqueados por `AiSocialReplyGuard`.
+Imagens recebidas no WhatsApp passam por `MediaInboundResolver` e pelo `visionModel` do agente. A análise visual roda já no ingest (`verifyMediaMessage` → `analyzeAndPersistInboundImageVision`), usando buffer local em data URL base64; o resumo fica em `MessageMediaFiles.visionSummary` e entra no turno como `[Imagem enviada pelo cliente]: …`. Com falha de leitura/análise, o turno ainda registra que houve imagem — a IA não deve dizer que “não vê imagens”. A descrição visual alimenta o RAG e a resposta final.
 
 ### Orquestrador — condição real
 Requer **ambos**:
