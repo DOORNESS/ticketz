@@ -110,6 +110,7 @@ export const sendTicketEscalationEmail = async ({
         to: [destinationEmail],
         subject,
         html,
+        attachments: transcript.attachments,
         text: [
           `Solicitação de conserto — Ticket #${ticket.id}`,
           `Cliente: ${contactName} (${contactNumber})`,

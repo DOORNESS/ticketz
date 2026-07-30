@@ -69,7 +69,14 @@ export const buildMediaGalleryData = (
         return acc;
       }
 
-      const thumbnailUrl = getThumbnailUrl(message);
+      const whatsappThumbnail =
+        data?.message?.imageMessage?.jpegThumbnail ||
+        data?.message?.videoMessage?.jpegThumbnail;
+      const thumbnailUrl =
+        getThumbnailUrl(message) ||
+        (whatsappThumbnail
+          ? `data:image/jpeg;base64,${whatsappThumbnail}`
+          : null);
       const description = getDescription(message) || undefined;
       const cacheSeed =
         getUpdatedAt(message) || getCreatedAt(message) || messageId;

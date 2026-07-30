@@ -8,6 +8,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.91] — 2026-07-30
+
+### Corrigido (lightbox e imagens no e-mail)
+
+- **Frontend `MessagesList`** — após evento Socket.io de imagem/vídeo, busca a versão autorizada da mensagem na API; o lightbox deixa de usar a URL privada bruta emitida pelo socket.
+- **`MediaGalleryLightbox`** — usa `jpegThumbnail` do WhatsApp nas miniaturas enquanto a mídia completa é carregada.
+- **`EscalationTranscriptService` / Resend** — substitui `data:` URLs, removidas pelo Gmail, por anexos inline CID (`content_id`) referenciados no HTML.
+- **Formulário público** — mantido com carregamento leve e página HTML; o formulário funcional do print corresponde ao backend atual.
+- **Manual 1.5.91** — §11 e índice `ai.md` sincronizados.
+
+---
+
 ## [1.5.90] — 2026-07-30
 
 ### Corrigido (escalação + mídia B2)

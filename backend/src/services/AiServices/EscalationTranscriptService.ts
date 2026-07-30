@@ -1,3 +1,4 @@
+/* eslint-disable import/no-duplicates */
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Ticket from "../../models/Ticket";
@@ -21,6 +22,14 @@ export type EscalationTranscript = {
   messages: EscalationTranscriptMessage[];
   plainText: string;
   htmlBody: string;
+  attachments: EscalationEmailAttachment[];
+};
+
+export type EscalationEmailAttachment = {
+  content: string;
+  filename: string;
+  content_id: string;
+  content_type: string;
 };
 
 const escapeHtml = (value: string): string =>
@@ -42,10 +51,13 @@ const isVisualMedia = (mediaType: string | null): boolean =>
 const formatTimestamp = (date: Date): string =>
   format(date, "dd/MM/yyyy HH:mm", { locale: ptBR });
 
-const resolveEmailMediaUrl = async (
+const resolveEmailMedia = async (
   media: MessageMediaFile,
   companyId: number
-): Promise<string | null> => {
+): Promise<{
+  mediaUrl: string;
+  attachment: EscalationEmailAttachment;
+} | null> => {
   if (!media.storageKey) {
     return null;
   }
@@ -62,7 +74,24 @@ const resolveEmailMediaUrl = async (
       (isVisualMedia(media.mediaType)
         ? "image/jpeg"
         : "application/octet-stream");
-    return `data:${mimeType};base64,${buffer.toString("base64")}`;
+    const contentId = `ticketz-${String(media.messageId).replace(
+      /[^a-zA-Z0-9_-]/g,
+      ""
+    )}`;
+    const extension = mimeType.split("/")[1]?.replace("jpeg", "jpg") || "bin";
+    const filename =
+      media.originalFilename?.trim() ||
+      `imagem-${media.messageId}.${extension}`;
+
+    return {
+      mediaUrl: `cid:${contentId}`,
+      attachment: {
+        content: buffer.toString("base64"),
+        filename,
+        content_id: contentId,
+        content_type: mimeType
+      }
+    };
   } catch {
     return null;
   }
@@ -121,6 +150,7 @@ export const buildEscalationTranscript = async (
         "storageKey",
         "mimeType",
         "mediaType",
+        "originalFilename",
         "status"
       ]
     })
@@ -137,6 +167,7 @@ export const buildEscalationTranscript = async (
     }
   });
 
+  const attachments: EscalationEmailAttachment[] = [];
   const transcriptMessages: EscalationTranscriptMessage[] = await Promise.all(
     messages
       .filter(message => message.mediaType !== "reactionMessage")
@@ -148,12 +179,13 @@ export const buildEscalationTranscript = async (
           mediaFile &&
           isVisualMedia(message.mediaType || mediaFile.mediaType)
         ) {
-          const signedUrl = await resolveEmailMediaUrl(
+          const emailMedia = await resolveEmailMedia(
             mediaFile,
             ticket.companyId
           );
-          if (signedUrl) {
-            mediaUrl = signedUrl;
+          if (emailMedia) {
+            mediaUrl = emailMedia.mediaUrl;
+            attachments.push(emailMedia.attachment);
           }
         }
 
@@ -189,7 +221,8 @@ export const buildEscalationTranscript = async (
   return {
     messages: transcriptMessages,
     plainText: plainLines.join("\n\n"),
-    htmlBody
+    htmlBody,
+    attachments
   };
 };
 

@@ -902,6 +902,11 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
             scrollTop + clientHeight >= scrollHeight - clientHeight / 4;
           message.bottomStick = (!isAtBottom && !message.fromMe) || undefined;
           dispatch({ type: "ADD_MESSAGE", payload: message });
+          if (["image", "video"].includes(message.mediaType)) {
+            setTimeout(() => {
+              pollNewMessages();
+            }, 300);
+          }
           if (
             (isAtBottom || data.message.fromMe) &&
             data.message.mediaType !== "reactionMessage"
@@ -915,6 +920,11 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
 
         if (data.action === "update") {
           dispatch({ type: "UPDATE_MESSAGE", payload: data.message });
+          if (["image", "video"].includes(data.message.mediaType)) {
+            setTimeout(() => {
+              pollNewMessages();
+            }, 300);
+          }
         }
       }
     };
@@ -1006,7 +1016,7 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
       socket.off(`company-${companyId}-presence`, onPresence);
       socket.emit("leaveChatBox", ticketIdStr);
     };
-  }, [ticketId, socketManager]);
+  }, [ticketId, socketManager, pollNewMessages]);
 
   useEffect(() => {
     if (!ticketId) {
