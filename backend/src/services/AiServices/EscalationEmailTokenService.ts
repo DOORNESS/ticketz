@@ -104,5 +104,5 @@ export const buildEscalationFormUrl = (token: string): string => {
   const backendUrl = (
     process.env.BACKEND_URL || "http://localhost:8080"
   ).replace(/\/$/, "");
-  return `${backendUrl}/escalation/${encodeURIComponent(token)}`;
+  return `${backendUrl}/escalation/${encodeURIComponent(token)}?v=${Date.now()}`;
 };

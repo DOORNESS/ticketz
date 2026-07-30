@@ -158,34 +158,43 @@ Sua tarefa agora:
     operationalRules
   });
 
-  const loopResult = await runToolLoop({
-    companyId: ticket.companyId,
-    agent,
-    disableTools: true,
-    messages: [
-      { role: "system", content: systemPrompt },
-      ...history.map(item => ({ role: item.role, content: item.content })),
-      {
-        role: "user",
-        content:
-          "[Sistema interno] O conserto foi aplicado. Avise o cliente e peça para testar."
-      }
-    ],
-    context: {
-      companyId: ticket.companyId,
-      aiAgentId: agent.id,
-      ticketId: ticket.id,
-      contactId: ticket.contactId,
-      queueId: ticket.queueId,
-      userText: humanGuidance,
-      providerId: agent.provider
-    }
-  });
-
   const fallbackReply =
     "Oi! Passando para avisar que nossa equipe já corrigiu o problema que você reportou. Pode testar por favor e me dizer se está tudo funcionando direitinho?";
+  let generatedReply = "";
+  try {
+    const loopResult = await runToolLoop({
+      companyId: ticket.companyId,
+      agent,
+      disableTools: true,
+      messages: [
+        { role: "system", content: systemPrompt },
+        ...history.map(item => ({ role: item.role, content: item.content })),
+        {
+          role: "user",
+          content:
+            "[Sistema interno] O conserto foi aplicado. Avise o cliente e peça para testar."
+        }
+      ],
+      context: {
+        companyId: ticket.companyId,
+        aiAgentId: agent.id,
+        ticketId: ticket.id,
+        contactId: ticket.contactId,
+        queueId: ticket.queueId,
+        userText: humanGuidance,
+        providerId: agent.provider
+      }
+    });
+    generatedReply = loopResult.content?.trim() || "";
+  } catch (error) {
+    logger.warn(
+      { error, ticketId: ticket.id, escalationId: escalation.id },
+      "Escalation AI generation failed; sending safe customer fallback"
+    );
+  }
+
   const replyBody = prepareCustomerFacingAiText(
-    loopResult.content?.trim() || fallbackReply,
+    generatedReply || fallbackReply,
     humanGuidance,
     agent
   );

@@ -4,11 +4,15 @@ import User from "../models/User";
 import AppError from "../errors/AppError";
 import {
   assertMediaAccess,
-  parseMediaAccessToken
+  parseMediaAccessToken,
+  resolveStorageKeyFromMessage
 } from "../services/MediaServices/MediaAuthorizationService";
 import { getSignedUrlForMedia } from "../services/MediaServices/MediaAccessService";
 import StorageService from "../services/StorageService/StorageService";
 import MessageMediaFile from "../models/MessageMediaFile";
+import Message from "../models/Message";
+import Ticket from "../models/Ticket";
+import { canViewTicket } from "../helpers/canViewTicket";
 
 export const accessByToken = async (
   req: Request,
@@ -114,6 +118,55 @@ export const streamById = async (
   if (req.query.inline === "1") {
     res.setHeader("Content-Disposition", "inline");
   }
+  return res.send(buffer);
+};
+
+export const streamByMessageId = async (
+  req: Request,
+  res: Response
+): Promise<Response | void> => {
+  const messageId = req.params.messageId;
+  const { companyId, id: userId } = req.user;
+  const user = await User.findByPk(userId);
+
+  if (!user) {
+    throw new AppError("ERR_UNAUTHORIZED", 401);
+  }
+
+  const message = await Message.findOne({
+    where: { id: messageId, companyId },
+    attributes: ["id", "ticketId", "mediaUrl", "mediaType"]
+  });
+  if (!message) {
+    throw new AppError("ERR_MEDIA_NOT_FOUND", 404);
+  }
+
+  const ticket = await Ticket.findOne({
+    where: { id: message.ticketId, companyId }
+  });
+  if (!ticket || !canViewTicket(ticket, user)) {
+    throw new AppError("ERR_NO_PERMISSION", 403);
+  }
+
+  const media = await MessageMediaFile.findOne({
+    where: { companyId, messageId: message.id }
+  });
+  const storageKey =
+    media?.storageKey || resolveStorageKeyFromMessage(message.mediaUrl);
+  if (!storageKey) {
+    throw new AppError("ERR_MEDIA_NOT_FOUND", 404);
+  }
+
+  const buffer = await StorageService.download(storageKey, companyId);
+  const contentType =
+    media?.mimeType ||
+    mime.lookup(media?.originalFilename || storageKey) ||
+    (message.mediaType === "image" ? "image/jpeg" : "application/octet-stream");
+
+  res.setHeader("Content-Type", String(contentType));
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("Pragma", "no-cache");
   return res.send(buffer);
 };
 

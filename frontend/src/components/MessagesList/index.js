@@ -735,6 +735,8 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
   const [selectedMessageData, setSelectedMessageData] = useState({});
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [lightboxMediaOverrides, setLightboxMediaOverrides] = useState({});
+  const lightboxObjectUrlsRef = useRef(new Set());
   const [previewVideoPlayingById, setPreviewVideoPlayingById] = useState({});
   const [anchorEl, setAnchorEl] = useState(null);
   const messageOptionsMenuOpen = Boolean(anchorEl);
@@ -1100,14 +1102,51 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
     setAnchorEl(null);
   };
 
-  const lightboxMedia = useMemo(() => {
-    return buildMediaGalleryData(messagesList);
-  }, [messagesList]);
+  useEffect(() => {
+    const objectUrls = lightboxObjectUrlsRef.current;
+    return () => {
+      objectUrls.forEach(url => URL.revokeObjectURL(url));
+      objectUrls.clear();
+    };
+  }, [ticketId]);
 
-  const openLightboxForMessage = messageId => {
+  const lightboxMedia = useMemo(() => {
+    return buildMediaGalleryData(messagesList, {
+      getMediaUrl: message =>
+        lightboxMediaOverrides[message.id] || message.mediaUrl
+    });
+  }, [messagesList, lightboxMediaOverrides]);
+
+  const openLightboxForMessage = async messageId => {
     const index = lightboxMedia.byMessageId[messageId];
     if (index === undefined) {
       return;
+    }
+
+    const message = messagesList.find(item => item.id === messageId);
+    if (inferMessageMediaKind(message) === "image") {
+      try {
+        const response = await api.get(
+          `/media/message/${encodeURIComponent(messageId)}/stream`,
+          {
+            responseType: "blob",
+            timeout: 30000,
+            _skipApiRetry: true
+          }
+        );
+        const objectUrl = URL.createObjectURL(response.data);
+        lightboxObjectUrlsRef.current.add(objectUrl);
+        setLightboxMediaOverrides(previous => {
+          const previousUrl = previous[messageId];
+          if (previousUrl) {
+            URL.revokeObjectURL(previousUrl);
+            lightboxObjectUrlsRef.current.delete(previousUrl);
+          }
+          return { ...previous, [messageId]: objectUrl };
+        });
+      } catch (error) {
+        toastError(error);
+      }
     }
 
     setLightboxIndex(index);

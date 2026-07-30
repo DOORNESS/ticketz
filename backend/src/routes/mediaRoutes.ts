@@ -22,6 +22,13 @@ mediaRoutes.get(
 );
 
 mediaRoutes.get(
+  "/media/message/:messageId/stream",
+  isAuth,
+  isCompliant,
+  MediaAccessController.streamByMessageId
+);
+
+mediaRoutes.get(
   "/media/unavailable/:mediaId",
   MediaAccessController.unavailable
 );
