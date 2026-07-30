@@ -1143,6 +1143,18 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
     previewVideo.pause();
   };
 
+  const buildFreshMediaUrl = message => {
+    const mediaUrl = message?.mediaUrl;
+    if (!mediaUrl || String(mediaUrl).startsWith("data:")) {
+      return mediaUrl;
+    }
+
+    const separator = mediaUrl.includes("?") ? "&" : "?";
+    const cacheSeed =
+      message.updatedAt || message.createdAt || message.id || Date.now();
+    return `${mediaUrl}${separator}cb=${encodeURIComponent(cacheSeed)}`;
+  };
+
   const inferMessageMediaKind = message => {
     const declared = String(message.mediaType || "").toLowerCase();
     const url = String(message.mediaUrl || "").toLowerCase();
@@ -1189,7 +1201,7 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
       const thumbnailSrc = thumbnail
         ? `data:image/jpeg;base64,${thumbnail}`
         : null;
-      const imageSrc = message.mediaUrl || thumbnailSrc;
+      const imageSrc = buildFreshMediaUrl(message) || thumbnailSrc;
 
       if (!imageSrc) {
         return (

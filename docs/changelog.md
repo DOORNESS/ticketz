@@ -8,6 +8,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.92] — 2026-07-30
+
+### Corrigido (cache de mídia e formulário)
+
+- **Chat e lightbox** — imagem completa passa a usar URL com `cb=<updatedAt>`, contornando respostas 404/500 antigas armazenadas pelo navegador; o download já utilizava esse padrão.
+- **`servePublicMedia`** — respostas do proxy `/public/*` recebem `Cache-Control: no-store`, `Pragma: no-cache` e `Expires: 0`.
+- **Formulário de escalação** — `GET/POST /escalation/:token` recebem os mesmos cabeçalhos anti-cache. O link exato do Resend foi validado em produção com HTTP 200.
+- **Diagnóstico de produção** — storage B2, URLs geradas para o operador e três imagens do ticket 88 validados com HTTP 200 e conteúdo JPEG completo.
+- **Manual 1.5.92** — §11 sincronizada.
+
+---
+
 ## [1.5.91] — 2026-07-30
 
 ### Corrigido (lightbox e imagens no e-mail)

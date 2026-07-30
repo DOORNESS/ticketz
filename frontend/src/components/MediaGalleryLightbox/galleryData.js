@@ -80,7 +80,7 @@ export const buildMediaGalleryData = (
       const description = getDescription(message) || undefined;
       const cacheSeed =
         getUpdatedAt(message) || getCreatedAt(message) || messageId;
-      const downloadUrl = buildCacheBustedUrl(mediaUrl, cacheSeed);
+      const freshMediaUrl = buildCacheBustedUrl(mediaUrl, cacheSeed);
 
       acc.byMessageId[messageId] = acc.slides.length;
 
@@ -94,21 +94,21 @@ export const buildMediaGalleryData = (
           controls: true,
           description,
           thumbnail: thumbnailUrl || VIDEO_THUMBNAIL_FALLBACK,
-          poster: thumbnailUrl || mediaUrl,
+          poster: thumbnailUrl || freshMediaUrl,
           download: {
-            url: downloadUrl,
+            url: freshMediaUrl,
             filename: extractFileName(mediaUrl, `video-${messageId}`)
           },
-          sources: [{ src: mediaUrl }]
+          sources: [{ src: freshMediaUrl }]
         });
       } else {
         acc.slides.push({
           key: `${messageId}`,
-          src: mediaUrl,
-          thumbnail: thumbnailUrl || mediaUrl,
+          src: freshMediaUrl,
+          thumbnail: thumbnailUrl || freshMediaUrl,
           description,
           download: {
-            url: downloadUrl,
+            url: freshMediaUrl,
             filename: extractFileName(mediaUrl, `image-${messageId}`)
           }
         });

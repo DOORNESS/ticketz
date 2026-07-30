@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.91 — auditada contra o código
+**Versão:** 1.5.92 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -516,9 +516,11 @@ Quando um humano identifica bug sistêmico, pode solicitar conserto por e-mail s
 
 **Env obrigatórios:** `RESEND_API_KEY`, `SEND_EMAIL_HOOK_SECRET`, `BACKEND_URL`. **Opcionais:** `ESCALATION_EMAIL_FROM` (default `aviso@emails.doorness.com`), `ESCALATION_EMAIL_TO`, `ESCALATION_EMAIL_ENABLED`, `ESCALATION_EMAIL_TOKEN_TTL_HOURS` (default 168).
 
-**Mídia no chat (B2 privado):** URLs exibidas ao operador usam `GET /media/access/:token`, que **streama bytes pelo backend** (sem redirect para URL assinada do B2). Mensagens de mídia recebidas por Socket.io são atualizadas pela API logo após o evento, garantindo que o lightbox use a URL privada assinada pelo Ticketz; thumbnails do WhatsApp permanecem como fallback visual.
+**Mídia no chat (B2 privado):** URLs exibidas ao operador usam `GET /media/access/:token` ou o proxy `/public/*`, que baixam os bytes pelo backend. Mensagens de mídia recebidas por Socket.io são atualizadas pela API logo após o evento. A imagem da mensagem e o lightbox acrescentam `cb=<updatedAt>` à URL para não reutilizar respostas quebradas armazenadas pelo navegador; thumbnails do WhatsApp permanecem como fallback visual. Respostas do proxy de mídia usam `Cache-Control: no-store`.
 
 **Imagens no e-mail:** cada mídia visual de até ~1,5 MB é baixada do storage e enviada ao Resend como anexo inline com `content_id`; o HTML referencia `cid:<id>`. Isso evita URLs públicas do B2 e a remoção de `data:` URLs pelo Gmail.
+
+**Formulário externo:** `GET/POST /escalation/:token` também usa `Cache-Control: no-store`, evitando que navegador ou proxy mantenha uma resposta 500 transitória para um link válido.
 
 ### Auditoria §11
 

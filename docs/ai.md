@@ -45,7 +45,7 @@
 | Tools | `tools/` — executor, loop, 4 pilot tools |
 | Prompt | `AiPromptBuilder.ts` |
 | Persona e isolamento de marca | `AgentPersonaService.ts` — identidade, saudação, fallback, regras e protocolo externo por agente |
-| E-mail conserto técnico | `EscalationEmailService.ts`, `EscalationResolutionService.ts`, `EscalationTranscriptService.ts` (imagens inline via CID/Resend) |
+| E-mail conserto técnico | `EscalationEmailService.ts`, `EscalationResolutionService.ts`, `EscalationTranscriptService.ts` (imagens inline via CID/Resend; formulário público sem cache) |
 | Feature flags | `AI_CONTACT_MEMORY_ENABLED`, `AI_TOOLS_ENABLED` + settings |
 | Migration | `20260730100000-ai-phase3-memory-tools.ts` |
 | Scripts | `seed:ai-phase3`, `audit:ai-phase3` |

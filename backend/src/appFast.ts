@@ -268,6 +268,12 @@ app.get("/public-settings/:settingKey", (req, res) => {
 });
 
 app.get("/escalation/:token", async (req, res) => {
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate"
+  );
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   try {
     await import("./database");
     const { showEscalationForm } =
@@ -292,6 +298,12 @@ app.post(
   "/escalation/:token",
   express.urlencoded({ extended: false, limit: "32kb" }),
   async (req, res) => {
+    res.setHeader(
+      "Cache-Control",
+      "no-store, no-cache, must-revalidate, proxy-revalidate"
+    );
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
     try {
       await import("./database");
       const { submitEscalationForm } =
