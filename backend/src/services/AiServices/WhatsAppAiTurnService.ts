@@ -10,9 +10,12 @@ import { finalizeAiResponse } from "./Triage/TriageOrchestratorService";
 import { websocketUpdateTicket } from "../TicketServices/UpdateTicketService";
 import {
   isInformationalIntent,
-  isPureGreetingMessage
+  isPureGreetingMessage,
+  isShortHelpRequest,
+  isWaitingForBotNudge
 } from "./Triage/CaseCompletenessEngine";
 import { findUnansweredCustomerQuestion } from "./WhatsAppCustomerTurnResolver";
+import { hasRecentSocialAcknowledgement } from "./AiSocialReplyGuard";
 import { logger } from "../../utils/logger";
 import { parsePositiveInt, withAiTimeout } from "./withAiTimeout";
 import {
@@ -137,6 +140,19 @@ export const runWhatsAppAiTurn = async ({
 }: WhatsAppTurnInput): Promise<"greeting" | "informational" | "skipped"> => {
   const trimmed = userText.trim();
   if (!trimmed) {
+    return "skipped";
+  }
+
+  const socialOnlyIncoming =
+    isPureGreetingMessage(trimmed) ||
+    isShortHelpRequest(trimmed) ||
+    isWaitingForBotNudge(trimmed);
+
+  if (socialOnlyIncoming && (await hasRecentSocialAcknowledgement(ticket.id))) {
+    logger.debug(
+      { ticketId: ticket.id, userText: trimmed.slice(0, 80) },
+      "Skipping duplicate social WhatsApp turn"
+    );
     return "skipped";
   }
 

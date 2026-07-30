@@ -214,6 +214,7 @@ const SHORT_HELP_PREFIX =
 const SHORT_HELP_PATTERNS = [
   /^\s*pode ajudar\s*\??\s*$/i,
   /^\s*pode?s?\s+me\s+ajudar(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,
+  /^\s*poderia\s+me\s+ajudar(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,
   /^\s*pode me ajj?dar(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,
   /^\s*(?:vc|voc[eê])\s+pode?s?\s+me\s+ajudar(?:\s+agora)?\s*\??\s*$/i,
   /^\s*(?:me\s+)?ajud(?:a|ar|e)(?:\s+(?:agora|j[aá]|por favor|pfv))*\s*\??\s*$/i,

@@ -65,6 +65,21 @@ export const resolveCustomerTurnText = async ({
       ? pickPrimaryCustomerText(messageParts)
       : rawUserText.trim();
 
+  if (messageParts.length > 1) {
+    const allSocialOnly = messageParts.every(
+      part =>
+        isPureGreetingMessage(part) ||
+        isShortHelpRequest(part) ||
+        isWaitingForBotNudge(part)
+    );
+
+    if (allSocialOnly) {
+      userText =
+        messageParts.find(part => isPureGreetingMessage(part)) ||
+        messageParts[0];
+    }
+  }
+
   if (isWaitingForBotNudge(userText)) {
     const recent = await Message.findAll({
       where: { ticketId, fromMe: false },

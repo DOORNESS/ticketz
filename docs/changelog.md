@@ -6,6 +6,16 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.86] — 2026-07-30
+
+### Corrigido (respostas duplicadas no WhatsApp)
+
+- **Coalescência inbound** — após adquirir o lock da fila IA, o backend aguarda estabilização do buffer antes de drenar, agrupando mensagens rápidas como `oi` + `poderia me ajudar?` em um único turno.
+- **Saudações repetidas** — respostas sociais equivalentes (`como posso ajudar`, `me diga como posso te ajudar`) são suprimidas quando já houve ack recente; o guard evita fallback obrigatório silencioso indevido.
+- **Manual 1.5.86** — §11 e índice `ai.md` sincronizados.
+
+---
+
 ## [1.5.85] — 2026-07-30
 
 ### Corrigido (follow-up subagentes)

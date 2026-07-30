@@ -85,6 +85,18 @@ describe("WhatsAppAiTurnService", () => {
     expect(resolved).toContain("útil para minha empresa");
   });
 
+  it("treats batched greeting plus help request as a single social turn", async () => {
+    mockFindAll.mockResolvedValueOnce([]);
+
+    const resolved = await resolveCustomerTurnText({
+      ticketId: 42,
+      rawUserText: "oi\n\npoderia me ajudar ?",
+      messageParts: ["oi", "poderia me ajudar ?"]
+    });
+
+    expect(resolved).toBe("oi");
+  });
+
   it("replays last real question on cadê vc", async () => {
     mockFindAll.mockResolvedValueOnce([
       {

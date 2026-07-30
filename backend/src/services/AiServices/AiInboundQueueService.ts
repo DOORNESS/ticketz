@@ -22,6 +22,7 @@ import { persistAiDecisionLog } from "./AiDecisionLogger";
 import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import formatBody from "../../helpers/Mustache";
 import { isRemovableDebounceJobState } from "./AiInboundQueueJobState";
+import { waitForInboundBufferQuietPeriod } from "./AiInboundBufferCoalesce";
 
 export type AiInboundPayload = {
   companyId: number;
@@ -401,6 +402,13 @@ export const processBufferedAiInbound = async (
 
     if (!ownsLock) {
       return;
+    }
+
+    if (!usesImmediateProcessing()) {
+      await waitForInboundBufferQuietPeriod(
+        () => redis.llen(bufferKey(ticketId)),
+        getDebounceMs()
+      );
     }
 
     const revalidated = await revalidateTicketForAiWithRepair(

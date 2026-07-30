@@ -614,7 +614,7 @@ const ProcessInboundMessageService = async ({
         isWaitingForBotNudge(userText));
 
     if (useDirectWhatsAppTurn) {
-      await runWhatsAppAiTurn({
+      const turnResult = await runWhatsAppAiTurn({
         companyId,
         ticket,
         agent,
@@ -622,6 +622,11 @@ const ProcessInboundMessageService = async ({
         messageId: primaryMessageId,
         markSent: markCustomerReply
       });
+
+      if (turnResult === "skipped") {
+        customerReplySent = true;
+      }
+
       return;
     }
 

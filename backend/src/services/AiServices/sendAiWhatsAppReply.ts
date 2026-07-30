@@ -4,6 +4,10 @@ import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import formatBody from "../../helpers/Mustache";
 import AppError from "../../errors/AppError";
 import { logger } from "../../utils/logger";
+import {
+  hasRecentSocialAcknowledgement,
+  isSimilarSocialAcknowledgement
+} from "./AiSocialReplyGuard";
 
 const DUPLICATE_WINDOW_MS = 120000;
 
@@ -35,14 +39,24 @@ export const sendAiWhatsAppReply = async ({
       })
     ]);
 
-    if (lastOutbound?.body?.trim() === normalized) {
+    if (lastOutbound?.body?.trim()) {
       const ageMs = Date.now() - new Date(lastOutbound.createdAt).getTime();
       const inboundAfterOutbound =
         lastInbound &&
         new Date(lastInbound.createdAt).getTime() >
           new Date(lastOutbound.createdAt).getTime();
 
-      if (ageMs < DUPLICATE_WINDOW_MS && !inboundAfterOutbound) {
+      const isExactDuplicate =
+        lastOutbound.body.trim() === normalized &&
+        ageMs < DUPLICATE_WINDOW_MS &&
+        !inboundAfterOutbound;
+
+      const isSimilarSocialDuplicate =
+        ageMs < DUPLICATE_WINDOW_MS &&
+        !inboundAfterOutbound &&
+        isSimilarSocialAcknowledgement(lastOutbound.body, normalized);
+
+      if (isExactDuplicate || isSimilarSocialDuplicate) {
         return true;
       }
     }
