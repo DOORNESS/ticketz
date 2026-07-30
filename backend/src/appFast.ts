@@ -267,34 +267,48 @@ app.get("/public-settings/:settingKey", (req, res) => {
   return res.status(200).json(null);
 });
 
-app.get("/escalation/:token", async (req, res, next) => {
+app.get("/escalation/:token", async (req, res) => {
   try {
     await import("./database");
     const { showEscalationForm } =
       await import("./controllers/EscalationEmailController");
     return showEscalationForm(req, res);
   } catch (error) {
-    if (error instanceof AppError) {
-      return res.status(error.statusCode).json({ error: error.message });
-    }
-    return next(error);
+    const { buildEscalationErrorPageHtml } =
+      await import("./services/AiServices/EscalationTranscriptService");
+    logger.error({ error }, "Escalation form GET failed");
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res
+      .status(500)
+      .send(
+        buildEscalationErrorPageHtml(
+          "Não foi possível abrir o formulário agora. Tente novamente em instantes."
+        )
+      );
   }
 });
 
 app.post(
   "/escalation/:token",
   express.urlencoded({ extended: false, limit: "32kb" }),
-  async (req, res, next) => {
+  async (req, res) => {
     try {
       await import("./database");
       const { submitEscalationForm } =
         await import("./controllers/EscalationEmailController");
       return submitEscalationForm(req, res);
     } catch (error) {
-      if (error instanceof AppError) {
-        return res.status(error.statusCode).json({ error: error.message });
-      }
-      return next(error);
+      const { buildEscalationErrorPageHtml } =
+        await import("./services/AiServices/EscalationTranscriptService");
+      logger.error({ error }, "Escalation form POST failed");
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res
+        .status(500)
+        .send(
+          buildEscalationErrorPageHtml(
+            "Não foi possível enviar o formulário agora. Tente novamente em instantes."
+          )
+        );
     }
   }
 );

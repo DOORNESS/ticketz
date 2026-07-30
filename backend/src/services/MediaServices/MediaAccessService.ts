@@ -95,6 +95,13 @@ export const resolveMessageMediaUrls = async ({
         return;
       }
 
+      if (
+        typeof rawMediaUrl === "string" &&
+        rawMediaUrl.includes("/media/access/")
+      ) {
+        return;
+      }
+
       try {
         await assertMediaAccess({
           user,

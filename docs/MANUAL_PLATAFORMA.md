@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.89 — auditada contra o código
+**Versão:** 1.5.90 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -506,15 +506,17 @@ Quando um humano identifica bug sistêmico, pode solicitar conserto por e-mail s
 
 | Etapa | Comportamento |
 |-------|----------------|
-| Disparo manual | Botão **Solicitar conserto** na barra do ticket (`TicketConversationToolbar`) → `POST /tickets/:ticketId/ai/escalate-email` |
-| E-mail HTML | Resend envia histórico completo (texto, imagens, `visionSummary`) para `ESCALATION_EMAIL_TO` a partir de `ESCALATION_EMAIL_FROM` |
-| Formulário externo | Link assinado (`SEND_EMAIL_HOOK_SECRET`) abre `GET /escalation/:token` — página HTML fora do painel |
+| Disparo manual | Botão **Enviar Email** na barra do ticket (`TicketConversationToolbar`) → `POST /tickets/:ticketId/ai/escalate-email` |
+| E-mail HTML | Resend envia histórico completo (texto, imagens embutidas em base64, `visionSummary`) para `ESCALATION_EMAIL_TO` a partir de `ESCALATION_EMAIL_FROM` |
+| Formulário externo | Link assinado (`SEND_EMAIL_HOOK_SECRET`) abre `GET /escalation/:token` — página HTML fora do painel (carrega ticket leve, sem `ShowTicketService`) |
 | Orientação interna | Humano descreve o que foi corrigido; texto **não** vai literalmente ao cliente |
 | Follow-up IA | `POST /escalation/:token` salva orientação e aciona IA para avisar o cliente no mesmo WhatsApp pedindo teste |
 
 **Persistência:** tabela `AiEscalationEmails` (migration `20260730120000-ai-escalation-emails.ts`).
 
 **Env obrigatórios:** `RESEND_API_KEY`, `SEND_EMAIL_HOOK_SECRET`, `BACKEND_URL`. **Opcionais:** `ESCALATION_EMAIL_FROM` (default `aviso@emails.doorness.com`), `ESCALATION_EMAIL_TO`, `ESCALATION_EMAIL_ENABLED`, `ESCALATION_EMAIL_TOKEN_TTL_HOURS` (default 168).
+
+**Mídia no chat (B2 privado):** URLs exibidas ao operador usam `GET /media/access/:token`, que **streama bytes pelo backend** (sem redirect para URL assinada do B2). Imagens no e-mail de escalação são embutidas em `data:` base64 (até ~1,5 MB por arquivo).
 
 ### Auditoria §11
 

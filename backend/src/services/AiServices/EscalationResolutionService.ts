@@ -1,12 +1,14 @@
 import AppError from "../../errors/AppError";
 import Ticket from "../../models/Ticket";
+import Contact from "../../models/Contact";
 import Message from "../../models/Message";
 import AiEscalationEmail from "../../models/AiEscalationEmail";
 import { logger } from "../../utils/logger";
 import { verifyEscalationToken } from "./EscalationEmailTokenService";
 import {
   buildEscalationFormPageHtml,
-  buildEscalationSuccessPageHtml
+  buildEscalationSuccessPageHtml,
+  buildEscalationErrorPageHtml
 } from "./EscalationTranscriptService";
 import { getActiveAgentForTicket, getSpecialtyPromptRules } from "./AiHelpers";
 import { buildAiSystemPrompt } from "./AiPromptBuilder";
@@ -17,6 +19,49 @@ import { finalizeAiResponse } from "./Triage/TriageOrchestratorService";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
 import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
 import ShowTicketService from "../TicketServices/ShowTicketService";
+
+const loadTicketForEscalationForm = async (
+  ticketId: number,
+  companyId: number
+): Promise<Ticket> => {
+  const ticket = await Ticket.findOne({
+    where: { id: ticketId, companyId },
+    include: [
+      {
+        model: Contact,
+        as: "contact",
+        attributes: ["id", "name", "number"]
+      }
+    ]
+  });
+
+  if (!ticket) {
+    throw new AppError("ERR_NO_TICKET_FOUND", 404);
+  }
+
+  return ticket;
+};
+
+const mapEscalationErrorMessage = (error: unknown): string => {
+  if (!(error instanceof AppError)) {
+    return "Não foi possível abrir o formulário agora. Tente novamente em instantes.";
+  }
+
+  switch (error.message) {
+    case "ERR_ESCALATION_TOKEN_INVALID":
+      return "Este link é inválido. Solicite um novo e-mail de escalação.";
+    case "ERR_ESCALATION_TOKEN_EXPIRED":
+      return "Este link expirou. Solicite um novo e-mail de escalação.";
+    case "ERR_ESCALATION_NOT_FOUND":
+      return "Registro de escalação não encontrado.";
+    case "ERR_ESCALATION_EMAIL_NOT_CONFIGURED":
+      return "Escalação por e-mail não está configurada no servidor.";
+    case "ERR_NO_TICKET_FOUND":
+      return "Ticket não encontrado.";
+    default:
+      return error.message;
+  }
+};
 
 const buildConversationHistory = async (
   ticketId: number,
@@ -193,21 +238,25 @@ export const loadEscalationForToken = async (
     throw new AppError("ERR_ESCALATION_NOT_FOUND", 404);
   }
 
-  const ticket = await ShowTicketService(payload.tid, payload.cid);
+  const ticket = await loadTicketForEscalationForm(payload.tid, payload.cid);
   return { escalation, ticket };
 };
 
 export const renderEscalationFormPage = async (
   token: string
 ): Promise<string> => {
-  const { escalation, ticket } = await loadEscalationForToken(token);
-  return buildEscalationFormPageHtml({
-    ticketId: ticket.id,
-    contactName: ticket.contact?.name || "Cliente",
-    contactNumber: ticket.contact?.number || "",
-    alreadyResolved: escalation.status === "resolved",
-    token
-  });
+  try {
+    const { escalation, ticket } = await loadEscalationForToken(token);
+    return buildEscalationFormPageHtml({
+      ticketId: ticket.id,
+      contactName: ticket.contact?.name || "Cliente",
+      contactNumber: ticket.contact?.number || "",
+      alreadyResolved: escalation.status === "resolved",
+      token
+    });
+  } catch (error) {
+    return buildEscalationErrorPageHtml(mapEscalationErrorMessage(error));
+  }
 };
 
 export const submitEscalationResolution = async ({
@@ -232,7 +281,13 @@ export const submitEscalationResolution = async ({
     });
   }
 
-  const { escalation, ticket } = await loadEscalationForToken(token);
+  let escalation: AiEscalationEmail;
+  let ticket: Ticket;
+  try {
+    ({ escalation, ticket } = await loadEscalationForToken(token));
+  } catch (error) {
+    return buildEscalationErrorPageHtml(mapEscalationErrorMessage(error));
+  }
 
   if (escalation.status === "resolved") {
     return buildEscalationSuccessPageHtml(ticket.id);

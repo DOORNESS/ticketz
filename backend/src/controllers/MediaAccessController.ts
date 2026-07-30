@@ -40,21 +40,17 @@ export const accessByToken = async (
     companyId: parsed.companyId
   });
 
-  if (StorageService.shouldUsePrivateAccess()) {
-    const signedUrl = await getSignedUrlForMedia(media);
-    return res.redirect(302, signedUrl);
-  }
-
   const buffer = await StorageService.download(
     media.storageKey,
     media.companyId
   );
   const contentType =
     media.mimeType ||
-    mime.lookup(media.originalFilename || "") ||
+    mime.lookup(media.originalFilename || media.storageKey || "") ||
     "application/octet-stream";
   res.setHeader("Content-Type", String(contentType));
-  if (req.query.inline === "1") {
+  res.setHeader("Cache-Control", "private, max-age=300");
+  if (req.query.inline === "1" || /^image\//i.test(String(contentType))) {
     res.setHeader("Content-Disposition", "inline");
   }
   return res.send(buffer);

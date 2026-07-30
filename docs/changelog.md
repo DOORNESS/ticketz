@@ -8,6 +8,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.90] — 2026-07-30
+
+### Corrigido (escalação + mídia B2)
+
+- **`MediaAccessController.accessByToken`** — streama mídia pelo backend em vez de redirect 302 para URL assinada do B2 (corrige imagem que aparecia e quebrava no chat).
+- **`EscalationTranscriptService`** — imagens do e-mail de conserto embutidas em base64 (`data:`), sem link externo ao B2.
+- **`EscalationResolutionService`** — formulário público carrega ticket leve (sem `ShowTicketService`/socket heal); erros retornam página HTML amigável em vez de JSON 500.
+- **Frontend `MessagesList`** — fallback para `jpegThumbnail` quando `mediaUrl` falha ao carregar.
+- **Manual 1.5.90** — §11 (escalação + mídia privada).
+
+---
+
 ## [1.5.89] — 2026-07-30
 
 ### Adicionado (e-mail de conserto técnico)

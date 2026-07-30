@@ -5,7 +5,7 @@ import Message from "../../models/Message";
 import MessageMediaFile from "../../models/MessageMediaFile";
 import StorageService from "../StorageService/StorageService";
 
-const EMAIL_MEDIA_TTL_SECONDS = 7 * 24 * 60 * 60;
+const EMAIL_MEDIA_MAX_BYTES = 1_500_000;
 
 export type EscalationTranscriptMessage = {
   id: string;
@@ -52,14 +52,17 @@ const resolveEmailMediaUrl = async (
 
   try {
     await StorageService.ensureReady(companyId);
-    if (StorageService.shouldUsePrivateAccess()) {
-      return StorageService.getSignedUrl(
-        media.storageKey,
-        companyId,
-        EMAIL_MEDIA_TTL_SECONDS
-      );
+    const buffer = await StorageService.download(media.storageKey, companyId);
+    if (!buffer?.length || buffer.length > EMAIL_MEDIA_MAX_BYTES) {
+      return null;
     }
-    return StorageService.getPublicUrl(media.storageKey);
+
+    const mimeType =
+      media.mimeType ||
+      (isVisualMedia(media.mediaType)
+        ? "image/jpeg"
+        : "application/octet-stream");
+    return `data:${mimeType};base64,${buffer.toString("base64")}`;
   } catch {
     return null;
   }
@@ -281,7 +284,8 @@ export const buildEscalationFormPageHtml = ({
   contactNumber,
   alreadyResolved,
   errorMessage,
-  token
+  token,
+  formActionUrl
 }: {
   ticketId: number;
   contactName: string;
@@ -289,7 +293,13 @@ export const buildEscalationFormPageHtml = ({
   alreadyResolved: boolean;
   errorMessage?: string | null;
   token: string;
+  formActionUrl?: string | null;
 }): string => {
+  const backendUrl = (
+    process.env.BACKEND_URL || "http://localhost:8080"
+  ).replace(/\/$/, "");
+  const postUrl =
+    formActionUrl || `${backendUrl}/escalation/${encodeURIComponent(token)}`;
   const errorBlock = errorMessage
     ? `<div style="margin-bottom:16px;padding:12px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;">${escapeHtml(errorMessage)}</div>`
     : "";
@@ -321,7 +331,7 @@ export const buildEscalationFormPageHtml = ({
       Ticket #${ticketId} · ${escapeHtml(contactName || "Cliente")} · ${escapeHtml(contactNumber || "")}
     </p>
     ${errorBlock}
-    <form method="post" action="/escalation/${encodeURIComponent(token)}">
+    <form method="post" action="${escapeHtml(postUrl)}">
       <label for="humanGuidance" style="display:block;font-weight:700;margin-bottom:8px;">
         O que foi corrigido? (orientação interna para a IA)
       </label>
@@ -352,6 +362,18 @@ export const buildEscalationSuccessPageHtml = (ticketId: number): string =>
     <h1 style="margin-top:0;color:#166534;">Conserto registrado</h1>
     <p>A orientação foi salva e a IA foi acionada para avisar o cliente do ticket #${ticketId} no WhatsApp e pedir para testar.</p>
     <p style="color:#4b5563;">Você já pode fechar esta página.</p>
+  </div>
+</body>
+</html>`;
+
+export const buildEscalationErrorPageHtml = (message: string): string =>
+  `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Erro — escalação</title></head>
+<body style="font-family:Arial,sans-serif;background:#f3f4f6;margin:0;padding:24px;">
+  <div style="max-width:640px;margin:0 auto;background:#fff;border-radius:12px;padding:24px;border:1px solid #fecaca;">
+    <h1 style="margin-top:0;color:#991b1b;">Não foi possível abrir o formulário</h1>
+    <p style="color:#374151;line-height:1.6;">${escapeHtml(message)}</p>
   </div>
 </body>
 </html>`;

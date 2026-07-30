@@ -1176,9 +1176,10 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
 
     if (!document && mediaKind === "image") {
       const thumbnail = data?.message?.imageMessage?.jpegThumbnail;
-      const imageSrc =
-        message.mediaUrl ||
-        (thumbnail ? `data:image/jpeg;base64,${thumbnail}` : null);
+      const thumbnailSrc = thumbnail
+        ? `data:image/jpeg;base64,${thumbnail}`
+        : null;
+      const imageSrc = message.mediaUrl || thumbnailSrc;
 
       if (!imageSrc) {
         return (
@@ -1212,6 +1213,11 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
             src={imageSrc}
             alt="midia da mensagem"
             onClick={() => openLightboxForMessage(message.id)}
+            onError={event => {
+              if (thumbnailSrc && event.currentTarget.src !== thumbnailSrc) {
+                event.currentTarget.src = thumbnailSrc;
+              }
+            }}
           />
           <>
             <div
