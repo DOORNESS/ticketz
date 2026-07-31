@@ -3,6 +3,10 @@ const buildCacheBustedUrl = (url, seed) => {
     return url;
   }
 
+  if (url.startsWith("blob:") || url.startsWith("data:")) {
+    return url;
+  }
+
   const cacheBuster = seed || Date.now();
   try {
     const parsedUrl = new URL(url, window.location.origin);

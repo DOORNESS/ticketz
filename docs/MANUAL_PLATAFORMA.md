@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.92 — auditada contra o código
+**Versão:** 1.5.93 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -316,6 +316,8 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - `releaseToAi: true` reabre em `pending` sem `userId`, reengajando IA quando permitido
 
 ### UI da conversa (compacta)
+- Cabeçalho `TicketInfo`: mostra **telefone · nome · Ticket #ID**, com o telefone em primeiro lugar
+- Lightbox: imagens são buscadas por `/media/message/:messageId/stream` e abertas por `blob:`; URLs `blob:` e `data:` não recebem cache-buster
 - Barra de ticket fechado: apenas ícones (Reabrir / Reabrir e chamar IA)
 - `TicketConversationToolbar`: ícones para Repositório, Tags (colapsável), Painel administrativo e estado IA
 - Diagnóstico IA (timeline, explicabilidade, copiloto) concentrados no drawer `TicketAdminPanel`, não no topo da conversa
@@ -459,6 +461,8 @@ IA só opera quando `AiPlatformState.aiFeaturesEnabled === true` (setado em `boo
 
 Imagens recebidas no WhatsApp passam por `MediaInboundResolver` e pelo `visionModel` do agente. A análise visual roda já no ingest (`verifyMediaMessage` → `analyzeAndPersistInboundImageVision`), usando buffer local em data URL base64; o resumo fica em `MessageMediaFiles.visionSummary` e entra no turno como `[Imagem enviada pelo cliente]: …`. O turno IA preserva esse bloco mesmo quando a legenda é escolhida como texto principal (`InboundImageContext`). Com falha de leitura/análise, o turno ainda registra que houve imagem — a IA não deve dizer que “não vê imagens”.
 
+Confirmações visuais de recuperação de conta são tratadas por `AccountRecoverySuccessReplyService`: quando a tela informa que a solicitação foi enviada e que a nova senha chegará por e-mail, a resposta tranquiliza o cliente, repete somente o prazo visível, orienta a verificar entrada/spam e proíbe abrir chamado duplicado. Envelopes de edição `secretEncryptedMessage` são processados como protocolo e não entram como novo turno da IA.
+
 ### Orquestrador — condição real
 Requer **ambos**:
 1. `AI_ORCHESTRATOR_ENABLED` truthy no env (`AiOrchestratorConfig.ts`)
@@ -521,6 +525,8 @@ Quando um humano identifica bug sistêmico, pode solicitar conserto por e-mail s
 **Imagens no e-mail:** cada mídia visual de até ~1,5 MB é baixada do storage e enviada ao Resend como anexo inline com `content_id`; o HTML referencia `cid:<id>`. Isso evita URLs públicas do B2 e a remoção de `data:` URLs pelo Gmail.
 
 **Formulário externo:** `GET/POST /escalation/:token` também usa `Cache-Control: no-store`, evitando que navegador ou proxy mantenha uma resposta 500 transitória para um link válido.
+
+**Entrega resiliente:** se a geração por modelo, a feature de IA ou o agente ativo estiver indisponível no momento do envio, `EscalationResolutionService` ainda entrega uma mensagem segura pelo WhatsApp pedindo ao cliente para aplicar a orientação e testar. Falha de log/finalização após entrega é apenas registrada e não transforma um envio bem-sucedido em erro no formulário.
 
 ### Auditoria §11
 

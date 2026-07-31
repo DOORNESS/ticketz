@@ -8,6 +8,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.93] — 2026-07-30
+
+### Corrigido (cabeçalho, lightbox e recuperação de conta)
+
+- **`TicketInfo`** — título da conversa passa a exibir telefone primeiro: **telefone · nome · Ticket #ID**.
+- **`MediaGalleryLightbox`** — preserva exatamente a URL `blob:` autenticada; antes o cache-buster era anexado ao object URL e tornava a imagem inválida.
+- **`AccountRecoverySuccessReplyService`** — confirmação visual de recuperação enviada gera resposta determinística para aguardar a nova senha no e-mail, verificar spam e não abrir chamado duplicado.
+- **`wbotMessageListener`** — envelopes `secretEncryptedMessage` de edição deixam de ser enviados à IA como texto “unsupported message”, eliminando a segunda resposta incorreta.
+- **`EscalationResolutionService`** — formulário consegue avisar o cliente com fallback seguro mesmo sem modelo, feature de IA ou agente disponível; falha de bookkeeping após a entrega não retorna falso erro ao formulário.
+- **Manual 1.5.93** — §5, §11 e índice `ai.md` sincronizados.
+
+---
+
 ## [1.5.92] — 2026-07-30
 
 ### Corrigido (cache de mídia e formulário)

@@ -119,28 +119,28 @@ export const runEscalationResolutionFollowUp = async ({
   escalation: AiEscalationEmail;
   humanGuidance: string;
 }): Promise<void> => {
-  if (!isAiFeaturesEnabled()) {
-    throw new AppError("ERR_AI_FEATURES_DISABLED", 503);
-  }
-
   const ticket = await ShowTicketService(
     escalation.ticketId,
     escalation.companyId
   );
   await prepareTicketForResolutionFollowUp(ticket);
 
-  const agent = await getActiveAgentForTicket(ticket);
-  if (!agent) {
-    throw new AppError("ERR_NO_ACTIVE_AI_AGENT", 422);
-  }
+  const agent = isAiFeaturesEnabled()
+    ? await getActiveAgentForTicket(ticket)
+    : null;
 
-  if (!ticket.aiAgentId) {
+  if (agent && !ticket.aiAgentId) {
     await ticket.update({ aiAgentId: agent.id });
     await ticket.reload();
   }
 
   const history = await buildConversationHistory(ticket.id, 8);
-  const operationalRules = `
+  const fallbackReply =
+    "Oi! Passando para avisar que nossa equipe já concluiu o ajuste que você solicitou. Pode entrar novamente, seguir a orientação informada e testar por favor? Depois me diga se ficou tudo certo.";
+  let generatedReply = "";
+
+  if (agent) {
+    const operationalRules = `
 Orientação interna da equipe técnica (NÃO repita literalmente ao cliente):
 ${humanGuidance.trim()}
 
@@ -152,71 +152,83 @@ Sua tarefa agora:
 - Não peça handoff humano nesta mensagem.
 `.trim();
 
-  const systemPrompt = buildAiSystemPrompt({
-    agent,
-    specialtyRules: getSpecialtyPromptRules(agent.specialty),
-    operationalRules
-  });
-
-  const fallbackReply =
-    "Oi! Passando para avisar que nossa equipe já corrigiu o problema que você reportou. Pode testar por favor e me dizer se está tudo funcionando direitinho?";
-  let generatedReply = "";
-  try {
-    const loopResult = await runToolLoop({
-      companyId: ticket.companyId,
+    const systemPrompt = buildAiSystemPrompt({
       agent,
-      disableTools: true,
-      messages: [
-        { role: "system", content: systemPrompt },
-        ...history.map(item => ({ role: item.role, content: item.content })),
-        {
-          role: "user",
-          content:
-            "[Sistema interno] O conserto foi aplicado. Avise o cliente e peça para testar."
-        }
-      ],
-      context: {
-        companyId: ticket.companyId,
-        aiAgentId: agent.id,
-        ticketId: ticket.id,
-        contactId: ticket.contactId,
-        queueId: ticket.queueId,
-        userText: humanGuidance,
-        providerId: agent.provider
-      }
+      specialtyRules: getSpecialtyPromptRules(agent.specialty),
+      operationalRules
     });
-    generatedReply = loopResult.content?.trim() || "";
-  } catch (error) {
+
+    try {
+      const loopResult = await runToolLoop({
+        companyId: ticket.companyId,
+        agent,
+        disableTools: true,
+        messages: [
+          { role: "system", content: systemPrompt },
+          ...history.map(item => ({ role: item.role, content: item.content })),
+          {
+            role: "user",
+            content:
+              "[Sistema interno] O conserto foi aplicado. Avise o cliente e peça para testar."
+          }
+        ],
+        context: {
+          companyId: ticket.companyId,
+          aiAgentId: agent.id,
+          ticketId: ticket.id,
+          contactId: ticket.contactId,
+          queueId: ticket.queueId,
+          userText: humanGuidance,
+          providerId: agent.provider
+        }
+      });
+      generatedReply = loopResult.content?.trim() || "";
+    } catch (error) {
+      logger.warn(
+        { error, ticketId: ticket.id, escalationId: escalation.id },
+        "Escalation AI generation failed; sending safe customer fallback"
+      );
+    }
+  } else {
     logger.warn(
-      { error, ticketId: ticket.id, escalationId: escalation.id },
-      "Escalation AI generation failed; sending safe customer fallback"
+      { ticketId: ticket.id, escalationId: escalation.id },
+      "Escalation has no available AI agent; sending safe customer fallback"
     );
   }
 
-  const replyBody = prepareCustomerFacingAiText(
-    generatedReply || fallbackReply,
-    humanGuidance,
-    agent
-  );
+  const replyBody = agent
+    ? prepareCustomerFacingAiText(
+        generatedReply || fallbackReply,
+        humanGuidance,
+        agent
+      )
+    : fallbackReply;
 
   const delivered = await deliverAiReply(ticket, replyBody);
   if (!delivered) {
     throw new AppError("ERR_ESCALATION_WHATSAPP_DELIVERY_FAILED", 502);
   }
 
-  await finalizeAiResponse(ticket);
-  await ticket.update({ aiProcessingState: "awaiting_customer" } as never);
+  try {
+    await finalizeAiResponse(ticket);
+    await ticket.update({ aiProcessingState: "awaiting_customer" } as never);
 
-  await persistAiDecisionLog({
-    companyId: ticket.companyId,
-    ticketId: ticket.id,
-    action: "respond",
-    reason: "human_guidance_applied",
-    details: {
-      escalationId: escalation.id,
-      delivered
-    }
-  });
+    await persistAiDecisionLog({
+      companyId: ticket.companyId,
+      ticketId: ticket.id,
+      action: "respond",
+      reason: "human_guidance_applied",
+      details: {
+        escalationId: escalation.id,
+        delivered
+      }
+    });
+  } catch (error) {
+    logger.warn(
+      { error, ticketId: ticket.id, escalationId: escalation.id },
+      "Escalation reply delivered but post-delivery bookkeeping failed"
+    );
+  }
 
   logger.info(
     {

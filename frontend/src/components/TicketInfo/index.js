@@ -4,7 +4,10 @@ import { Avatar, CardHeader } from "@material-ui/core";
 import { Lightbox } from "react-modal-image";
 
 import { i18n } from "../../translate/i18n";
-import { formatWhatsappContactName } from "../../helpers/formatWhatsappDisplay";
+import {
+  formatWhatsappContactName,
+  formatWhatsappContactNumber
+} from "../../helpers/formatWhatsappDisplay";
 import { getInitials } from "../../helpers/getInitials";
 import { generateColor } from "../../helpers/colorGenerator";
 
@@ -18,6 +21,14 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
     document.body.offsetWidth < 600 && contactName.length > 10
       ? contactName.substring(0, 10) + "..."
       : contactName;
+  const contactNumber = contact ? formatWhatsappContactNumber(contact) : "";
+  const conversationTitle = [
+    contactNumber,
+    truncatedContactName,
+    `Ticket #${ticket.id}`
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   useEffect(() => {
     if (user && contact) {
@@ -60,7 +71,7 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
             {getInitials(contactName)}
           </Avatar>
         }
-        title={`${truncatedContactName} #${ticket.id}`}
+        title={conversationTitle}
         subheader={ticket.user && `${userName}`}
       />
     </>

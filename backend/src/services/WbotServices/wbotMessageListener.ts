@@ -1962,7 +1962,7 @@ const handleMessage = async (
       return;
     }
 
-    let newMessage: Message;
+    let newMessage: Message | undefined;
 
     if (
       messageMedia ||
@@ -2047,6 +2047,13 @@ const handleMessage = async (
       newMessage = await verifyMessage(msg, ticket, contact, {
         skipWebsocket: justCreated
       });
+    }
+
+    // Edit/delete protocol envelopes are not customer turns. Their payload was
+    // already applied above; sending the synthetic "unsupported message" body
+    // to the AI creates an unrelated second answer and duplicate support flow.
+    if (!newMessage) {
+      return;
     }
 
     if (isGroup || contact.disableBot || msg.key.fromMe) {

@@ -75,6 +75,7 @@ import {
 } from "./AgentPersonaService";
 import { getRagMinimumSimilarity } from "./RagConfig";
 import { buildContextualRetrievalQuery } from "./ContextualRetrievalQuery";
+import { resolveAccountRecoverySuccessReply } from "./AccountRecoverySuccessReplyService";
 
 export type InboundMessageItem = {
   messageBody: string;
@@ -544,6 +545,26 @@ const ProcessInboundMessageService = async ({
       rawUserText: userText,
       messageParts: textParts
     });
+
+    const accountRecoveryReply = resolveAccountRecoverySuccessReply(userText);
+    if (accountRecoveryReply) {
+      await sendAiWhatsAppReply({
+        ticket,
+        body: accountRecoveryReply
+      });
+      markCustomerReply();
+      await persistAiDecisionLog({
+        companyId,
+        ticketId: ticket.id,
+        messageId: primaryMessageId,
+        action: "respond",
+        reason: "account_recovery_request_confirmed",
+        userMessage: maskSensitiveLog(userText),
+        aiResponse: accountRecoveryReply
+      });
+      await finalizeAiResponse(ticket, primaryMessageId);
+      return;
+    }
 
     const priority = classifyTicketPriority(userText);
     if (!ticket.aiPriority) {
