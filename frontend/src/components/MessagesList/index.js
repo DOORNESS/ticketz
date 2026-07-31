@@ -62,6 +62,10 @@ import { getInitials } from "../../helpers/getInitials";
 import { downloadFile } from "../../helpers/downloadFile";
 import { Mutex } from "async-mutex";
 import { isAiHandlingTicket } from "../../helpers/aiTicketStatus";
+import {
+  removeOptimisticMessage,
+  replaceOptimisticMessage
+} from "./optimisticMessages";
 
 const loadPageMutex = new Mutex();
 
@@ -675,6 +679,15 @@ const reducer = (state, action) => {
     return [...state];
   }
 
+  if (action.type === "REPLACE_MESSAGE") {
+    const { temporaryId, message } = action.payload;
+    return replaceOptimisticMessage(state, temporaryId, message);
+  }
+
+  if (action.type === "REMOVE_MESSAGE") {
+    return removeOptimisticMessage(state, action.payload);
+  }
+
   if (action.type === "RESET_STICKY") {
     state.forEach(message => {
       delete message.bottomStick;
@@ -1053,6 +1066,19 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
         }
         dispatch({ type: "ADD_MESSAGE", payload: message });
         scrollToBottom();
+      },
+      replace: (temporaryId, message) => {
+        if (Number(message?.ticketId) !== Number(currentTicketId.current)) {
+          return;
+        }
+        dispatch({
+          type: "REPLACE_MESSAGE",
+          payload: { temporaryId, message }
+        });
+        scrollToBottom();
+      },
+      remove: messageId => {
+        dispatch({ type: "REMOVE_MESSAGE", payload: messageId });
       },
       refresh: () => refreshMessagesList()
     });
@@ -2164,7 +2190,7 @@ const MessagesList = ({ ticket, ticketId, isGroup, markAsRead, readOnly }) => {
               ]}
               title={message.queueId && message.queue?.name}
             >
-              {readOnly || (
+              {readOnly || message.optimistic || (
                 <IconButton
                   variant="contained"
                   size="small"

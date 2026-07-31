@@ -24,7 +24,7 @@
 | `layout/MainListItems.js` | Menu lateral |
 | `rules.js` | Permissões `<Can>` |
 | `context/Socket/SocketContext.js` | WebSocket |
-| `context/Tickets/TicketsContext.js` | Ticket ativo, abas da lista (`listSubTab`), refresh de listas/mensagens |
+| `context/Tickets/TicketsContext.js` | Ticket ativo, abas, refresh e reconciliação de mensagens otimistas |
 | `pages/Ai*` | Módulo IA (11 páginas: agentes, bases, domínios, assets, playground, etc.) |
 | `translate/i18n.js` | i18n (fallback `pt`) |
 

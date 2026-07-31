@@ -8,6 +8,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.94] — 2026-07-30
+
+### Corrigido (envio rápido de mensagens)
+
+- **`MessageInputCustom`** — envio de texto deixa de bloquear o campo enquanto aguarda WhatsApp/API; o texto é limpo e o foco volta imediatamente para permitir mensagens consecutivas por Enter.
+- **Mensagem otimista** — aparece instantaneamente na conversa com estado de envio e é reconciliada com a mensagem confirmada pelo servidor.
+- **Falha assíncrona** — remove somente a mensagem temporária, preserva qualquer novo texto digitado e exibe o erro sem travar a composição.
+- **`TicketsContext` / `MessagesList`** — adicionados handlers para substituir e remover mensagens temporárias sem duplicação após socket/resposta HTTP.
+- **Manual 1.5.94** — §5 e índice `frontend.md` sincronizados.
+
+---
+
 ## [1.5.93] — 2026-07-30
 
 ### Corrigido (cabeçalho, lightbox e recuperação de conta)

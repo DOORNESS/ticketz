@@ -33,13 +33,21 @@ const TicketsContextProvider = ({ children }) => {
     };
   }, []);
 
-  const notifyMessageSent = useCallback(message => {
+  const notifyMessageSent = useCallback((message, replaceId = null) => {
     const handlers = messageHandlersRef.current;
+    if (replaceId && message?.id && handlers.replace) {
+      handlers.replace(replaceId, message);
+      return;
+    }
     if (message?.id && handlers.append) {
       handlers.append(message);
       return;
     }
     handlers.refresh?.();
+  }, []);
+
+  const notifyMessageFailed = useCallback(messageId => {
+    messageHandlersRef.current.remove?.(messageId);
   }, []);
 
   return (
@@ -54,7 +62,8 @@ const TicketsContextProvider = ({ children }) => {
         listRevision,
         refreshTicketLists,
         registerMessageHandlers,
-        notifyMessageSent
+        notifyMessageSent,
+        notifyMessageFailed
       }}
     >
       {children}

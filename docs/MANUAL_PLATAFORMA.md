@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.93 — auditada contra o código
+**Versão:** 1.5.94 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -318,6 +318,7 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 ### UI da conversa (compacta)
 - Cabeçalho `TicketInfo`: mostra **telefone · nome · Ticket #ID**, com o telefone em primeiro lugar
 - Lightbox: imagens são buscadas por `/media/message/:messageId/stream` e abertas por `blob:`; URLs `blob:` e `data:` não recebem cache-buster
+- Envio de texto é otimista e não bloqueante: `MessageInputCustom` limpa e refoca o campo imediatamente, adiciona uma mensagem temporária na conversa e deixa o `POST /messages/:ticketId` rodar em segundo plano; `TicketsContext` confirma/substitui ou remove a mensagem temporária sem impedir a próxima digitação
 - Barra de ticket fechado: apenas ícones (Reabrir / Reabrir e chamar IA)
 - `TicketConversationToolbar`: ícones para Repositório, Tags (colapsável), Painel administrativo e estado IA
 - Diagnóstico IA (timeline, explicabilidade, copiloto) concentrados no drawer `TicketAdminPanel`, não no topo da conversa

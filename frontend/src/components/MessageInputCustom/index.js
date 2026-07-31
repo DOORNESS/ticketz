@@ -852,7 +852,7 @@ const MessageInputCustom = forwardRef((props, ref) => {
     useContext(ReplyMessageContext);
   const { setEditingMessage, editingMessage } = useContext(EditMessageContext);
   const { user } = useContext(AuthContext);
-  const { notifyMessageSent } = useContext(TicketsContext);
+  const { notifyMessageSent, notifyMessageFailed } = useContext(TicketsContext);
 
   const [signMessage, setSignMessage] = useLocalStorage("signOption", true);
 
@@ -1053,39 +1053,91 @@ const MessageInputCustom = forwardRef((props, ref) => {
 
   const handleSendMessage = async () => {
     if (inputMessage.trim() === "" || disableOption) return;
-    setLoading(true);
 
+    const originalInput = inputMessage.trim();
+    const quotedMessage = replyingMessage;
+    const messageBeingEdited = editingMessage;
     const messageBody = signMessage
-      ? `*${user?.name}:*\n${inputMessage.trim()}`
-      : inputMessage.trim();
+      ? `*${user?.name}:*\n${originalInput}`
+      : originalInput;
     const message = {
       read: 1,
       fromMe: true,
       mediaUrl: "",
       body: messageBody,
-      quotedMsg: replyingMessage
+      quotedMsg: quotedMessage
     };
 
     handlePresenceUpdate(null);
 
-    const url =
-      editingMessage !== null
-        ? `/messages/edit/${editingMessage.id}`
-        : `/messages/${ticketId}`;
-
-    try {
-      const { data } = await api.post(url, message);
-      notifyMessageSent?.(data);
-      setInputMessage("");
-      setShowEmoji(false);
-      setReplyingMessage(null);
-      setEditingMessage(null);
-    } catch (err) {
-      toastError(err);
-    } finally {
-      setLoading(false);
-      inputRef.current?.focus();
+    if (messageBeingEdited !== null) {
+      setLoading(true);
+      try {
+        const { data } = await api.post(
+          `/messages/edit/${messageBeingEdited.id}`,
+          message
+        );
+        notifyMessageSent?.(data);
+        setInputMessage("");
+        setShowEmoji(false);
+        setReplyingMessage(null);
+        setEditingMessage(null);
+      } catch (err) {
+        toastError(err);
+      } finally {
+        setLoading(false);
+        inputRef.current?.focus();
+      }
+      return;
     }
+
+    const temporaryId = `optimistic-${ticketId}-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    const now = new Date().toISOString();
+    notifyMessageSent?.({
+      id: temporaryId,
+      ticketId,
+      body: messageBody,
+      fromMe: true,
+      read: true,
+      ack: 1,
+      mediaType: null,
+      mediaUrl: "",
+      dataJson: JSON.stringify({
+        key: { id: temporaryId, fromMe: true },
+        message: { conversation: messageBody }
+      }),
+      quotedMsg: quotedMessage,
+      quotedMsgId: quotedMessage?.id || null,
+      userId: user?.id || null,
+      user,
+      contact: ticket.contact,
+      queueId: ticket.queueId,
+      createdAt: now,
+      updatedAt: now,
+      optimistic: true
+    });
+
+    setInputMessage("");
+    setShowEmoji(false);
+    setReplyingMessage(null);
+    setEditingMessage(null);
+    requestAnimationFrame(() => inputRef.current?.focus());
+
+    void api
+      .post(`/messages/${ticketId}`, message)
+      .then(({ data }) => {
+        notifyMessageSent?.(data, temporaryId);
+      })
+      .catch(err => {
+        notifyMessageFailed?.(temporaryId);
+        setInputMessage(current =>
+          current ? `${originalInput}\n${current}` : originalInput
+        );
+        toastError(err);
+        requestAnimationFrame(() => inputRef.current?.focus());
+      });
   };
 
   const handleStartRecording = async () => {
