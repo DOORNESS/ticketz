@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.94 — auditada contra o código
+**Versão:** 1.5.95 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -526,6 +526,8 @@ Quando um humano identifica bug sistêmico, pode solicitar conserto por e-mail s
 **Imagens no e-mail:** cada mídia visual de até ~1,5 MB é baixada do storage e enviada ao Resend como anexo inline com `content_id`; o HTML referencia `cid:<id>`. Isso evita URLs públicas do B2 e a remoção de `data:` URLs pelo Gmail.
 
 **Formulário externo:** `GET/POST /escalation/:token` também usa `Cache-Control: no-store`, evitando que navegador ou proxy mantenha uma resposta 500 transitória para um link válido.
+
+**CORS do formulário:** `corsOrigin` permite explicitamente a origem pública do próprio backend (`BACKEND_URL`, incluindo `https://api.fortmax.com.br`). Navegações e submissões do Chrome enviam `Origin` com esse domínio; rejeitá-lo impede o controller de renderizar o formulário e impede a IA de receber a orientação.
 
 **Entrega resiliente:** se a geração por modelo, a feature de IA ou o agente ativo estiver indisponível no momento do envio, `EscalationResolutionService` ainda entrega uma mensagem segura pelo WhatsApp pedindo ao cliente para aplicar a orientação e testar. Falha de log/finalização após entrega é apenas registrada e não transforma um envio bem-sucedido em erro no formulário.
 

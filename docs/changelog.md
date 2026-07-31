@@ -8,6 +8,17 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.95] — 2026-07-30
+
+### Corrigido (formulário público de escalação)
+
+- **Causa confirmada em produção** — o Chrome enviava `Origin: https://api.fortmax.com.br`, rejeitado pelo CORS antes de `EscalationEmailController`; por isso o navegador recebia JSON 500 e o formulário nunca acionava a IA.
+- **`corsOrigin`** — passa a aceitar `BACKEND_URL`, normaliza barras finais e inclui as origens locais/produção do próprio backend.
+- **Cobertura** — teste garante origem própria permitida e origem externa desconhecida rejeitada.
+- **Manual 1.5.95** — §11 e índice `api.md` sincronizados.
+
+---
+
 ## [1.5.94] — 2026-07-30
 
 ### Corrigido (envio rápido de mensagens)

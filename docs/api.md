@@ -22,6 +22,7 @@
 | GET | `/health`, `/version` |
 | GET | `/public-settings/:key` |
 | POST | `/auth/login` |
+| GET/POST | `/escalation/:token` (formulário público; aceita a origem do próprio `BACKEND_URL` no CORS) |
 
 ## API externa
 
