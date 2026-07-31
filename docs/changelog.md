@@ -8,6 +8,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.96] — 2026-07-31
+
+### Corrigido (envio de itens do Repositório)
+
+- **Causa confirmada em produção** — o item do ticket 92 foi enviado enquanto a sessão WhatsApp “Nível” estava reconectando (`ERR_WAPP_NOT_INITIALIZED`); não era defeito no arquivo selecionado.
+- **Retentativa de conexão** — texto e mídia do Repositório aguardam a recuperação da sessão e repetem o envio até quatro vezes, sem registrar uso antes da entrega.
+- **Arquivo temporário** — mídia local passa a ser carregada integralmente antes do envio, eliminando o `ENOENT` provocado pela remoção de um arquivo cujo stream ainda não havia sido aberto.
+- **Cobertura** — testes confirmam envio de imagem, PDF, documento e arquivo genérico, remoção segura do temporário e recuperação após falha transitória.
+- **Manual 1.5.96** — §45 e índice `backend.md` sincronizados.
+
+---
+
 ## [1.5.95] — 2026-07-30
 
 ### Corrigido (formulário público de escalação)

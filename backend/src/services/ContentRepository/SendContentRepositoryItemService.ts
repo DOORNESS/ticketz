@@ -16,6 +16,7 @@ import {
   buildRepositoryAccessForTicket
 } from "./ContentRepositoryService";
 import { logAiTicketTimelineEvent } from "../AiServices/Triage/AiTicketTimelineService";
+import { logger } from "../../utils/logger";
 
 export type SendRepositoryItemInput = {
   companyId: number;
@@ -61,6 +62,56 @@ const writeTempFile = async (
   );
   await fs.promises.writeFile(tempPath, Uint8Array.from(buffer));
   return tempPath;
+};
+
+const REPOSITORY_SEND_RETRY_DELAYS_MS = [0, 3000, 6000, 9000];
+
+const wait = (milliseconds: number): Promise<void> =>
+  new Promise(resolve => {
+    setTimeout(resolve, milliseconds);
+  });
+
+const sendWithConnectionRetry = async <T>(
+  operation: () => Promise<T>,
+  context: { ticketId: number; itemId: number; contentType: string }
+): Promise<T> => {
+  let lastError: unknown;
+
+  for (
+    let attempt = 0;
+    attempt < REPOSITORY_SEND_RETRY_DELAYS_MS.length;
+    attempt += 1
+  ) {
+    const delay = REPOSITORY_SEND_RETRY_DELAYS_MS[attempt];
+    if (delay) {
+      await wait(delay);
+    }
+
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      const retryable =
+        error instanceof AppError && error.message === "ERR_SENDING_WAPP_MSG";
+      const hasMoreAttempts =
+        attempt < REPOSITORY_SEND_RETRY_DELAYS_MS.length - 1;
+
+      if (!retryable || !hasMoreAttempts) {
+        throw error;
+      }
+
+      logger.warn(
+        {
+          ...context,
+          attempt: attempt + 1,
+          nextRetryMs: REPOSITORY_SEND_RETRY_DELAYS_MS[attempt + 1]
+        },
+        "Repository WhatsApp send waiting for connection recovery"
+      );
+    }
+  }
+
+  throw lastError;
 };
 
 export const sendRepositoryItemToTicket = async (
@@ -134,7 +185,7 @@ export const sendRepositoryItemToTicket = async (
     }
     if (!textPayload) {
       if (
-        ["image", "pdf", "audio", "video", "document"].includes(
+        ["image", "pdf", "audio", "video", "document", "file"].includes(
           item.contentType
         )
       ) {
@@ -142,11 +193,19 @@ export const sendRepositoryItemToTicket = async (
       }
       throw new AppError("ERR_REPOSITORY_EMPTY_PAYLOAD", 400);
     }
-    await SendWhatsAppMessage({
-      body: textPayload,
-      ticket,
-      userId: input.sentByAi ? null : input.userId
-    });
+    await sendWithConnectionRetry(
+      () =>
+        SendWhatsAppMessage({
+          body: textPayload,
+          ticket,
+          userId: input.sentByAi ? null : input.userId
+        }),
+      {
+        ticketId: ticket.id,
+        itemId: item.id,
+        contentType: item.contentType
+      }
+    );
     await recordRepositoryUsage({
       item,
       companyId: input.companyId,
@@ -180,12 +239,20 @@ export const sendRepositoryItemToTicket = async (
       size: buffer.length
     } as Express.Multer.File;
 
-    await SendWhatsAppMedia({
-      media,
-      ticket,
-      caption: textPayload || undefined,
-      ptt: item.contentType === "audio"
-    });
+    await sendWithConnectionRetry(
+      () =>
+        SendWhatsAppMedia({
+          media,
+          ticket,
+          caption: textPayload || undefined,
+          ptt: item.contentType === "audio"
+        }),
+      {
+        ticketId: ticket.id,
+        itemId: item.id,
+        contentType: item.contentType
+      }
+    );
   } finally {
     if (fs.existsSync(tempPath)) {
       fs.unlinkSync(tempPath);

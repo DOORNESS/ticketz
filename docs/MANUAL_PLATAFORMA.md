@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.95 — auditada contra o código
+**Versão:** 1.5.96 — auditada contra o código
 **Data:** julho/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -1645,6 +1645,13 @@ Script: `node backend/scripts/validate-content-repository-migrations.js` (após 
 - `search_repository` — busca itens ativos com filtros de fila/agente
 - `send_repository_item` — envia item validado; registra timeline
 
+### Entrega de mídia no WhatsApp
+
+- `SendContentRepositoryItemService` entrega imagem/foto, PDF, documento, áudio, vídeo e arquivo genérico preservando nome e MIME do item.
+- Se a sessão WhatsApp estiver em uma reconexão transitória, texto e mídia do Repositório são tentados novamente em até quatro envios (esperas de 3, 6 e 9 segundos). Uso e timeline só são registrados após confirmação do envio.
+- `SendWhatsAppMedia` materializa mídias locais de até o limite de upload em `Buffer` antes de chamar a biblioteca WhatsApp. Assim, o arquivo temporário pode ser removido com segurança ao fim do envio, sem o `ENOENT` causado por streams abertos de forma tardia.
+- Itens acima do limite configurado continuam sendo entregues por link, conforme a regra global de upload.
+
 ### Frontend
 
 - Admin: `/ai/repository` (`pages/AiRepository`)
@@ -1652,7 +1659,7 @@ Script: `node backend/scripts/validate-content-repository-migrations.js` (após 
 
 ### Limitações conhecidas (homologação jul/2026)
 
-- E2E WhatsApp (áudio/repositório) depende de sessão conectada no ambiente
+- E2E WhatsApp (áudio/repositório) depende de sessão válida no ambiente; reconexões transitórias durante o envio têm retentativa automática
 - Permissões granulares v2 (`ContentRepositoryPermissions`) criadas; integração completa em evolução
 - UI Favoritos/Recentes/Mais usados parcial no `RepositoryPanel`
 

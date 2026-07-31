@@ -9,6 +9,7 @@
 | Arquitetura e startup | [§2](MANUAL_PLATAFORMA.md#2-visão-geral-da-arquitetura) |
 | Estrutura pastas | [§35 — Backend](MANUAL_PLATAFORMA.md#35-estrutura-de-pastas--backend) |
 | Serviços | [§37 — Serviços principais](MANUAL_PLATAFORMA.md#37-serviços-principais-e-responsabilidades) |
+| Repositório multimodal e entrega WhatsApp | [§45](MANUAL_PLATAFORMA.md#45-repositório-multimodal-de-conteúdos-v15) |
 | Filas e roteamento IA | [§9](MANUAL_PLATAFORMA.md#9-filas-e-chatbot) |
 | Filas Bull | [§17](MANUAL_PLATAFORMA.md#17-filas-de-processamento-bullredis) |
 

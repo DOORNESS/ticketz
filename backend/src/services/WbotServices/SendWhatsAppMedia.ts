@@ -10,7 +10,6 @@ import path from "path";
 import ffmpegPath from "@ffmpeg-installer/ffmpeg";
 import mime from "mime-types";
 import iconv from "iconv-lite";
-import { Readable } from "stream";
 import AppError from "../../errors/AppError";
 import GetTicketWbot from "../../helpers/GetTicketWbot";
 import Ticket from "../../models/Ticket";
@@ -115,7 +114,7 @@ const validateOutboundAudio = async (
 const processRecordedAudio = async (
   audio: string
 ): Promise<{
-  stream: Readable;
+  buffer: Buffer;
   outputPath: string;
 }> => {
   const outputAudio = path.join(
@@ -130,7 +129,7 @@ const processRecordedAudio = async (
   await validateOutboundAudio(outputAudio, path.basename(outputAudio));
 
   return {
-    stream: fs.createReadStream(outputAudio),
+    buffer: await fs.promises.readFile(outputAudio),
     outputPath: outputAudio
   };
 };
@@ -146,9 +145,9 @@ export const getMessageFileOptions = async (
     fileName
   );
 
-  const url = pathMedia.match(/^https?:\/\//) && {
-    url: pathMedia
-  };
+  const url = pathMedia.match(/^https?:\/\//) ? { url: pathMedia } : null;
+  const localBuffer = url ? null : await fs.promises.readFile(pathMedia);
+  const mediaSource = url || (localBuffer as Buffer);
 
   let tempConvertedPath: string | null = null;
 
@@ -158,7 +157,7 @@ export const getMessageFileOptions = async (
     if (mimetype.startsWith("video/")) {
       options = {
         fileName,
-        video: url || { stream: fs.createReadStream(pathMedia) }
+        video: mediaSource
       };
     } else if (mimetype.startsWith("audio/")) {
       const needConvert = !url && isPanelRecordedAudio(fileName, mimetype);
@@ -168,21 +167,21 @@ export const getMessageFileOptions = async (
         tempConvertedPath = converted.outputPath;
         options = {
           fileName: fileName.replace(/\.[^.]+$/, ".ogg"),
-          audio: { stream: converted.stream },
+          audio: converted.buffer,
           mimetype: "audio/ogg; codecs=opus",
           ptt: true
         };
       } else if (mimetype === "audio/ogg") {
         options = {
           fileName,
-          audio: url || { stream: fs.createReadStream(pathMedia) },
+          audio: mediaSource,
           mimetype: "audio/ogg; codecs=opus",
           ptt: ptt ?? true
         };
       } else {
         options = {
           fileName,
-          audio: url || { stream: fs.createReadStream(pathMedia) },
+          audio: mediaSource,
           mimetype,
           ptt: !!ptt
         };
@@ -190,22 +189,21 @@ export const getMessageFileOptions = async (
     } else if (supportedImages.has(mimetype)) {
       options = {
         fileName,
-        image: url || { stream: fs.createReadStream(pathMedia) }
+        image: mediaSource
       };
     } else {
       options = {
         fileName,
-        document: url || { stream: fs.createReadStream(pathMedia) },
+        document: mediaSource,
         mimetype
       };
     }
 
     return options;
-  } catch (error) {
+  } finally {
     if (tempConvertedPath && fs.existsSync(tempConvertedPath)) {
       fs.unlinkSync(tempConvertedPath);
     }
-    throw error;
   }
 };
 
