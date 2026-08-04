@@ -20,23 +20,24 @@ describe("Agent brand isolation", () => {
       'Você é o Webin, assistente virtual da Fortmax. Responda: "Me chamo Webin, Assistente Virtual da Fortmax."'
   };
 
-  it("builds identity and greeting from the active agent", () => {
+  it("builds the identity reply from the active agent", () => {
     expect(buildAgentIdentityReply(nivel)).toMatch(/Nivelton.*Nível Cashback/i);
     expect(buildAgentIdentityReply(fortmax)).toMatch(/Webin.*Fortmax/i);
+  });
 
-    const nivelGreeting = buildAgentGreetingReply({
-      agent: nivel,
-      alreadyGreeted: false
-    });
-    const fortmaxGreeting = buildAgentGreetingReply({
-      agent: fortmax,
-      alreadyGreeted: false
-    });
+  it("keeps the opening greeting neutral, without naming the assistant", () => {
+    // A identidade só aparece quando o cliente pergunta; por isso a saudação
+    // não pode citar marca nem nome do agente.
+    const greetings = [nivel, fortmax].map(agent =>
+      buildAgentGreetingReply({ agent, alreadyGreeted: false })
+    );
 
-    expect(nivelGreeting).toMatch(/Nivelton/i);
-    expect(nivelGreeting).not.toMatch(/Fortmax/i);
-    expect(fortmaxGreeting).toMatch(/Webin.*Fortmax/i);
-    expect(fortmaxGreeting).not.toMatch(/Nivelton|Nível Cashback/i);
+    greetings.forEach(greeting => {
+      expect(greeting).toMatch(
+        /^Olá, (bom dia|boa tarde|boa noite)! Em que posso ajudar\?$/
+      );
+      expect(greeting).not.toMatch(/Nivelton|Webin|Fortmax|Nível Cashback/i);
+    });
   });
 
   it("never derives the brand from customer text", () => {

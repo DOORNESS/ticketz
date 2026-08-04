@@ -8,6 +8,23 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.98] — 2026-08-04
+
+### Corrigido (edição do prompt do agente era revertida a cada reinício)
+
+- **Causa** — `WireSupportLinesService` roda a cada boot (via `bootstrapAiPlatform`) e gravava `basePrompt: NIVEL_PROMPT` incondicionalmente. Qualquer alteração feita pelo admin no painel voltava para a semente no restart seguinte. A linha Fortmax já preservava o prompt existente; só a linha Nível sobrescrevia.
+- **Correção** — `resolveSeededBasePrompt` passa a valer para as duas marcas: o prompt do painel é a fonte de verdade e só é resemeado quando está vazio ou pertence à outra marca (contaminação Nível ↔ Fortmax, que é o caso que o religamento existe para reparar).
+
+### Alterado (saudação de abertura)
+
+- **Antes** — `"Me chamo Nivelton, assistente da Nível Cashback. Olá, bom dia! Como posso ajudar você hoje?"`, montado em `buildAgentGreetingReply` e portanto **impossível de mudar pelo prompt**.
+- **Agora** — `"Olá, Fernando, boa tarde! Em que posso ajudar?"`, ou `"Olá, boa tarde! Em que posso ajudar?"` quando o contato não tem pushName utilizável. Saudação seguinte no mesmo ticket: apenas `"Em que posso ajudar?"`.
+- **Nome do cliente** — `resolveCustomerFirstName` usa o primeiro nome do pushName do WhatsApp, descarta nome que é o próprio telefone, remove emoji e normaliza caixa alta.
+- **Identidade do agente** — continua respondida por `buildAgentIdentityReply` quando o cliente pergunta o nome; deixou apenas de abrir toda conversa.
+- **Cobertura** — `AgentGreeting.spec.ts` (13 casos) + specs de saudação atualizados em `AgentBrandIsolation` e `WhatsAppAiTurnService`.
+
+---
+
 ## [1.5.97] — 2026-08-03
 
 ### Corrigido (conexão WhatsApp presa em DISCONNECTED)

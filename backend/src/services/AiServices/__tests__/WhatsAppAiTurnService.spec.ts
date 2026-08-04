@@ -148,21 +148,7 @@ describe("WhatsAppAiTurnService", () => {
     expect(resolved).toContain("útil para minha empresa");
   });
 
-  it("greets with the active Fortmax agent identity", async () => {
-    mockFindOne.mockResolvedValueOnce(null);
-    const agent = {
-      name: "Webin",
-      basePrompt:
-        'Você é o Webin, assistente virtual da Fortmax. Responda: "Me chamo Webin, Assistente Virtual da Fortmax."'
-    } as AiAgent;
-
-    const reply = await buildFastGreetingReply(42, agent);
-
-    expect(reply).toMatch(/Webin.*Fortmax/i);
-    expect(reply).not.toMatch(/Nivelton|Nível Cashback/i);
-  });
-
-  it("greets with the active Nível agent identity", async () => {
+  it("greets by the customer first name, without naming the assistant", async () => {
     mockFindOne.mockResolvedValueOnce(null);
     const agent = {
       name: "Nivelton",
@@ -170,9 +156,33 @@ describe("WhatsAppAiTurnService", () => {
         'Você é o Nivelton. Responda: "Me chamo Nivelton, assistente da Nível Cashback."'
     } as AiAgent;
 
-    const reply = await buildFastGreetingReply(42, agent);
+    const reply = await buildFastGreetingReply(42, agent, {
+      name: "Fernando Tarin",
+      number: "5517991658811"
+    });
 
-    expect(reply).toMatch(/Nivelton.*Nível Cashback/i);
-    expect(reply).not.toMatch(/Fortmax/i);
+    expect(reply).toMatch(
+      /^Olá, Fernando, (bom dia|boa tarde|boa noite)! Em que posso ajudar\?$/
+    );
+    expect(reply).not.toMatch(/Nivelton|Nível Cashback|Fortmax|Webin/i);
+  });
+
+  it("omits the name when the contact has no usable pushName", async () => {
+    mockFindOne.mockResolvedValueOnce(null);
+    const agent = {
+      name: "Webin",
+      basePrompt:
+        'Você é o Webin, assistente virtual da Fortmax. Responda: "Me chamo Webin, Assistente Virtual da Fortmax."'
+    } as AiAgent;
+
+    const reply = await buildFastGreetingReply(42, agent, {
+      name: "5517991658811",
+      number: "5517991658811"
+    });
+
+    expect(reply).toMatch(
+      /^Olá, (bom dia|boa tarde|boa noite)! Em que posso ajudar\?$/
+    );
+    expect(reply).not.toMatch(/Nivelton|Nível Cashback|Fortmax|Webin/i);
   });
 });

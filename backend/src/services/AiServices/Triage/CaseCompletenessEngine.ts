@@ -304,7 +304,8 @@ export const isSubstantiveAiReply = (body: string): boolean => {
 };
 
 export const buildTimeBasedGreeting = (
-  timezone = "America/Sao_Paulo"
+  timezone = "America/Sao_Paulo",
+  customerName?: string | null
 ): string => {
   const hour = Number(
     new Intl.DateTimeFormat("en-US", {
@@ -314,15 +315,15 @@ export const buildTimeBasedGreeting = (
     }).format(new Date())
   );
 
-  if (hour >= 5 && hour < 12) {
-    return "Olá, bom dia!";
-  }
+  const period =
+    hour >= 5 && hour < 12
+      ? "bom dia"
+      : hour >= 12 && hour < 18
+        ? "boa tarde"
+        : "boa noite";
 
-  if (hour >= 12 && hour < 18) {
-    return "Olá, boa tarde!";
-  }
-
-  return "Olá, boa noite!";
+  const name = customerName?.trim();
+  return name ? `Olá, ${name}, ${period}!` : `Olá, ${period}!`;
 };
 
 export const buildShortHelpReply = (timezone = "America/Sao_Paulo"): string =>

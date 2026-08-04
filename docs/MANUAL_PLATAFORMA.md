@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.97 — auditada contra o código
+**Versão:** 1.5.98 — auditada contra o código
 **Data:** agosto/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -490,6 +490,21 @@ IA só opera quando `AiPlatformState.aiFeaturesEnabled === true` (setado em `boo
 Imagens recebidas no WhatsApp passam por `MediaInboundResolver` e pelo `visionModel` do agente. A análise visual roda já no ingest (`verifyMediaMessage` → `analyzeAndPersistInboundImageVision`), usando buffer local em data URL base64; o resumo fica em `MessageMediaFiles.visionSummary` e entra no turno como `[Imagem enviada pelo cliente]: …`. O turno IA preserva esse bloco mesmo quando a legenda é escolhida como texto principal (`InboundImageContext`). Com falha de leitura/análise, o turno ainda registra que houve imagem — a IA não deve dizer que “não vê imagens”.
 
 Confirmações visuais de recuperação de conta são tratadas por `AccountRecoverySuccessReplyService`: quando a tela informa que a solicitação foi enviada e que a nova senha chegará por e-mail, a resposta tranquiliza o cliente, repete somente o prazo visível, orienta a verificar entrada/spam e proíbe abrir chamado duplicado. Envelopes de edição `secretEncryptedMessage` são processados como protocolo e não entram como novo turno da IA.
+
+### Saudação e identidade do agente
+
+| Situação | Resposta |
+|----------|----------|
+| Abertura, contato com pushName | `Olá, {PrimeiroNome}, {bom dia/boa tarde/boa noite}! Em que posso ajudar?` |
+| Abertura, sem pushName utilizável | `Olá, {período}! Em que posso ajudar?` |
+| Já cumprimentado no mesmo ticket | `Em que posso ajudar?` |
+| Cliente pergunta o nome do assistente | `buildAgentIdentityReply` — extrai o trecho entre aspas do `basePrompt` |
+
+A saudação é montada em `AgentPersonaService.buildAgentGreetingReply` + `buildTimeBasedGreeting`, **não** no prompt do agente. O nome do cliente vem de `resolveCustomerFirstName`, que descarta `Contact.name` quando ele é o próprio telefone (o Ticketz preenche esse campo com o número quando não há pushName).
+
+### `basePrompt` é propriedade do painel
+
+`WireSupportLinesService` roda a cada boot e religa filas, bases e agentes. Ele **não** sobrescreve o `basePrompt` editado no painel: `resolveSeededBasePrompt` só regrava a semente quando o prompt está vazio ou contém marcadores da outra marca. Alterar esse comportamento faz toda customização do admin ser perdida no restart seguinte.
 
 ### Orquestrador — condição real
 Requer **ambos**:

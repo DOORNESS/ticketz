@@ -25,6 +25,7 @@ import {
   resolveAgentInformationalFallback
 } from "./AgentPersonaService";
 import { detectAgentIdentityQuestion } from "./AiHelpers";
+import { resolveCustomerFirstName } from "./resolveCustomerFirstName";
 
 const getWhatsAppTurnTimeoutMs = (): number =>
   parsePositiveInt(process.env.AI_WHATSAPP_TURN_TIMEOUT_MS, 25000);
@@ -59,10 +60,15 @@ const alreadyBotGreeted = async (
 
 export const buildFastGreetingReply = async (
   ticketId: number,
-  agent: AiAgent
+  agent: AiAgent,
+  contact?: { name?: string | null; number?: string | null } | null
 ): Promise<string> => {
   const greeted = await alreadyBotGreeted(ticketId, agent);
-  return buildAgentGreetingReply({ agent, alreadyGreeted: greeted });
+  return buildAgentGreetingReply({
+    agent,
+    alreadyGreeted: greeted,
+    customerName: resolveCustomerFirstName(contact)
+  });
 };
 
 const maskForLog = (text: string): string =>
@@ -174,7 +180,11 @@ export const runWhatsAppAiTurn = async ({
   }
 
   if (pureGreeting && !unanswered) {
-    const greetingReply = await buildFastGreetingReply(ticket.id, agent);
+    const greetingReply = await buildFastGreetingReply(
+      ticket.id,
+      agent,
+      ticket.contact
+    );
     await completeTurnDelivery({
       companyId,
       ticket,

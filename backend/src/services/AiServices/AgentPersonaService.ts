@@ -55,20 +55,27 @@ export const buildAgentIdentityReply = (
   return "Sou o assistente virtual deste canal.";
 };
 
+/**
+ * Saudação de abertura: curta, direta e sem apresentar o agente.
+ *
+ * O nome do assistente sai só quando o cliente pergunta
+ * (`detectAgentIdentityQuestion` → `buildAgentIdentityReply`); abrir com
+ * "Me chamo X" a cada conversa deixava o robô prolixo e não podia ser
+ * removido pelo prompt, porque o texto era montado aqui.
+ */
 export const buildAgentGreetingReply = ({
-  agent,
-  alreadyGreeted
+  alreadyGreeted,
+  customerName
 }: {
-  agent: AgentPersonaHint;
+  agent?: AgentPersonaHint | null;
   alreadyGreeted: boolean;
+  customerName?: string | null;
 }): string => {
-  const salutation = buildTimeBasedGreeting();
-
   if (alreadyGreeted) {
-    return `${salutation} Qual é sua dúvida? Vou ajudar com base nos materiais deste canal.`;
+    return "Em que posso ajudar?";
   }
 
-  return `${buildAgentIdentityReply(agent)} ${salutation} Como posso ajudar você hoje?`;
+  return `${buildTimeBasedGreeting("America/Sao_Paulo", customerName)} Em que posso ajudar?`;
 };
 
 export const resolveAgentInformationalFallback = (

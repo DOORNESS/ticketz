@@ -27,6 +27,37 @@ Em recuperação de conta ou senha, siga a ordem e os links oficiais recuperados
 Quando a base indicar formulário externo, não diga que transferiu o atendimento dentro do WhatsApp.
 Nunca fale como Fortmax, WebG3 ou FortControl. Se o assunto for Fortmax/WebG3, informe que este canal é da Nível Cashback.`;
 
+/**
+ * Prompt a gravar no religamento das linhas de suporte, que roda a cada boot.
+ *
+ * O prompt editado pelo admin no painel é a fonte de verdade e precisa
+ * sobreviver a reinícios — sobrescrevê-lo com a semente fazia toda edição ser
+ * revertida silenciosamente no próximo restart. A semente só volta quando o
+ * prompt está vazio ou pertence à outra marca (contaminação entre Nível e
+ * Fortmax), que é o caso que este religamento existe para reparar.
+ */
+export const resolveSeededBasePrompt = ({
+  currentPrompt,
+  seedPrompt,
+  foreignBrandMarkers
+}: {
+  currentPrompt?: string | null;
+  seedPrompt: string;
+  foreignBrandMarkers: string[];
+}): string => {
+  const current = currentPrompt?.trim();
+  if (!current) {
+    return seedPrompt;
+  }
+
+  const normalized = current.toLowerCase();
+  const contaminated = foreignBrandMarkers.some(marker =>
+    normalized.includes(marker.toLowerCase())
+  );
+
+  return contaminated ? seedPrompt : current;
+};
+
 type NamedRecord = {
   id: number;
   name: string;
@@ -233,9 +264,11 @@ const wireFortmaxLine = async (companyId: number) => {
 
   await agent.update({
     active: true,
-    basePrompt: agent.basePrompt?.includes("Nivelton")
-      ? FORTMAX_PROMPT
-      : agent.basePrompt || FORTMAX_PROMPT,
+    basePrompt: resolveSeededBasePrompt({
+      currentPrompt: agent.basePrompt,
+      seedPrompt: FORTMAX_PROMPT,
+      foreignBrandMarkers: ["nivelton", "nível cashback", "nivel cashback"]
+    }),
     fallbackQueueId: queue.id,
     maxTokens: 4096
   });
@@ -421,7 +454,11 @@ const wireNivelLine = async (companyId: number) => {
 
   await agent.update({
     active: true,
-    basePrompt: NIVEL_PROMPT,
+    basePrompt: resolveSeededBasePrompt({
+      currentPrompt: agent.basePrompt,
+      seedPrompt: NIVEL_PROMPT,
+      foreignBrandMarkers: ["webin", "fortmax", "webg3", "fortcontrol"]
+    }),
     fallbackQueueId: queue.id,
     maxTokens: 4096
   });
