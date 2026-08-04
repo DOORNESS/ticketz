@@ -8,6 +8,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.99] — 2026-08-04
+
+### Adicionado (pergunta de confirmação adiada — fluxo de recuperação de conta)
+
+- **Problema** — a IA mandava o cliente abrir o link de recuperação e, na mesma mensagem, perguntava "Conseguiu localizar sua conta?". O cliente ainda não tinha tido chance de tentar, então a pergunta chegava vazia e a conversa travava.
+- **Comportamento** — `deliverAiReply` recorta a confirmação final, entrega só as instruções e agenda a pergunta para ~60s depois (`AI_DEFERRED_QUESTION_SECONDS`). Um cron de 15s entrega, e **descarta** se qualquer mensagem tiver entrado no ticket nesse meio tempo.
+- **Escopo deliberado** — só o contexto de recuperação de conta/senha, e só perguntas de confirmação de resultado. Pedido de dado ("Qual é o CPF cadastrado?") nunca é adiado: é ele que destrava o atendimento.
+- **Arquitetura** — regra pura isolada em `AiDeferredQuestionRules` (sem model/Redis/fila), para ser testável e rápida; o serviço cuida de Redis e entrega.
+- **Cobertura** — `AiDeferredQuestion.spec.ts`, incluindo o caso real de produção. Suíte `AiServices` em 245 testes verdes.
+
+---
+
 ## [1.5.98] — 2026-08-04
 
 ### Corrigido (edição do prompt do agente era revertida a cada reinício)

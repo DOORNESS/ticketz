@@ -31,6 +31,7 @@ import { startAiKnowledgeIngestionQueue } from "./services/AiServices/KnowledgeC
 import { startAiContactMemoryQueue } from "./services/AiServices/ContactMemory/AiContactMemoryQueueService";
 import { startAiMetricsQueue } from "./services/AiServices/metrics/AiMetricsQueueService";
 import { runAiProactiveFollowUp } from "./services/AiServices/AiProactiveFollowUpService";
+import { runDeferredQuestionSweep } from "./services/AiServices/AiDeferredQuestionService";
 import { monitorHandoffSla } from "./services/AiServices/AiSlaMonitorService";
 import { runWhatsAppSessionWatchdog } from "./services/WbotServices/WhatsAppSessionWatchdogService";
 import OutOfTicketMessage from "./models/OutOfTicketMessages";
@@ -622,6 +623,18 @@ const aiSlaMonitorJob = new CronJob("*/15 * * * * *", async () => {
 });
 
 aiSlaMonitorJob.start();
+
+// Resolução de 15s: a pergunta de confirmação adiada precisa sair perto do
+// minuto combinado; o sweep de 1 minuto atrasaria até o dobro.
+const aiDeferredQuestionJob = new CronJob("*/15 * * * * *", async () => {
+  try {
+    await runDeferredQuestionSweep();
+  } catch (error) {
+    logger.error({ message: error?.message }, "aiDeferredQuestionJob failed");
+  }
+});
+
+aiDeferredQuestionJob.start();
 
 export async function startQueueProcess() {
   const { ensurePilotToolsRegistered } =

@@ -4,10 +4,12 @@ import SendWhatsAppMessage from "../WbotServices/SendWhatsAppMessage";
 import formatBody from "../../helpers/Mustache";
 import AppError from "../../errors/AppError";
 import { logger } from "../../utils/logger";
+import { isSimilarSocialAcknowledgement } from "./AiSocialReplyGuard";
 import {
-  hasRecentSocialAcknowledgement,
-  isSimilarSocialAcknowledgement
-} from "./AiSocialReplyGuard";
+  isDeferredQuestionEnabled,
+  scheduleDeferredQuestion
+} from "./AiDeferredQuestionService";
+import { splitDeferrableConfirmation } from "./AiDeferredQuestionRules";
 
 const DUPLICATE_WINDOW_MS = 120000;
 
@@ -81,16 +83,43 @@ export const sendAiWhatsAppReply = async ({
 /** Envia resposta ao cliente; repete com skip de duplicata se necessário. */
 export const deliverAiReply = async (
   ticket: Ticket,
-  body: string
+  body: string,
+  { allowDefer = true }: { allowDefer?: boolean } = {}
 ): Promise<boolean> => {
-  const sent = await sendAiWhatsAppReply({ ticket, body });
-  if (sent) {
-    return true;
+  let outbound = body;
+  let deferredQuestion: string | null = null;
+
+  // Cobrar "Conseguiu localizar sua conta?" na mesma mensagem que acabou de
+  // mandar o cliente abrir um link é pedir resposta antes de haver o que
+  // responder. A pergunta sai depois, e só se o cliente ficar em silêncio.
+  if (allowDefer && isDeferredQuestionEnabled()) {
+    const split = splitDeferrableConfirmation(body);
+    if (split) {
+      outbound = split.immediate;
+      deferredQuestion = split.deferred;
+    }
   }
 
-  return sendAiWhatsAppReply({
-    ticket,
-    body,
-    skipDuplicateCheck: true
-  });
+  const sent =
+    (await sendAiWhatsAppReply({ ticket, body: outbound })) ||
+    (await sendAiWhatsAppReply({
+      ticket,
+      body: outbound,
+      skipDuplicateCheck: true
+    }));
+
+  if (sent && deferredQuestion) {
+    await scheduleDeferredQuestion({
+      companyId: ticket.companyId,
+      ticketId: ticket.id,
+      question: deferredQuestion
+    }).catch(error => {
+      logger.warn(
+        { error, ticketId: ticket.id },
+        "Failed to schedule deferred AI question"
+      );
+    });
+  }
+
+  return sent;
 };

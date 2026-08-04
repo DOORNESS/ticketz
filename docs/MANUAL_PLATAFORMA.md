@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.98 — auditada contra o código
+**Versão:** 1.5.99 — auditada contra o código
 **Data:** agosto/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -501,6 +501,29 @@ Confirmações visuais de recuperação de conta são tratadas por `AccountRecov
 | Cliente pergunta o nome do assistente | `buildAgentIdentityReply` — extrai o trecho entre aspas do `basePrompt` |
 
 A saudação é montada em `AgentPersonaService.buildAgentGreetingReply` + `buildTimeBasedGreeting`, **não** no prompt do agente. O nome do cliente vem de `resolveCustomerFirstName`, que descarta `Contact.name` quando ele é o próprio telefone (o Ticketz preenche esse campo com o número quando não há pushName).
+
+### Pergunta de confirmação adiada
+
+Resposta que manda o cliente executar um passo e **na mesma mensagem** cobra o resultado ("Conseguiu localizar sua conta?") pede resposta antes de existir o que responder. O recorte acontece em `deliverAiReply`, ponto único por onde passam todas as respostas da IA.
+
+| Etapa | Onde |
+|-------|------|
+| Decisão do recorte (pura, sem I/O) | `AiDeferredQuestionRules.splitDeferrableConfirmation` |
+| Agendamento (Redis) | `AiDeferredQuestionService.scheduleDeferredQuestion` |
+| Entrega | cron `*/15 * * * * *` → `runDeferredQuestionSweep` |
+
+**Só recorta quando todas valem:** a mensagem termina em `?`; a pergunta é uma frase única de até 120 caracteres; o corpo anterior tem ≥40 caracteres **e** um passo acionável (URL, "clique", "acesse", "insira"…); o corpo está no **contexto de recuperação de conta/senha**; a pergunta é de **confirmação de resultado** (`conseguiu`, `deu certo`, `funcionou`, `apareceu`, `recebeu`, `localizou`…) e **não** um pedido de dado (`qual`, `quando`, `onde`, `me informe`…).
+
+Pedido de dado nunca é adiado — é ele que destrava o atendimento.
+
+**A pergunta é descartada** se qualquer mensagem entrar no ticket depois da instrução (cliente respondeu, ou humano/IA continuou), ou se o ticket sair da elegibilidade da IA (`canAiEngageTicket`).
+
+| Env | Padrão | Efeito |
+|-----|--------|--------|
+| `AI_DEFERRED_QUESTION_SECONDS` | `60` | Atraso da pergunta |
+| `AI_DEFERRED_QUESTION_ENABLED` | ligado | `false` desliga o recorte |
+
+Ampliar `RECOVERY_CONTEXT` muda a entrega de toda resposta da IA — é decisão de produto. Cobertura: `AiDeferredQuestion.spec.ts`.
 
 ### `basePrompt` é propriedade do painel
 
