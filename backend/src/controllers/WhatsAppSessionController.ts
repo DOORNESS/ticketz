@@ -47,6 +47,19 @@ const update = async (req: Request, res: Response): Promise<Response> => {
   });
 
   if (whatsapp.channel === "whatsapp") {
+    // Clearing `session` alone drops the creds but keeps every BaileysKeys row
+    // of the previous registration. authState() then pairs fresh creds with the
+    // old identity's signal keys, the handshake never completes and the panel
+    // hangs on "Waiting for QR Code". A new pairing must start from a clean
+    // slate, exactly like the disconnect and failed-import paths below.
+    await removeWbot(whatsapp.id, false).catch(error => {
+      logger.warn(
+        { error, whatsappId: whatsapp.id },
+        "Failed to drop in-memory session before new QR"
+      );
+    });
+    await BaileysKeys.destroy({ where: { whatsappId: whatsapp.id } });
+
     StartWhatsAppSession(whatsapp, companyId).catch(error => {
       logger.error(
         { error, whatsappId: whatsapp.id },
