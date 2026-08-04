@@ -1,7 +1,7 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.96 — auditada contra o código
-**Data:** julho/2026  
+**Versão:** 1.5.97 — auditada contra o código
+**Data:** agosto/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
 **Regra de manutenção:** `.cursor/rules/documentation-rules.mdc` + `docs/.documentation-rules.md`  
@@ -290,6 +290,33 @@ Ordem real em `wbotMessageListener.ts` → `handleMessage` (linhas ~1655–2184)
 - Socket sessão: `libs/wbot.ts` emite `company-{id}-whatsappSession` e global `whatsappSession`
 - Watchdog memória: `WhatsAppSessionWatchdogService` (15s pós-startup) + fila `WhatsappWatchdog` cron `*/5 * * * *`
 - Reconexão: conflito **440** preserva `BaileysKeys`; rotações automáticas de QR (428) não apagam credenciais; estado **PAIRING** durante scan
+
+### Guarda de abertura de sessão (`StartWhatsAppSession.ts`)
+
+`openingSessions` (`Map<whatsappId, Promise>`) impede dois `initWASocket` simultâneos na mesma conexão. Quem consulta a guarda:
+
+| Consumidor | Comportamento quando a guarda está ativa |
+|------------|------------------------------------------|
+| `WhatsAppSessionWatchdogService` | `isWhatsAppSessionStarting()` → pula a conexão |
+| `scheduleSessionRestart` (`libs/wbot.ts`) | pula o restart agendado |
+| `StartWhatsAppSession` | devolve a promise em curso (botão *reconectar* do painel vira no-op) |
+
+**A guarda é liberada pelo start limitado por `withTimeout` (`WHATSAPP_START_TIMEOUT_MS`, padrão 90s), nunca por `initWASocket`.** O Baileys pode deixar essa promise pendente para sempre; amarrar a liberação a ela mantinha `isWhatsAppSessionStarting()` verdadeiro indefinidamente e as três vias de recuperação acima ficavam bloqueadas — a conexão permanecia `DISCONNECTED` até reinício do processo, sem nenhuma mensagem inbound chegando ao Ticketz.
+
+Cobertura: `services/WbotServices/__tests__/StartWhatsAppSessionGuard.spec.ts`.
+
+### Reset de credenciais — sempre limpar `BaileysKeys` junto
+
+`Whatsapps.session` guarda as **creds**; `BaileysKeys` guarda as **chaves de sinal** da mesma identidade. As duas formam um par: zerar só uma delas produz um estado híbrido em que `authState()` monta creds novas (`initAuthCreds()`) sobre as chaves da identidade anterior.
+
+Todo caminho que inicia um pareamento novo limpa os dois:
+
+| Caminho | Rota |
+|---------|------|
+| Novo QR | `PUT /whatsappsession/:id` |
+| Reset de sessão | `POST /whatsappsession/:id/reset` |
+| Desconectar | `DELETE /whatsappsession/:id` |
+| Falha de importação de dump | `WhatsAppSessionController.capture` |
 - Wavoip: `WavoipController`, model `Wavoip`
 - Capture token: `BuildCaptureExtensionService`, `buildCaptureExtensionRoutes`
 

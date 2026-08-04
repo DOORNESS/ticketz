@@ -129,9 +129,6 @@ export const StartWhatsAppSession = async (
       })
       .catch(async err => {
         await markStartFailedIfStillOpening(whatsapp, err);
-      })
-      .finally(() => {
-        openingSessions.delete(whatsapp.id);
       });
 
     try {
@@ -142,5 +139,17 @@ export const StartWhatsAppSession = async (
   })();
 
   openingSessions.set(whatsapp.id, startPromise);
+
+  // The guard must be released by the *bounded* start (withTimeout), never by
+  // initWASocket: Baileys can leave that promise pending forever, and a guard
+  // that never clears makes isWhatsAppSessionStarting() permanently true. Both
+  // recovery paths — the 5min watchdog and scheduleSessionRestart — bail out on
+  // that flag, so the connection stays DISCONNECTED until the process restarts
+  // and even the panel's reconnect button becomes a no-op.
+  const releaseGuard = () => {
+    openingSessions.delete(whatsapp.id);
+  };
+  startPromise.then(releaseGuard, releaseGuard);
+
   return startPromise;
 };

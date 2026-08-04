@@ -8,6 +8,24 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.5.97] — 2026-08-03
+
+### Corrigido (conexão WhatsApp presa em DISCONNECTED)
+
+- **Causa confirmada em produção** — a conexão “Nivel” (`whatsappId 3`) ficou `DISCONNECTED` desde 03/08 16:41 BRT com `Whatsapps.updatedAt` congelado e **zero mensagens inbound desde 02/08 16:20**. A IA não respondeu porque a mensagem nunca chegou ao backend; a cadeia de IA estava íntegra (agentes ativos, filas ligadas, `openAiKey` presente).
+- **`StartWhatsAppSession`** — a guarda `openingSessions` era liberada no `finally` de `initWASocket`, promise que o Baileys pode deixar pendente para sempre. Com a guarda presa, `isWhatsAppSessionStarting()` retornava `true` indefinidamente e as três vias de recuperação (watchdog `*/5 * * * *`, `scheduleSessionRestart` e o botão *reconectar* do painel) pulavam a conexão. Só um reinício do processo resolvia.
+- **Correção** — a liberação passa a ser feita pelo start limitado por `withTimeout` (`WHATSAPP_START_TIMEOUT_MS`), tanto em sucesso quanto em falha, garantindo que a guarda sempre expire e o watchdog volte a recuperar a sessão.
+- **Cobertura** — `StartWhatsAppSessionGuard.spec.ts` cobre `initWASocket` que nunca resolve, start que rejeita, reentrada após timeout e reuso legítimo da promise em curso (3 dos 4 testes falham no código anterior).
+- **Manual 1.5.97** — §7 ganha a subseção “Guarda de abertura de sessão”; índice `backend.md` sincronizado.
+
+### Corrigido (novo pareamento deixava credenciais híbridas)
+
+- **`WhatsAppSessionController.update`** — o botão “Novo QR” zerava `Whatsapps.session` (as creds) mas mantinha todas as `BaileysKeys` do registro anterior, e não descartava o socket em memória. O `authState()` passava a combinar creds novas com as chaves de sinal da identidade antiga.
+- **Correção** — o início de um novo pareamento passa a chamar `removeWbot` e apagar as `BaileysKeys` da conexão, igualando o comportamento já existente em `reset`, no `disconnect` e no caminho de importação de dump que falha.
+- **Escopo** — higiene de credenciais. O travamento em “Waiting for QR Code” observado em produção foi causado pela guarda `openingSessions` presa (item acima), não por estas chaves: com a guarda solta, o QR voltou a ser gerado normalmente mesmo com 1032 chaves órfãs ainda na base.
+
+---
+
 ## [1.5.96] — 2026-07-31
 
 ### Corrigido (envio de itens do Repositório)
