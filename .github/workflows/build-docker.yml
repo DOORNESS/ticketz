@@ -11,8 +11,11 @@ on:
   workflow_dispatch:
 env:
   REGISTRY: ghcr.io
-  IMAGE_BACKEND: ticketz-oss/ticketz-backend
-  IMAGE_FRONTEND: ticketz-oss/ticketz-frontend
+  # Sem namespace fixo: o GITHUB_TOKEN só tem `packages: write` no owner do
+  # próprio repositório. Fixar `ticketz-oss` fazia todo push deste fork falhar
+  # com "denied: permission_denied: The requested installation does not exist".
+  IMAGE_BACKEND_NAME: ticketz-backend
+  IMAGE_FRONTEND_NAME: ticketz-frontend
 
 jobs:
   build-and-push-images:
@@ -24,6 +27,12 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Resolver namespace do registry
+        id: registry
+        run: |
+          # GHCR exige o nome da imagem em minúsculas; o owner pode ter maiúsculas.
+          echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -64,7 +73,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_BACKEND }}
+            ${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/${{ env.IMAGE_BACKEND_NAME }}
           labels: |
             org.opencontainers.image.title=ticketz-backend
           tags: |
@@ -79,7 +88,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_FRONTEND }}
+            ${{ env.REGISTRY }}/${{ steps.registry.outputs.owner }}/${{ env.IMAGE_FRONTEND_NAME }}
           labels: |
             org.opencontainers.image.title=ticketz-frontend
           tags: |
