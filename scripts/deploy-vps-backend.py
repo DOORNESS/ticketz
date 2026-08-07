@@ -534,6 +534,12 @@ def collect_files() -> List[Path]:
             raise FileNotFoundError(f"Missing build output: {path}")
         add(path)
 
+    # libs/ inteiro: PATCH_PATHS lista arquivos um a um, entao um modulo NOVO
+    # em libs/ nao subia e o backend quebrava com "Cannot find module" no
+    # verify-heavy-routes-ready — foi o que derrubou heavyRoutes em 06/08.
+    for path in sorted(DIST.glob("libs/*.js")):
+        add(path)
+
     for path in sorted(DIST.glob("services/AiServices/*.js")):
         add(path)
 
