@@ -35,7 +35,8 @@
     "set:user-password": "ts-node-dev --transpile-only scripts/set-user-password.ts",
     "wire:nivel-support": "ts-node-dev --transpile-only scripts/wireNivelSupport.ts",
     "wire:support-lines": "ts-node-dev --transpile-only scripts/wireSupportLines.ts",
-    "audit:support-lines": "ts-node-dev --transpile-only scripts/auditSupportLines.ts"
+    "audit:support-lines": "ts-node-dev --transpile-only scripts/auditSupportLines.ts",
+    "eval:ai-replies": "ts-node --transpile-only src/scripts/evalAiReplies.ts"
   },
   "author": "",
   "license": "MIT",

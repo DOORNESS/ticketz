@@ -10,6 +10,8 @@ import { parsePositiveInt, withAiTimeout } from "./withAiTimeout";
 import { resolveAgentInformationalFallback } from "./AgentPersonaService";
 import { buildDefaultOperationalRules } from "./AiPromptBuilder";
 import { buildContextualRetrievalQuery } from "./ContextualRetrievalQuery";
+import { buildConversationAttemptState } from "./ConversationAttemptStateService";
+import { dropDuplicatedCurrentTurn } from "./conversationHistoryUtils";
 
 const getKnowledgeLookupTimeoutMs = (): number =>
   parsePositiveInt(process.env.AI_INFORMATIONAL_KNOWLEDGE_TIMEOUT_MS, 8000);
@@ -104,8 +106,10 @@ export const tryInformationalDirectReply = async ({
   let chunkCount = 0;
   let hasReadyDocuments = false;
   let contextBlock = "";
-  const history = await buildConversationHistory(ticket.id, 6);
+  const rawHistory = await buildConversationHistory(ticket.id, 6);
+  const history = dropDuplicatedCurrentTurn(rawHistory, userText);
   const retrievalQuery = buildContextualRetrievalQuery(userText, history);
+  const attemptState = buildConversationAttemptState(history, userText);
 
   try {
     const knowledgeContext = await withAiTimeout(
@@ -158,8 +162,11 @@ export const tryInformationalDirectReply = async ({
                 "Use o material da base de conhecimento abaixo.",
                 "Não invente políticas, valores ou procedimentos que não estejam no material.",
                 buildDefaultOperationalRules(agent),
+                attemptState.promptBlock,
                 `Material da base:\n${contextBlock.slice(0, 12000)}`
-              ].join("\n\n")
+              ]
+                .filter(Boolean)
+                .join("\n\n")
             },
             ...history.map(item => ({
               role: item.role,

@@ -71,6 +71,25 @@ Conexões multifila com agente IA não exibem menu: a Nível entra silenciosamen
 
 Imagens de WhatsApp são analisadas no ingest e no turno IA; o bloco `[Imagem enviada pelo cliente]` é preservado no texto do turno e alimenta RAG/resposta.
 
+## Estado da conversa (o que já foi tentado)
+
+| Componente | Caminho |
+|------------|---------|
+| Falha relatada + passos descartados | `ConversationAttemptStateService.ts` — ver [§27](MANUAL_PLATAFORMA.md#27-fluxo-ia-inbound) |
+| Query de retrieval com histórico | `ContextualRetrievalQuery.ts` (últimos 3 turnos do cliente + atual) |
+| Anti-duplicação do turno atual | `conversationHistoryUtils.ts` |
+| Injeção no prompt | `AiPromptBuilder.buildAiSystemPrompt({ conversationState })` |
+
+**Avaliação de qualidade:**
+
+```bash
+# Determinístico (CI): prova o que o modelo recebe — query, fontes, restrições.
+npx jest src/services/AiServices/__tests__/NivelConversationQuality.spec.ts
+
+# Com provedor real (gasta cota): prova a redação da resposta.
+OPENAI_API_KEY=sk-... npm run eval:ai-replies
+```
+
 ## Diretório no código
 
 `backend/src/services/AiServices/` — 47+ serviços  

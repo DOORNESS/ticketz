@@ -75,6 +75,8 @@ import {
 } from "./AgentPersonaService";
 import { getRagMinimumSimilarity } from "./RagConfig";
 import { buildContextualRetrievalQuery } from "./ContextualRetrievalQuery";
+import { buildConversationAttemptState } from "./ConversationAttemptStateService";
+import { dropDuplicatedCurrentTurn } from "./conversationHistoryUtils";
 import { resolveAccountRecoverySuccessReply } from "./AccountRecoverySuccessReplyService";
 
 export type InboundMessageItem = {
@@ -771,8 +773,12 @@ const ProcessInboundMessageService = async ({
       ticket.queueId,
       { orchestratorMode }
     );
-    const history = await buildConversationHistory(ticket.id, 6);
+    const history = dropDuplicatedCurrentTurn(
+      await buildConversationHistory(ticket.id, 6),
+      userText
+    );
     const retrievalQuery = buildContextualRetrievalQuery(userText, history);
+    const attemptState = buildConversationAttemptState(history, userText);
 
     const [
       scheduleContext,
@@ -825,7 +831,8 @@ const ProcessInboundMessageService = async ({
       schedulePrompt: buildAiSchedulePromptBlock(scheduleContext),
       knowledgeContextBlock: contextHint,
       verifiedMemory,
-      toolsEnabled
+      toolsEnabled,
+      conversationState: attemptState.promptBlock
     });
 
     const requestStartedAt = Date.now();

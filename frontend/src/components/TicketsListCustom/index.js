@@ -365,10 +365,14 @@ const TicketsListCustom = props => {
         });
       }
 
-      if (
-        data.action === "update" &&
-        (listMode === "ai" || data.ticket.status === status)
-      ) {
+      if (data.action === "update" && listMode === "ai") {
+        // Na aba IA quem decide é shouldShowTicketInList, via syncTicketUpdate:
+        // insere quando o ticket pertence à lista e remove quando sai dela
+        // (ex.: humano assumiu). Filtrar por operationalState.listColumn aqui
+        // esvaziava a aba, porque em supervisão ela acompanha também tickets em
+        // handoff e pausados, cujo listColumn é "pending"/"open".
+        syncTicketUpdate(data.ticket);
+      } else if (data.action === "update" && data.ticket.status === status) {
         if (shouldUpdateTicket(data.ticket)) {
           syncTicketUpdate(data.ticket);
         }
@@ -388,15 +392,6 @@ const TicketsListCustom = props => {
         listMode !== "ai" &&
         status &&
         data.ticket.status !== status
-      ) {
-        dispatch({ type: "DELETE_TICKET", payload: data.ticket?.id });
-      }
-
-      if (
-        data.action === "update" &&
-        data.ticket?.operationalState?.listColumn &&
-        listMode === "ai" &&
-        data.ticket.operationalState.listColumn !== "ai"
       ) {
         dispatch({ type: "DELETE_TICKET", payload: data.ticket?.id });
       }

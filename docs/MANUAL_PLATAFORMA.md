@@ -372,6 +372,7 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Diagnóstico IA (timeline, explicabilidade, copiloto) concentrados no drawer `TicketAdminPanel`, não no topo da conversa
 - **Supervisão / observação:** `MessagesList` com `markAsRead={false}` carrega automaticamente todas as páginas de histórico e exibe botão **Carregar mensagens anteriores** quando houver mais registros; polling **1s** no chat + indicador **IA digitando…** quando `aiProcessingState=processing`; barra com **Participar**, **Solicitar conserto** (e-mail técnico via Resend), **Ensinar IA** e dialog para anexar à base **Respostas anexas** (`POST /tickets/:id/ai/annex-response`). Abrir o dialog não grava conhecimento: a base da marca só é criada no primeiro **Anexar à base**, quando também é vinculada automaticamente aos agentes ativos cuja persona pertence à mesma marca
 - **Lista IA:** ao assumir ticket (`userId` preenchido), o socket remove o item da aba **IA** imediatamente (`TicketsListCustom`)
+- **Escopo da aba IA:** em supervisão ela acompanha **todo** ticket com `aiAgentId`, sem dono e não fechado — incluindo handoff pendente e IA pausada, cujo `operationalState.listColumn` é `pending`/`open`, não `ai`. Quem decide entrada e saída da lista é exclusivamente `shouldShowTicketInList` (`helpers/ticketListVisibility.js`); filtrar por `listColumn` esvaziava a aba no primeiro evento de socket. Contrato coberto por `helpers/__tests__/ticketListVisibility.aiTab.spec.js`
 
 ### Controllers
 `TicketController.ts`, `TicketAiController.ts`, `AiLearningController.ts`
@@ -1049,6 +1050,25 @@ flowchart TD
 
 **Handoff keywords reais** (`AiHelpers.ts:15–43`): lista fixa inclui "humano", "atendente humano", "suporte humano", etc.  
 **Temas sensíveis:** cancelamento, contrato, cobrança, cpf, cnpj, senha, etc.
+
+### Estado da conversa no prompt (`ConversationAttemptStateService`)
+
+O histórico bruto vai ao modelo, mas "o cliente já tentou o passo X e falhou" se dilui no meio das mensagens: o modelo relê a última frase, reconhece o tema e reoferece o mesmo primeiro passo — mandando o cliente de volta ao formulário que ele acabou de dizer que não funcionou.
+
+`buildConversationAttemptState(history, userText)` transforma esse fato implícito em bloco explícito do prompt:
+
+| Entrada | Saída |
+|---------|-------|
+| `detectCustomerFailureReport(userText)` | Relato de tentativa ("já tentei"), resultado ausente ("não chegou o código") ou **pré-requisito perdido** ("perdi meu e-mail", "troquei de número") |
+| `extractAssistantOfferedSteps(history)` | Links que o assistente já enviou, com a frase que os acompanhava |
+
+Quando há falha, o bloco entra depois das regras operacionais (restrição mais específica vence a orientação genérica) listando os passos descartados e mandando avançar para a etapa seguinte do material recuperado. É **agnóstico de marca e de procedimento** — vale para senha, saldo, segunda via ou qualquer sequência oficial. Ele não decide qual é o próximo passo: isso continua vindo do RAG.
+
+Aplicado nos dois caminhos de resposta: `InformationalDirectReplyService` (turno direto do WhatsApp) e `ProcessInboundMessageService` (caminho completo, via `buildAiSystemPrompt({ conversationState })`).
+
+### Turno atual não duplicado (`conversationHistoryUtils`)
+
+`wbotMessageListener` persiste a mensagem (`verifyMessage`) **antes** de acionar a IA, então ela volta em `Message.findAll`. Como os dois caminhos anexam `{ role: "user", content: userText }` no fim, o modelo recebia o mesmo turno duas vezes seguidas. `dropDuplicatedCurrentTurn` remove a repetição do fim do histórico — inclusive as partes individuais quando o debounce agrupou várias mensagens em um `userText` concatenado.
 
 ---
 

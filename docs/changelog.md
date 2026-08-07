@@ -6,6 +6,19 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.6.1] — 2026-08-07
+
+### Corrigido
+
+- **Aba IA esvaziava sozinha (~3s):** `TicketsListCustom` apagava da lista todo ticket cujo `operationalState.listColumn !== "ai"`. Em supervisão a aba acompanha também handoff pendente e IA pausada, que o backend marca como `pending`/`open` — o primeiro evento de socket limpava a lista. A decisão passou a ser exclusivamente de `shouldShowTicketInList`. Contrato travado em `ticketListVisibility.aiTab.spec.js` (§8).
+- **Turno atual duplicado no prompt:** a mensagem do cliente é persistida por `verifyMessage` antes da IA rodar, então voltava em `Message.findAll` e ainda era anexada ao fim do array — o modelo via o mesmo turno duas vezes. `dropDuplicatedCurrentTurn` remove a repetição nos dois caminhos de resposta (§27).
+
+### Adicionado
+
+- **`ConversationAttemptStateService`** — deriva do histórico o que o cliente já tentou e falhou (relato de tentativa, resultado ausente ou pré-requisito perdido) e os links já oferecidos, injetando um bloco explícito no prompt que proíbe repetir a etapa descartada e manda avançar para a seguinte. Agnóstico de marca e procedimento (§27).
+- **Regras operacionais anti-repetição** em `DEFAULT_OPERATIONAL_RULES`: identificar a etapa em que o cliente já está, nunca reenviar passo que ele disse ter tentado, escolher a alternativa compatível com o relato e dar o passo mais resolutivo antes de pedir print/CPF.
+- **Avaliação de qualidade de atendimento:** `NivelConversationQuality.spec.ts` (determinístico, exercita retrieval com corpus controlado e registra query → fontes → restrições → resposta) e `npm run eval:ai-replies` (provedor real, fora do CI).
+
 ---
 
 ## [1.6.0] — 2026-08-06

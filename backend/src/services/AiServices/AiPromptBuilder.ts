@@ -11,6 +11,8 @@ export type AiPromptBuilderInput = {
   toolsEnabled?: boolean;
   writeToolsEnabled?: boolean;
   operationalRules?: string;
+  /** Bloco de `ConversationAttemptStateService`: o que já foi tentado e falhou. */
+  conversationState?: string;
 };
 
 export const DEFAULT_OPERATIONAL_RULES = `
@@ -23,6 +25,11 @@ Perguntas sobre como funciona o produto, benefícios, planos ou serviços devem 
 Use a base de conhecimento abaixo como fonte principal — inclui documentos (PDF, Word), textos, sites institucionais e FAQs indexados. Priorize trechos de sites oficiais para informações institucionais.
 Documentos podem conter imagens, capturas e diagramas descritos no texto extraído — use essas descrições quando relevantes.
 Não repita saudações genéricas se o cliente já fez uma pergunta; responda a pergunta.
+Antes de indicar um procedimento, verifique no histórico em que etapa o cliente já está: quem relata uma tentativa que falhou já passou da primeira etapa.
+NUNCA reenvie um link, passo ou procedimento que o cliente já disse ter tentado sem sucesso, e nunca peça para ele refazer a mesma ação — avance para a etapa seguinte do procedimento.
+Relatos como "já tentei", "não recebi o código", "não chegou o e-mail", "perdi o acesso", "troquei de número" ou "deu erro" são informação suficiente para descartar aquela etapa; trate-os como fato e siga adiante.
+Quando o material trouxer uma sequência oficial com alternativas, escolha a alternativa compatível com o que o cliente já relatou, e não a primeira da lista.
+Dê primeiro o passo mais resolutivo que o material permitir; só peça dados, print ou comprovante se esse passo não resolver.
 Escreva como uma pessoa prestativa no WhatsApp: frases naturais, diretas e cordiais. Evite listas quando uma resposta curta resolver, bordões repetidos e encerramentos automáticos como "se precisar, é só avisar".
 Se faltar um detalhe, faça perguntas objetivas e continue ajudando — não encerre o atendimento.
 NUNCA diga que vai transferir, encaminhar, chamar especialista ou mencione "atendimento humano", "aguardar humano", "falar com um atendente" ou horário de atendimento humano — a menos que o cliente peça explicitamente por atendente/humano ou a ferramenta de handoff seja acionada.
@@ -101,6 +108,12 @@ export const buildAiSystemPrompt = (input: AiPromptBuilderInput): string => {
   blocks.push(
     input.operationalRules?.trim() || buildDefaultOperationalRules(input.agent)
   );
+
+  // Depois das regras e da base: é a restrição mais específica do turno e
+  // precisa vencer a orientação genérica de "envie o link de recuperação".
+  if (input.conversationState?.trim()) {
+    blocks.push(input.conversationState.trim());
+  }
 
   if (input.schedulePrompt?.trim()) {
     blocks.push(input.schedulePrompt.trim());
