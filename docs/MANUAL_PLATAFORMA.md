@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.5.99 — auditada contra o código
+**Versão:** 1.6.0 — auditada contra o código
 **Data:** agosto/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -290,6 +290,27 @@ Ordem real em `wbotMessageListener.ts` → `handleMessage` (linhas ~1655–2184)
 - Socket sessão: `libs/wbot.ts` emite `company-{id}-whatsappSession` e global `whatsappSession`
 - Watchdog memória: `WhatsAppSessionWatchdogService` (15s pós-startup) + fila `WhatsappWatchdog` cron `*/5 * * * *`
 - Reconexão: conflito **440** preserva `BaileysKeys`; rotações automáticas de QR (428) não apagam credenciais; estado **PAIRING** durante scan
+
+### Reconexão e classificação de desconexão
+
+`keepAliveIntervalMs` **deve ficar em ~30s** (padrão da biblioteca; `WA_KEEPALIVE_INTERVAL_MS` ajusta). O WhatsApp derruba WebSocket ocioso em cerca de 1 minuto — com intervalos maiores o servidor fecha antes do primeiro ping e a sessão entra em ciclo `open → 428 → reconnect`.
+
+`libs/SessionReconnectPolicy.ts` classifica `lastDisconnect.output.statusCode`:
+
+| Status | Ação | Limpa credencial |
+|--------|------|------------------|
+| `401` loggedOut | novo pareamento | **sim** |
+| `403` forbidden | novo pareamento | **sim** |
+| `500` badSession | novo pareamento | **sim** |
+| `440` / "conflict" | reconecta (backoff 15s→120s) | não |
+| `408` connectionLost | reconecta | não |
+| `428` connectionClosed | reconecta | não |
+| `515` restartRequired | reconecta | não |
+| desconhecido | reconecta | não |
+
+**`428` não é QR expirado** — é `DisconnectReason.connectionClosed`, o fechamento do WebSocket. Tratar como expiração de QR descartava sessões válidas e forçava novo pareamento sem motivo.
+
+Backoff de reconexão: 5s → 10s → 20s → 40s → 60s (teto), zerado em `connection === "open"`. Cada conexão tem no máximo um restart agendado (`cancelSessionRestart` antes de cada `scheduleSessionRestart`), preservando o isolamento entre linhas.
 
 ### Guarda de abertura de sessão (`StartWhatsAppSession.ts`)
 

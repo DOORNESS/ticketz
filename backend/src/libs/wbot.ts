@@ -1,7 +1,6 @@
 import * as Sentry from "@sentry/node";
 import makeWASocket, {
   WASocket,
-  DisconnectReason,
   isJidBroadcast,
   CacheStore,
   WAMessageKey,
@@ -37,6 +36,11 @@ import waVersion from "../waversion.json";
 import Message from "../models/Message";
 import OutOfTicketMessage from "../models/OutOfTicketMessages";
 import BaileysKeys from "../models/BaileysKeys";
+import {
+  classifyDisconnect,
+  conflictBackoffMs,
+  nextBackoffMs
+} from "./SessionReconnectPolicy";
 import { DecoupledDriverServices } from "../services/DecoupledDriverServices/DecoupledDriverServices";
 import ShowTicketService from "../services/TicketServices/ShowTicketService";
 import GetTicketWbot from "../helpers/GetTicketWbot";
@@ -89,6 +93,26 @@ const pairingProtectedUntil = new Map<number, number>();
 const PAIRING_PROTECT_MS = 120000;
 
 const MIN_SESSION_RESTART_MS = 8000;
+
+const DEFAULT_KEEPALIVE_MS = 30000;
+
+const getKeepAliveIntervalMs = (): number => {
+  const parsed = Number(process.env.WA_KEEPALIVE_INTERVAL_MS);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_KEEPALIVE_MS;
+};
+
+/** Tentativas consecutivas de reconexao por conexao; zera quando abre. */
+const reconnectAttempts = new Map<number, number>();
+
+const bumpReconnectAttempt = (whatsappId: number): number => {
+  const next = (reconnectAttempts.get(whatsappId) || 0) + 1;
+  reconnectAttempts.set(whatsappId, next);
+  return next;
+};
+
+const resetReconnectAttempts = (whatsappId: number): void => {
+  reconnectAttempts.delete(whatsappId);
+};
 
 const cancelSessionRestart = (whatsappId: number): void => {
   const timer = sessionRestartTimers.get(whatsappId);
@@ -427,7 +451,11 @@ export const initWASocket = async (
           version,
           defaultQueryTimeoutMs: 60000,
           retryRequestDelayMs: 500,
-          keepAliveIntervalMs: 5 * 60 * 1000,
+          // O WhatsApp derruba WebSocket ocioso em ~1min. Com 5min o cliente
+          // só mandava ping depois de o servidor já ter fechado, gerando o
+          // ciclo open -> 428 Connection Terminated -> reconnect. 30s e o
+          // padrao da biblioteca; ajustavel por WA_KEEPALIVE_INTERVAL_MS.
+          keepAliveIntervalMs: getKeepAliveIntervalMs(),
           msgRetryCounterCache,
           // syncFullHistory: true,
           generateHighQualityLinkPreview: true,
@@ -473,120 +501,31 @@ export const initWASocket = async (
             if (connection === "close") {
               const disconnectError = lastDisconnect?.error as Boom | undefined;
               const statusCode = disconnectError?.output?.statusCode;
-              const pairingProtected =
-                Date.now() < (pairingProtectedUntil.get(id) || 0);
-              const isConflict =
-                statusCode === 440 ||
-                JSON.stringify(lastDisconnect?.error ?? "")
-                  .toLowerCase()
-                  .includes("conflict");
+              const { action, reason, clearCredentials } = classifyDisconnect(
+                statusCode,
+                lastDisconnect?.error ?? ""
+              );
 
-              if (statusCode === 403) {
-                // disconnected from whatsapp
-                await removeWbot(id);
-                await whatsapp.update({
-                  status: "DISCONNECTED",
-                  session: "",
-                  qrcode: ""
-                });
-                await DeleteBaileysService(whatsapp.id);
-                io.to(`company-${whatsapp.companyId}-admin`).emit(
-                  `company-${whatsapp.companyId}-whatsappSession`,
-                  {
-                    action: "update",
-                    session: whatsapp
-                  }
-                );
-                return;
-              }
+              // Um unico restart agendado por conexao: timers antigos morrem
+              // aqui, antes de qualquer novo agendamento.
+              cancelSessionRestart(id);
 
-              if (statusCode === 428) {
-                cancelSessionRestart(id);
-                await whatsapp.reload();
-                const keyCount = await BaileysKeys.count({
-                  where: { whatsappId: id }
-                });
-                const pairingWait =
-                  pairingProtected || whatsapp.status === "PAIRING" ? 8000 : 12000;
-
-                logger.info(
-                  { whatsappId: id, statusCode, keyCount, pairingWait },
-                  `Session QR expired — refreshing QR for ${name}`
-                );
-                await removeWbot(id, false);
-                await whatsapp.update({
-                  status: "OPENING",
-                  qrcode: "",
-                  retries: 0
-                });
-                await whatsapp.reload();
-                io.to(`company-${whatsapp.companyId}-admin`).emit(
-                  `company-${whatsapp.companyId}-whatsappSession`,
-                  {
-                    action: "update",
-                    session: whatsapp
-                  }
-                );
-                scheduleSessionRestart(whatsapp, pairingWait, keyCount > 0);
-                return;
-              }
-
-              if (isConflict) {
-                const pairingWait =
-                  pairingProtected || whatsapp.status === "PAIRING" ? 10000 : 15000;
+              if (action === "logout") {
                 logger.warn(
-                  { whatsappId: id, statusCode, pairingWait },
-                  `Session conflict — scheduling reconnect for ${name}`
+                  { whatsappId: id, statusCode, reason },
+                  `Session ${name} ended by WhatsApp (${reason}) — new pairing required`
                 );
-                cancelSessionRestart(id);
+                resetReconnectAttempts(id);
                 await removeWbot(id, false);
-                await whatsapp.update({
-                  status: "OPENING",
-                  qrcode: "",
-                  retries: 0
-                });
-                await whatsapp.reload();
-                io.to(`company-${whatsapp.companyId}-admin`).emit(
-                  `company-${whatsapp.companyId}-whatsappSession`,
-                  {
-                    action: "update",
-                    session: whatsapp
-                  }
-                );
-                scheduleSessionRestart(whatsapp, pairingWait, false);
-                return;
-              }
-
-              if (statusCode !== DisconnectReason.loggedOut) {
-                const pairingWait =
-                  pairingProtected || whatsapp.status === "PAIRING" ? 8000 : 8000;
-                await whatsapp.update({
-                  status: pairingProtected ? "OPENING" : "PENDING",
-                  qrcode: pairingProtected ? "" : whatsapp.qrcode
-                });
-                await whatsapp.reload();
-                io.to(`company-${whatsapp.companyId}-admin`).emit(
-                  `company-${whatsapp.companyId}-whatsappSession`,
-                  {
-                    action: "update",
-                    session: whatsapp
-                  }
-                );
-                removeWbot(id, false).then(() => {
-                  logger.info(
-                    `Reconnecting ${name} after transient disconnect (${pairingWait}ms)`
-                  );
-                  scheduleSessionRestart(whatsapp, pairingWait, false);
-                });
-              } else {
-                // logged out
-                await removeWbot(id);
                 await whatsapp.update({
                   status: "DISCONNECTED",
                   session: "",
                   qrcode: ""
                 });
-                await DeleteBaileysService(whatsapp.id);
+                if (clearCredentials) {
+                  await DeleteBaileysService(whatsapp.id);
+                }
+                await whatsapp.reload();
                 io.to(`company-${whatsapp.companyId}-admin`).emit(
                   `company-${whatsapp.companyId}-whatsappSession`,
                   {
@@ -594,7 +533,33 @@ export const initWASocket = async (
                     session: whatsapp
                   }
                 );
+                return;
               }
+
+              // A partir daqui a credencial continua valida: nunca limpar
+              // `session` nem apagar BaileysKeys, e nunca pedir QR novo.
+              const attempt = bumpReconnectAttempt(id);
+              const waitMs =
+                action === "conflict"
+                  ? conflictBackoffMs(attempt)
+                  : nextBackoffMs(attempt);
+
+              logger.info(
+                { whatsappId: id, statusCode, reason, attempt, waitMs },
+                `Session ${name} disconnected (${reason}) — reconnecting with existing credentials`
+              );
+
+              await removeWbot(id, false);
+              await whatsapp.update({ status: "OPENING", qrcode: "" });
+              await whatsapp.reload();
+              io.to(`company-${whatsapp.companyId}-admin`).emit(
+                `company-${whatsapp.companyId}-whatsappSession`,
+                {
+                  action: "update",
+                  session: whatsapp
+                }
+              );
+              scheduleSessionRestart(whatsapp, waitMs, true);
             }
 
             if (connection === "connecting") {
@@ -612,7 +577,10 @@ export const initWASocket = async (
             }
 
             if (connection === "open") {
+              // Abriu: mata qualquer restart pendente e zera o backoff, senao
+              // a proxima queda transitoria ja comecaria no teto de espera.
               cancelSessionRestart(id);
+              resetReconnectAttempts(id);
               retriesQrCodeMap.delete(id);
               pairingProtectedUntil.delete(id);
 

@@ -8,6 +8,18 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.6.0] — 2026-08-06
+
+### Corrigido (ciclo de reconexão WhatsApp — causa raiz de instabilidade crônica)
+
+- **Causa raiz** — `libs/wbot.ts` configurava `keepAliveIntervalMs: 5 * 60 * 1000`. O padrão da biblioteca é **30s**. O WhatsApp derruba WebSocket ocioso em ~1 min, então o servidor fechava a conexão muito antes do primeiro ping do cliente. O `ws.on('close')` do Baileys vira `Boom('Connection Terminated', { statusCode: 428 })`.
+- **Escala do problema** — no log arquivado: **19.383** eventos "QR expired", 19.413 "Connection Terminated", 26.145 closes. **Todos** os disconnects eram 428; zero ocorrências de 401, 403, 408, 440 ou 515.
+- **Erro de tratamento** — o handler classificava `428` como "QR expirado" e derrubava o socket, marcava `OPENING`, limpava `qrcode` e reiniciava com espera fixa de 12s e `retries: 0`. `428` é `DisconnectReason.connectionClosed` — não diz nada sobre a validade da credencial.
+- **Correção** — `keepAliveIntervalMs` volta a 30s (`WA_KEEPALIVE_INTERVAL_MS` ajusta). Nova `SessionReconnectPolicy` classifica a desconexão: só `401`, `403` e `500` limpam credenciais e pedem novo QR; `408`, `428`, `440` e `515` reconectam reaproveitando as credenciais; status desconhecido erra para o lado seguro e nunca apaga credencial. Backoff progressivo 5s→10s→20s→40s→60s, zerado quando a conexão abre. Conflito (`440`) usa backoff próprio 15s→120s. Um único restart agendado por conexão, com isolamento entre Nível e WebG3.
+- **Cobertura** — `SessionReconnectPolicy.spec.ts`, 16 casos: 428 transitório, 401/403 logout real, 500 credencial corrompida, conflito, abre-e-fecha, sequência de fechamentos, timer duplicado, isolamento entre conexões.
+
+---
+
 ## [1.5.99] — 2026-08-04
 
 ### Adicionado (pergunta de confirmação adiada — fluxo de recuperação de conta)
