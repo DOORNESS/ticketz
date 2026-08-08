@@ -1,5 +1,6 @@
 import { Op } from "sequelize";
 import AiAgent from "../../models/AiAgent";
+import Brand from "../../models/Brand";
 import KnowledgeBase from "../../models/KnowledgeBase";
 import KnowledgeCategory from "../../models/KnowledgeCategory";
 import KnowledgeDomain from "../../models/KnowledgeDomain";
@@ -95,6 +96,22 @@ export const ensureAnnexResponsesKnowledgeBase = async (
       ? null
       : await findByNameLoose(KnowledgeDomain, companyId, config.domainNames);
 
+  // A marca precisa ser gravada na base, não só herdada do domínio.
+  //
+  // `wireBrandLinesForCompany` roda a cada boot e refaz os vínculos do agente
+  // a partir das bases DAQUELA marca (`syncAgentKnowledgeBases` apaga e
+  // recria). Uma base de anexos com `brandId` nulo some dessa lista e é
+  // desvinculada do agente no próximo restart: o supervisor ensina, o
+  // conteúdo é indexado, e depois a IA simplesmente deixa de enxergá-lo.
+  // Foi o que aconteceu com "Respostas anexas — Nível" em produção.
+  const brandRecord =
+    brand === "default"
+      ? null
+      : await Brand.findOne({
+          where: { companyId, slug: brand },
+          attributes: ["id"]
+        });
+
   let base = await KnowledgeBase.findOne({
     where: {
       companyId,
@@ -110,6 +127,7 @@ export const ensureAnnexResponsesKnowledgeBase = async (
       description:
         "Respostas validadas por humanos durante supervisão da IA — anexadas manualmente.",
       knowledgeDomainId: domain?.id || null,
+      brandId: brandRecord?.id || null,
       active: true
     });
   } else {
@@ -127,6 +145,11 @@ export const ensureAnnexResponsesKnowledgeBase = async (
     }
     if (base.slug !== config.slug) {
       updates.slug = config.slug;
+    }
+    // Repara bases de anexos criadas antes desta correção, que ficaram sem
+    // marca e por isso eram desvinculadas do agente a cada restart.
+    if (!base.brandId && brandRecord?.id) {
+      updates.brandId = brandRecord.id;
     }
     if (Object.keys(updates).length) {
       await base.update(updates);
