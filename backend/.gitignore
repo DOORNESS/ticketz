@@ -9,3 +9,6 @@
 /.settings/
 /private/*
 !/private/index.html
+.env.test
+.env.homolog-sim
+.env.backup-real

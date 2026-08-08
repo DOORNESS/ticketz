@@ -119,6 +119,17 @@ const normalizeQueueName = (value: string): string =>
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
 
+/**
+ * Desempate entre filas da MESMA marca, quando a conexão tem várias.
+ *
+ * Continua olhando nome, e isso é intencional: aqui o nome não decide marca
+ * nenhuma — quem já cortou por marca foi `resolveQueueIdForTicket`. O que
+ * sobra é preferência operacional ("consumidor" antes de "empresa" na Nível,
+ * "suporte" antes de "financeiro" na Fortmax), que é convenção de nome mesmo.
+ *
+ * Marca nova cai no ramo genérico (`suporte` na frente) e funciona sem código
+ * novo; se um dia quiser ordem própria, o lugar é `Brand.settings`, não aqui.
+ */
 export const rankQueuesForAutomaticAiRouting = (
   queues: AutomaticAiQueueCandidate[]
 ): AutomaticAiQueueCandidate[] => {
@@ -154,7 +165,7 @@ export const rankQueuesForAutomaticAiRouting = (
 };
 
 export const resolveQueueIdForTicket = async (
-  ticket: Pick<Ticket, "queueId" | "whatsappId" | "companyId">
+  ticket: Pick<Ticket, "queueId" | "whatsappId" | "companyId" | "brandId">
 ): Promise<number | undefined> => {
   if (ticket.queueId) {
     return ticket.queueId;
@@ -165,14 +176,28 @@ export const resolveQueueIdForTicket = async (
   }
 
   const whatsapp = await Whatsapp.findByPk(ticket.whatsappId, {
-    include: [{ model: Queue, as: "queues", attributes: ["id", "name"] }]
+    include: [
+      { model: Queue, as: "queues", attributes: ["id", "name", "brandId"] }
+    ]
   });
 
   if (!whatsapp?.queues?.length) {
     return undefined;
   }
 
-  const rankedQueues = rankQueuesForAutomaticAiRouting(whatsapp.queues);
+  // Fila de outra marca não é candidata. Sem este corte, um ticket da Nível
+  // podia cair numa fila da Fortmax só porque a conexão tinha as duas
+  // vinculadas — e o ranking por nome logo abaixo não impede isso.
+  // Se a marca ainda não tem fila própria, mantemos todas: melhor rotear para
+  // algum lugar do que deixar o cliente sem fila.
+  const brandQueues = ticket.brandId
+    ? whatsapp.queues.filter(
+        queue => Number(queue.brandId) === Number(ticket.brandId)
+      )
+    : [];
+  const candidates = brandQueues.length ? brandQueues : whatsapp.queues;
+
+  const rankedQueues = rankQueuesForAutomaticAiRouting(candidates);
   const queuesWithAgent = await Promise.all(
     rankedQueues.map(async queue => ({
       queue,
@@ -227,9 +252,8 @@ export const getActiveAgentForTicket = async (
   // A marca do ticket é a fonte primária: o agente vem do vínculo explícito,
   // não de nome de conexão nem de fila. A resolução por fila continua como
   // fallback enquanto existirem tickets anteriores ao backfill.
-  const { getAgentForBrand } = await import(
-    "../BrandServices/BrandAiConfigService"
-  );
+  const { getAgentForBrand } =
+    await import("../BrandServices/BrandAiConfigService");
   const brandAgent = await getAgentForBrand(ticket.companyId, ticket.brandId);
   if (brandAgent) {
     return brandAgent;
@@ -326,17 +350,32 @@ const getLegacyKnowledgeBaseIdsForAgent = async (
 type AgentBrandHint = {
   name?: string | null;
   basePrompt?: string | null;
+  brandId?: number | null;
+  brand?: { slug?: string | null } | null;
 };
 
 export const resolveBrandKnowledgeBaseIds = async (
   companyId: number,
   agent: AgentBrandHint
 ): Promise<number[]> => {
+  // Caminho estrutural: o agente pertence a uma marca, e as bases daquela
+  // marca são as bases permitidas. Nome de base e de domínio não entram na
+  // decisão — é por isso que uma marca nova funciona sem tocar em código.
+  if (agent?.brandId) {
+    const owned = await KnowledgeBase.findAll({
+      where: { companyId, active: true, brandId: agent.brandId },
+      attributes: ["id"],
+      order: [["id", "ASC"]]
+    });
+    return owned.map(base => base.id);
+  }
+
   const brand = detectAgentBrand(agent);
   if (brand === "generic") {
     return [];
   }
 
+  // Daqui para baixo é transição: só roda para agente sem `brandId`.
   const domainHints =
     brand === "nivel"
       ? ["nivel cashback", "nível cashback", "nivel"]
@@ -411,7 +450,10 @@ export const getKnowledgeBaseIdsForAgent = async (
 ): Promise<number[]> => {
   const agent = await AiAgent.findOne({
     where: { id: agentId, companyId },
-    attributes: ["id", "name", "basePrompt"]
+    // `brandId` é o que faz `resolveBrandKnowledgeBaseIds` usar o vínculo
+    // estrutural em vez do casamento por nome. Sem ele na projeção, o caminho
+    // novo nunca executaria e o antigo seguiria valendo silenciosamente.
+    attributes: ["id", "name", "basePrompt", "brandId"]
   });
 
   const enrichWithBrandBases = async (ids: number[]): Promise<number[]> => {

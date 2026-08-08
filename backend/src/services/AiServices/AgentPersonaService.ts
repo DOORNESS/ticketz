@@ -1,5 +1,6 @@
 import AiAgent from "../../models/AiAgent";
 import Brand from "../../models/Brand";
+import { logger } from "../../utils/logger";
 import { buildTimeBasedGreeting } from "./Triage/CaseCompletenessEngine";
 import {
   buildBrandExternalSupportReply,
@@ -45,13 +46,55 @@ export const resolveOperationalRulesForBrand = (
 ): string =>
   buildBrandOperationalRules(brand) || buildAgentOperationalRules(agent);
 
-export type AgentBrand = "nivel" | "fortmax" | "generic";
+/**
+ * Um aviso por agente, não um por mensagem: o objetivo é revelar agente sem
+ * `brandId`, e repetir isso a cada turno só afogaria o log.
+ */
+const legacyBrandWarned = new Set<string>();
 
-type AgentPersonaHint = Pick<AiAgent, "name" | "basePrompt">;
+const reportLegacyAgentBrand = (
+  agent: { name?: string | null } | null | undefined,
+  slug: string
+): string => {
+  const key = `${agent?.name || "?"}:${slug}`;
+  if (!legacyBrandWarned.has(key)) {
+    legacyBrandWarned.add(key);
+    logger.warn(
+      { agentName: agent?.name || null, slug },
+      "legacyAgentBrandFallback: agente sem brandId — marca inferida por texto"
+    );
+  }
+  return slug;
+};
 
+/**
+ * Slug da marca. Deixou de ser união fechada quando marcas passaram a ser
+ * registro: uma marca nova criada no painel devolve o slug dela aqui, sem
+ * alteração de código.
+ */
+export type AgentBrand = string;
+
+type AgentPersonaHint = Pick<AiAgent, "name" | "basePrompt"> & {
+  brand?: { slug?: string | null } | null;
+};
+
+/**
+ * Marca do agente.
+ *
+ * O vínculo estrutural (`AiAgent.brand`) é a resposta. O casamento por texto
+ * abaixo é só transição, para agente que ainda não passou pelo backfill — e
+ * está instrumentado justamente para provar, em log, quando ainda acontece.
+ * Depois do backfill esse trecho não executa: nenhuma decisão de runtime
+ * depende de substring de nome ou de prompt.
+ */
 export const detectAgentBrand = (
   agent?: Partial<AgentPersonaHint> | null
 ): AgentBrand => {
+  const linked = agent?.brand?.slug?.trim();
+  if (linked) {
+    return linked;
+  }
+
   const text = `${agent?.name || ""} ${agent?.basePrompt || ""}`
     .toLowerCase()
     .normalize("NFD")
@@ -62,7 +105,7 @@ export const detectAgentBrand = (
     text.includes("nivel cashback") ||
     text.includes("agente nivel")
   ) {
-    return "nivel";
+    return reportLegacyAgentBrand(agent, "nivel");
   }
 
   if (
@@ -71,7 +114,7 @@ export const detectAgentBrand = (
     text.includes("webg3") ||
     text.includes("fortcontrol")
   ) {
-    return "fortmax";
+    return reportLegacyAgentBrand(agent, "fortmax");
   }
 
   return "generic";

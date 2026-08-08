@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.6.0 — auditada contra o código
+**Versão:** 1.7.0 — auditada contra o código
 **Data:** agosto/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -190,6 +190,31 @@ N:N entre funcionário e marca, sem duplicar login. `canAttend = false` = superv
 A troca é por configuração, não deploy, e reversível na mesma velocidade. Admin e super não são afetados. O gate síncrono (`canViewTicket`) lê um snapshot do Setting carregado por `ShowUserService` em `user.brandIsolationEnforced`.
 
 **Administração:** Administração → Marcas (`pages/Brands`) cria e edita marcas; o cadastro do funcionário (`UserModal` → `UserBrandsSelect`) atribui as marcas.
+
+### Marcas em operação
+
+| Marca | Estado | Recursos próprios |
+|-------|--------|-------------------|
+| `nivel` — Nível Cashback | operando | conexão, fila, agente (Nivelton), domínio, bases, tickets |
+| `fortmax` — Fortmax / WebG3 | operando | conexão, fila, agente (Webin), domínio, bases, tickets |
+| `fortcontrol` — FortControl | **criada e vazia** | nenhum — ver abaixo |
+
+FortControl hoje é **produto da suíte Fortmax** (PCP, estoque, financeiro), não uma operação com atendimento próprio: no código aparece apenas como assunto dentro do conhecimento Fortmax. A marca existe, é editável em Administração → Marcas e pode receber conexão, fila, agente, domínio, base e usuários pela interface — mas o backfill **não** lhe entrega nada da Fortmax.
+
+A regra em `legacyMatchBrandSlugByName` reflete isso: uma conexão só é reivindicada pelo FortControl quando o nome cita `fortcontrol` **e não** cita `fortmax`/`webg3`. Assim `Fortmax FortControl` continua sendo da Fortmax, e uma conexão dedicada `FortControl Suporte` nasce na marca certa. A ordem dos seeds em `BackfillBrandsService` também importa: operações existentes vêm antes, então reivindicam primeiro.
+
+### Fim da detecção por substring no runtime
+
+Nenhuma decisão de runtime depende mais de `includes("nivel")`, `includes("fortmax")`, `includes("webg3")` ou `includes("fortcontrol")` para descobrir a marca:
+
+| Ponto | Antes | Agora |
+|-------|-------|-------|
+| `AgentPersonaService.detectAgentBrand` | lia nome/prompt do agente | usa `AiAgent.brand.slug`; texto só como transição, com log `legacyAgentBrandFallback` |
+| `AiHelpers.resolveBrandKnowledgeBaseIds` | procurava domínio e base por nome | consulta `KnowledgeBases.brandId` |
+| `prepareCustomerFacingAiText` | `brand === "fortmax"` liberava telefone | libera quando a marca tem `supportContacts` com WhatsApp |
+| `resolveQueueIdForTicket` | qualquer fila da conexão | só filas da marca do ticket; sem fila própria, mantém todas |
+
+`rankQueuesForAutomaticAiRouting` continua olhando nome de fila **de propósito**: nesse ponto a marca já foi decidida, e o que resta é preferência operacional entre filas da mesma marca. Marca nova cai no ramo genérico e funciona sem código novo.
 
 ### Whatsapp (`backend/src/models/Whatsapp.ts`)
 Conexão WhatsApp: status, mensagens automáticas, token API, filas via `WhatsappQueue`.

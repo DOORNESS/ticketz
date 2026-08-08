@@ -42,6 +42,13 @@ type BrandSeed = {
 /**
  * Conteúdo migrado de `AgentPersonaService` e `CaseCompletenessEngine`.
  * A partir daqui ele é dado editável, não código.
+ *
+ * A ORDEM IMPORTA. O laço percorre os seeds em sequência e `linkRecords` só
+ * grava onde ainda está nulo, então quem vem antes reivindica primeiro. As
+ * operações já existentes (Nível, Fortmax) vêm antes de FortControl de
+ * propósito: um domínio chamado "Fortmax FortControl" casa com os padrões das
+ * duas, e assim continua sendo da Fortmax. Só um recurso dedicado, cujo nome
+ * não cita a operação existente, sobra para a marca nova.
  */
 const SEEDS: BrandSeed[] = [
   {
@@ -83,6 +90,28 @@ const SEEDS: BrandSeed[] = [
     queuePatterns: ["suporte fortmax", "suporte webg3", "suporte web g3"],
     agentPatterns: ["webin", "atendente virtual webg3"],
     domainPatterns: ["fortmax", "suporte fortmax"]
+  },
+  {
+    /**
+     * FortControl hoje é produto da suíte Fortmax (PCP, estoque, financeiro),
+     * não uma operação com atendimento próprio: no código ele aparece só como
+     * assunto dentro do conhecimento Fortmax, e a documentação o marca como
+     * "futuro". Por isso a marca é criada vazia e configurável, e os padrões
+     * abaixo são deliberadamente estreitos — se não existir recurso dedicado,
+     * ela permanece sem nada, em vez de tomar fila, agente ou base da Fortmax.
+     */
+    slug: "fortcontrol",
+    name: "FortControl",
+    shortLabel: "FortControl",
+    primaryColor: "#00897B",
+    sortOrder: 30,
+    informationalFallback:
+      "Não encontrei esse procedimento com segurança na base.",
+    supportContacts: [],
+    vocabulary: ["fortcontrol", "fort control"],
+    queuePatterns: ["suporte fortcontrol", "fortcontrol"],
+    agentPatterns: ["fortcontrol"],
+    domainPatterns: ["fortcontrol"]
   }
 ];
 

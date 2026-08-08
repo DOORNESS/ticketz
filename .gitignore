@@ -15,3 +15,5 @@ frontend/.env
 *.key
 deploy-cache/
 api-worker/node_modules/
+
+.DS_Store

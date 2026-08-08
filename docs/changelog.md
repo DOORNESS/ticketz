@@ -6,6 +6,27 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.4] — 2026-08-08
+
+### Adicionado — marca FortControl
+- Seed `fortcontrol` em `BackfillBrandsService`, criada vazia e configurável. Não recebe conexão, fila, agente nem base da Fortmax.
+- Regra de não-roubo em `legacyMatchBrandSlugByName`: só reivindica nome com `fortcontrol` sem `fortmax`/`webg3`. Coberta por teste em `BrandIsolation.spec.ts`.
+- Manual §Brand: tabela de marcas em operação e a razão de FortControl nascer vazia.
+
+### Alterado — fim do substring no runtime
+- `detectAgentBrand` passa a usar `AiAgent.brand.slug`; casamento por texto vira transição instrumentada (`legacyAgentBrandFallback`).
+- `resolveBrandKnowledgeBaseIds` consulta `KnowledgeBases.brandId` em vez de procurar domínio/base por nome.
+- `prepareCustomerFacingAiText`: liberar telefone passa a depender de `supportContacts` da marca, não do slug `fortmax`. Checagem de "portal sem URL" deixa de ser exclusiva da Fortmax.
+- `resolveQueueIdForTicket` filtra filas pela marca do ticket antes de ranquear.
+
+### Corrigido — triagem
+- Pedido explícito de humano era engolido por `shouldSkipSupportInvestigation` (a frase casa também com "informacional"), e o cliente ficava sem transferência fora do horário. A checagem passou para antes da classificação.
+- `investigateOrNone` retornava `action: "none"` fixo e `buildInvestigateDecision` nunca era chamada: toda a triagem por investigação estava inerte, embora `ProcessInboundMessageService` já tratasse `action === "investigate"`. Agora investiga quando há pergunta útil e cala quando não há.
+- Mock desatualizado em `AssetStorageKey.spec.ts` (faltava `extractStructuredTextFromBuffer`).
+- Resultado: suíte backend de 442/448 para **448/448**.
+
+---
+
 ## [1.7.3] — 2026-08-08
 
 ### Adicionado — isolamento fechado

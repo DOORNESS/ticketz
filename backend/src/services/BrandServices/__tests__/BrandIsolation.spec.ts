@@ -302,4 +302,28 @@ describe("12-13. marca nova não exige condicional no código", () => {
 
     await expect(resolveBrandIdForWhatsapp(1, 9)).resolves.toBe(30);
   });
+
+  /**
+   * FortControl é produto da suíte Fortmax e pode virar operação própria. A
+   * regra evita os dois erros opostos: dar à marca nova uma conexão que é da
+   * Fortmax, e deixar uma conexão dedicada sem marca.
+   */
+  describe("FortControl não herda conexão da Fortmax", () => {
+    it("conexão dedicada fica com FortControl", () => {
+      expect(legacyMatchBrandSlugByName("FortControl Suporte")).toBe(
+        "fortcontrol"
+      );
+    });
+
+    it("conexão que cita Fortmax continua da Fortmax", () => {
+      expect(legacyMatchBrandSlugByName("Fortmax FortControl")).toBe("fortmax");
+      expect(legacyMatchBrandSlugByName("WebG3 FortControl")).toBe("fortmax");
+    });
+
+    it("conexão da Fortmax sem citar FortControl segue igual", () => {
+      expect(legacyMatchBrandSlugByName("Suporte Fortmax WebG3")).toBe(
+        "fortmax"
+      );
+    });
+  });
 });

@@ -39,6 +39,20 @@ export const legacyMatchBrandSlugByName = (
     return "nivel";
   }
 
+  // FortControl é produto da suíte Fortmax e também pode virar operação
+  // própria. Só reivindica a conexão quando ela é dedicada: nome com
+  // "fortcontrol" e SEM "fortmax"/"webg3". Uma conexão chamada
+  // "Fortmax FortControl" continua sendo da Fortmax — a marca nova não herda
+  // conexão da operação existente por ambiguidade de nome.
+  if (
+    name.includes("fortcontrol") &&
+    !name.includes("fortmax") &&
+    !name.includes("webg3") &&
+    !name.includes("web g3")
+  ) {
+    return "fortcontrol";
+  }
+
   if (
     name.includes("fortmax") ||
     name.includes("webg3") ||

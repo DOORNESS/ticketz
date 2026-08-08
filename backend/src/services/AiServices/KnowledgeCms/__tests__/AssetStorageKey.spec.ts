@@ -12,7 +12,14 @@ jest.mock("../../../StorageService/StorageService", () => ({
 }));
 
 jest.mock("../../DocumentParser", () => ({
-  extractTextFromBuffer: jest.fn().mockResolvedValue("extracted word text")
+  extractTextFromBuffer: jest.fn().mockResolvedValue("extracted word text"),
+  // O handler de .docx passou a usar a versão estruturada. Como o mock
+  // substitui o módulo inteiro, faltar uma função aqui vira
+  // "is not a function" em runtime, não erro de tipo.
+  extractStructuredTextFromBuffer: jest.fn().mockResolvedValue({
+    text: "extracted word text",
+    format: "docx"
+  })
 }));
 
 describe("CMS asset storage key resolution", () => {
