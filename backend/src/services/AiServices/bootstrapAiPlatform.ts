@@ -11,6 +11,18 @@ import { ensureAiFirstResponderForAllCompanies } from "./EnsureAiFirstResponderS
 import { ensurePilotToolsRegistered } from "./tools/registerPilotTools";
 import { logger } from "../../utils/logger";
 
+/** Mesmas empresas que o religamento legado já usava. */
+const resolveWireCompanyIds = (): number[] => {
+  const raw = process.env.WIRE_SUPPORT_LINES_COMPANY_IDS?.trim();
+  if (raw) {
+    return raw
+      .split(",")
+      .map(id => Number(id.trim()))
+      .filter(id => Number.isFinite(id) && id > 0);
+  }
+  return [Number(process.env.WIRE_SUPPORT_LINES_COMPANY_ID || 1)];
+};
+
 export const bootstrapAiPlatform = async (): Promise<void> => {
   ensurePilotToolsRegistered();
 
@@ -43,10 +55,39 @@ export const bootstrapAiPlatform = async (): Promise<void> => {
 
     if (aiReady) {
       if (process.env.WIRE_SUPPORT_LINES !== "0") {
-        const { wireSupportLinesForConfiguredCompanies } =
-          await import("./WireSupportLinesService");
         try {
-          await wireSupportLinesForConfiguredCompanies();
+          /**
+           * Religamento por marca quando a estrutura já está vinculada; o
+           * caminho legado (casamento por nome) só entra enquanto alguma
+           * marca ainda estiver incompleta.
+           *
+           * É o que permite a Brand 3 funcionar sem `wireBrand3Line`: se ela
+           * tem conexão e agente vinculados, o laço genérico dá conta.
+           */
+          const companyIds = resolveWireCompanyIds();
+          const { hasCompleteBrandWiring, wireBrandLinesForCompany } =
+            await import("../BrandServices/WireBrandLinesService");
+
+          let legacyNeeded = false;
+
+          // eslint-disable-next-line no-restricted-syntax
+          for (const companyId of companyIds) {
+            if (await hasCompleteBrandWiring(companyId)) {
+              await wireBrandLinesForCompany(companyId);
+            } else {
+              legacyNeeded = true;
+            }
+          }
+
+          if (legacyNeeded) {
+            logger.warn(
+              { legacyBrandWiringFallback: true },
+              "Marca incompleta — usando religamento legado por nome"
+            );
+            const { wireSupportLinesForConfiguredCompanies } =
+              await import("./WireSupportLinesService");
+            await wireSupportLinesForConfiguredCompanies();
+          }
         } catch (error) {
           logger.error({ error }, "Failed to wire support lines on startup");
         }

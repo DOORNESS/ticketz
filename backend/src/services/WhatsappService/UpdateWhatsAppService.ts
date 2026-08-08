@@ -20,6 +20,8 @@ export interface WhatsappData {
   companyId?: number;
   token?: string;
   language?: string;
+  /** Marca da operação. É a conexão que define a marca do atendimento. */
+  brandId?: number | null;
 }
 
 interface Request {

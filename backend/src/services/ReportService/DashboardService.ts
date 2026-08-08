@@ -5,6 +5,7 @@ import { GetCompanySetting } from "../../helpers/CheckSettings";
 import User from "../../models/User";
 import TicketTraking from "../../models/TicketTraking";
 import sequelize from "../../database";
+import { getBrandAccessForUser } from "../BrandServices/BrandAccessService";
 import {
   listCounterSerie,
   TicketCounterSeries
@@ -60,14 +61,28 @@ type UserReportData = {
 export async function calculateTicketStatistics(
   companyId: number,
   start: Date,
-  end: Date
+  end: Date,
+  brandIds: number[] | null = null
 ): Promise<TicketTrackingStatistics> {
+  const brandScopedTickets =
+    brandIds === null
+      ? []
+      : [
+          {
+            model: Ticket,
+            attributes: [],
+            required: true,
+            where: { brandId: { [Op.in]: brandIds } }
+          }
+        ];
+
   const ticketStatistics = (await TicketTraking.findOne({
     attributes: [
       [fn("AVG", col("waitTime")), "avgWaitTime"],
       [fn("AVG", col("serviceTime")), "avgServiceTime"],
-      [fn("COUNT", col("id")), "totalClosed"]
+      [fn("COUNT", col("TicketTraking.id")), "totalClosed"]
     ],
+    include: brandScopedTickets,
     where: {
       companyId,
       createdAt: {
@@ -124,13 +139,40 @@ export async function calculateTicketStatistics(
   return ticketStatistics;
 }
 
-export async function ticketsStatusSummary(companyId: number) {
+/**
+ * `brandIds = null` significa "sem restrição" (admin ou company sem marcas);
+ * um array restringe. Array vazio devolve nada de propósito: é o usuário sem
+ * nenhuma marca permitida com o isolamento ligado.
+ */
+/**
+ * Escopo de marca do dashboard, derivado da permissão do usuário.
+ * Mesma regra do restante do sistema: "Todas" é todas as **permitidas**.
+ */
+export async function resolveDashboardBrandScope(
+  userId?: number | string
+): Promise<number[] | null> {
+  if (!userId) {
+    return null;
+  }
+
+  const access = await getBrandAccessForUser(userId);
+  return access.isUnrestricted ? null : access.visibleBrandIds || [];
+}
+
+export async function ticketsStatusSummary(
+  companyId: number,
+  brandIds: number[] | null = null
+) {
   const where: WhereOptions<Ticket> = {
     companyId,
     status: {
       [Op.or]: ["open", "pending"]
     }
   };
+
+  if (brandIds !== null) {
+    (where as Record<string, unknown>).brandId = { [Op.in]: brandIds };
+  }
 
   const groupsEnabled =
     (await GetCompanySetting(companyId, "groupsTab", "disabled")) === "enabled";
@@ -285,9 +327,14 @@ export async function userReport(companyId: number, start: Date, end: Date) {
   return result as unknown[] as UserStatistics[];
 }
 
-export async function statusSummaryService(companyId: number) {
+export async function statusSummaryService(
+  companyId: number,
+  userId?: number | string
+) {
+  const brandIds = await resolveDashboardBrandScope(userId);
+
   const [ticketsSummary, usersSummary] = await Promise.all([
-    ticketsStatusSummary(companyId),
+    ticketsStatusSummary(companyId, brandIds),
     usersStatusSummary(companyId)
   ]);
 
@@ -299,7 +346,8 @@ export async function statusSummaryService(companyId: number) {
 
 export async function ticketsStatisticsService(
   companyId: number,
-  params: DashboardDateRange
+  params: DashboardDateRange,
+  userId?: number | string
 ): Promise<TicketsStatisticsData> {
   let start: Date;
   let end = new Date();
@@ -328,7 +376,12 @@ export async function ticketsStatisticsService(
       transfer,
       close
     },
-    ticketStatistics: await calculateTicketStatistics(companyId, start, end)
+    ticketStatistics: await calculateTicketStatistics(
+      companyId,
+      start,
+      end,
+      await resolveDashboardBrandScope(userId)
+    )
   };
 }
 

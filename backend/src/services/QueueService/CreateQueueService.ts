@@ -5,6 +5,7 @@ import Company from "../../models/Company";
 import Plan from "../../models/Plan";
 
 interface QueueData {
+  brandId?: number | null;
   name: string;
   color: string;
   companyId: number;

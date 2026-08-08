@@ -33,6 +33,7 @@ import { QueueOptions } from "../QueueOptions";
 import SchedulesForm from "../SchedulesForm";
 import OpenHoursEditor from "../../components/OpenHoursEditor";
 import ConfirmationModal from "../ConfirmationModal";
+import BrandSelect from "../BrandSelect";
 
 const useStyles = makeStyles(theme => ({
   root: {
@@ -92,7 +93,8 @@ const QueueModal = ({ open, onClose, queueId }) => {
     name: "",
     color: "",
     greetingMessage: "",
-    outOfHoursMessage: ""
+    outOfHoursMessage: "",
+    brandId: null
   };
 
   const [colorPickerModalOpen, setColorPickerModalOpen] = useState(false);
@@ -248,7 +250,7 @@ const QueueModal = ({ open, onClose, queueId }) => {
                 }, 400);
               }}
             >
-              {({ touched, errors, isSubmitting, values }) => (
+              {({ touched, errors, isSubmitting, values, setFieldValue }) => (
                 <Form>
                   <DialogContent dividers>
                     <Field
@@ -351,6 +353,11 @@ const QueueModal = ({ open, onClose, queueId }) => {
                         />
                       )}
                     </div>
+                    <BrandSelect
+                      value={values.brandId ?? null}
+                      onChange={brandId => setFieldValue("brandId", brandId)}
+                      helperText="Marca a que esta fila pertence."
+                    />
                     <QueueOptions queueId={queueId} />
                     {(queue.mediaPath || attachment) && (
                       <Grid xs={12} item>

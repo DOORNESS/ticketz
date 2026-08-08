@@ -36,6 +36,7 @@
     "wire:nivel-support": "ts-node-dev --transpile-only scripts/wireNivelSupport.ts",
     "wire:support-lines": "ts-node-dev --transpile-only scripts/wireSupportLines.ts",
     "audit:support-lines": "ts-node-dev --transpile-only scripts/auditSupportLines.ts",
+    "audit:brands": "ts-node-dev --transpile-only src/scripts/auditBrands.ts",
     "eval:ai-replies": "ts-node --transpile-only src/scripts/evalAiReplies.ts"
   },
   "author": "",

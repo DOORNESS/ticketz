@@ -30,6 +30,7 @@ import { verifyMessage } from "../services/WbotServices/wbotMessageListener";
 import { getJidOf } from "../services/WbotServices/getJidOf";
 import ShowContactService from "../services/ContactServices/ShowContactService";
 import { verifyContact } from "../services/WbotServices/verifyContact";
+import { assertCanAttendTicketBrand } from "../services/BrandServices/BrandAccessService";
 
 type IndexQuery = {
   nextId?: string;
@@ -140,6 +141,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   const ticket = await ShowTicketService(ticketId, companyId);
   const { channel } = ticket;
+
+  // Responder é ação de atendimento: exige `canAttend` naquela marca.
+  // Quem só supervisiona pode abrir e acompanhar, mas não fala com o cliente.
+  await assertCanAttendTicketBrand(ticket, req.user.id);
 
   const requestUser = await User.findByPk(userId);
   const isOwner = !!ticket.userId && Number(ticket.userId) === Number(userId);

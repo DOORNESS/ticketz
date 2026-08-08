@@ -55,6 +55,9 @@ import { GetCompanySetting } from "../helpers/CheckSettings";
 import canViewTicket from "../helpers/canViewTicket";
 import { DecoupledDriverServices } from "../services/DecoupledDriverServices/DecoupledDriverServices";
 import { corsOrigin } from "../helpers/corsOrigin";
+import Brand from "../models/Brand";
+import { isBrandIsolationEnforced } from "../services/BrandServices/BrandAccessService";
+import { socketQueuesForUser } from "../helpers/socketBrandScope";
 
 const hasCompanyWideSocketAccess = (user: User): boolean =>
   user.profile === "admin" || user.super === true;
@@ -128,7 +131,17 @@ export const initIO = (httpServer: Server): SocketIO => {
     const userId = tokenData.id;
 
     if (userId && userId !== "undefined" && userId !== "null") {
-      user = await User.findByPk(userId, { include: [Queue] });
+      user = await User.findByPk(userId, { include: [Queue, Brand] });
+
+      // `canViewTicket` decide por marca lendo `user.brands` e
+      // `user.brandIsolationEnforced`. Sem carregar os dois aqui, o gate
+      // passava batido no socket enquanto a API HTTP barrava — vazamento por
+      // websocket com o endpoint corretamente protegido.
+      if (user) {
+        user.brandIsolationEnforced = await isBrandIsolationEnforced(
+          user.companyId
+        );
+      }
       if (user) {
         await user.save();
       } else {
@@ -226,12 +239,18 @@ export const initIO = (httpServer: Server): SocketIO => {
       if (!ticketId || ticketId === "undefined") {
         return;
       }
-      const userWithQueues =
-        user.queues?.length > 0
-          ? user
-          : await User.findByPk(user.id, {
-              include: [{ model: Queue, as: "queues" }]
-            });
+      let userWithQueues = user;
+      if (!user.queues?.length || !user.brands) {
+        userWithQueues = await User.findByPk(user.id, {
+          include: [
+            { model: Queue, as: "queues" },
+            { model: Brand, as: "brands" }
+          ]
+        });
+        if (userWithQueues) {
+          userWithQueues.brandIsolationEnforced = user.brandIsolationEnforced;
+        }
+      }
 
       Ticket.findByPk(ticketId).then(
         async ticket => {
@@ -298,7 +317,7 @@ export const initIO = (httpServer: Server): SocketIO => {
           socket.join(`company-${user.companyId}-notification`);
           socket.join(`company-${user.companyId}-handoff`);
         } else {
-          user.queues.forEach(queue => {
+          socketQueuesForUser(user).forEach(queue => {
             logger.debug(
               `User ${user.id} of company ${user.companyId} joined queue ${queue.id} channel.`
             );
@@ -311,7 +330,7 @@ export const initIO = (httpServer: Server): SocketIO => {
     });
 
     socket.on("joinHandoff", () => {
-      user.queues.forEach(queue => {
+      socketQueuesForUser(user).forEach(queue => {
         socket.join(`queue-${queue.id}-handoff`);
       });
     });
@@ -341,7 +360,7 @@ export const initIO = (httpServer: Server): SocketIO => {
           );
           socket.join(`company-${user.companyId}-${status}`);
         } else if (status === "pending") {
-          user.queues.forEach(queue => {
+          socketQueuesForUser(user).forEach(queue => {
             logger.debug(
               `User ${user.id} of company ${user.companyId} joined queue ${queue.id} pending tickets channel.`
             );

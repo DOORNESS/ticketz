@@ -6,6 +6,25 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.2] — 2026-08-08
+
+### Adicionado — isolamento completo
+
+- **Dashboard por marca:** `statusSummaryService` e `ticketsStatisticsService` recebem o usuário e aplicam `resolveDashboardBrandScope`. "Todas" continua significando todas as **permitidas**.
+- **`canAttend` no envio de mensagem:** `MessageController.store` chama `assertCanAttendTicketBrand`. Quem só supervisiona abre e acompanha, mas não fala com o cliente.
+- **Campo Marca nas telas administrativas:** Conexões, Filas e Agentes IA (`BrandSelect`). Uma marca nova é configurável ponta a ponta pela interface.
+- **`WireBrandLinesService`:** religamento genérico por Brand, substituindo `wireNivelLine`/`wireFortmaxLine`. `bootstrapAiPlatform` prefere o caminho genérico e só cai no legado enquanto alguma marca estiver incompleta — com `legacyBrandWiringFallback` no log.
+- **`npm run audit:brands`:** diagnóstico somente-leitura com marcas, órfãos de cada tipo, conexões ambíguas, funcionários sem marca e vínculos somente-supervisão. Sai com código 1 enquanto houver pendência bloqueante. É o relatório que autoriza ligar `brandIsolationEnforced`.
+
+### Corrigido — vazamento por websocket
+
+- `libs/socket.ts` carregava o usuário **sem** `brands`, então `canViewTicket` passava batido no socket enquanto a API HTTP barrava corretamente. Agora carrega `brands` + o snapshot de `brandIsolationEnforced`, na conexão e no `joinChatBox`.
+- `socketQueuesForUser` (`helpers/socketBrandScope.ts`): um atendente restrito não entra mais na sala de fila de outra marca, mesmo que a fila esteja no cadastro dele. Extraído para helper próprio para o teste importar a regra real em vez de replicá-la.
+
+### Documentado
+
+- `docs/PENDENCIA-migration-content-repository.md` — `db:migrate` do zero quebra em `20260719180000-content-repository` (FK para `KnowledgeDomains`, criada por migration posterior). Causa, impacto, por que **não** renomear e caminho seguro de correção.
+
 ## [1.7.1] — 2026-08-08
 
 ### Validado contra Postgres real
