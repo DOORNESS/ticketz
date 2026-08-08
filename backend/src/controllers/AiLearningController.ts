@@ -19,11 +19,13 @@ import {
 } from "../services/AiServices/AiReplayService";
 import User from "../models/User";
 import Ticket from "../models/Ticket";
+import { assertCanViewTicketBrand } from "../services/BrandServices/BrandAccessService";
 
 const loadTicketForUser = async (req: Request) => {
   const { ticketId } = req.params;
   const { companyId, id: userId } = req.user;
   const ticket = await ShowTicketService(Number(ticketId), companyId);
+  await assertCanViewTicketBrand(ticket, req.user.id);
   const user = await User.findByPk(userId);
 
   if (!user || user.companyId !== companyId) {

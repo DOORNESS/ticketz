@@ -31,8 +31,10 @@ import versionRoutes from "./versionRoutes";
 import ticketzOSSRoutes from "./ticketzOSSRoutes";
 import i18nRoutes from "./i18nRoutes";
 import wavoipRoutes from "./wavoipRoutes";
+import brandRoutes from "./brandRoutes";
 import aiRoutes from "./aiRoutes";
 import mediaRoutes from "./mediaRoutes";
+import escalationRoutes from "./escalationRoutes";
 
 const heavyRoutes = Router();
 
@@ -67,7 +69,20 @@ heavyRoutes.use(versionRoutes);
 heavyRoutes.use(ticketzOSSRoutes);
 heavyRoutes.use(i18nRoutes);
 heavyRoutes.use(wavoipRoutes);
+heavyRoutes.use(brandRoutes);
 heavyRoutes.use(aiRoutes);
 heavyRoutes.use(mediaRoutes);
+
+/**
+ * Link público do chamado por e-mail (`/escalation/:token`).
+ *
+ * Estava registrado apenas em `routes/index.ts`, que pertence ao `app.ts` —
+ * um Express que o `server.ts` importa só para ler `get("queues")` e nunca
+ * serve. O router realmente servido é este, então o link enviado ao técnico
+ * respondia 404 e a resposta nunca chegava ao cliente.
+ *
+ * Rota pública por natureza: a autorização é o token assinado, não sessão.
+ */
+heavyRoutes.use(escalationRoutes);
 
 export default heavyRoutes;

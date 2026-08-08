@@ -19,6 +19,8 @@ import { hash, compare } from "bcryptjs";
 import Ticket from "./Ticket";
 import Queue from "./Queue";
 import UserQueue from "./UserQueue";
+import Brand from "./Brand";
+import UserBrand from "./UserBrand";
 import Company from "./Company";
 import QuickMessage from "./QuickMessage";
 import UserSocketSession from "./UserSocketSession"; // Importação da nova model
@@ -71,6 +73,19 @@ class User extends Model<User> {
 
   @BelongsToMany(() => Queue, () => UserQueue)
   queues: Queue[];
+
+  /** Marcas que este funcionário pode acessar. Vazio = sem restrição
+   *  apenas para admin/super; para os demais significa sem acesso. */
+  @BelongsToMany(() => Brand, () => UserBrand)
+  brands: Brand[];
+
+  /**
+   * Snapshot do Setting `brandIsolationEnforced`, carregado por
+   * `ShowUserService`. Não é coluna: existe para `canViewTicket` — que é
+   * síncrono e é o gate usado por socket, controller, mídia e aceite — poder
+   * decidir sem virar async e sem consultar o banco a cada verificação.
+   */
+  brandIsolationEnforced?: boolean;
 
   @HasMany(() => QuickMessage, {
     onUpdate: "CASCADE",

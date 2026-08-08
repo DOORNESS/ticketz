@@ -22,6 +22,7 @@ import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
 import { useAiPageStyles } from "../../components/Ai/shared";
+import BrandSelect from "../../components/BrandSelect";
 import {
   AiFormSelect,
   AiFormTextField,
@@ -29,6 +30,7 @@ import {
 } from "../../components/Ai/forms";
 
 const defaultForm = {
+  brandId: null,
   name: "",
   slug: "",
   description: "",
@@ -98,7 +100,8 @@ const AiKnowledgeDomains = () => {
       description: domain.description || "",
       linkedSpecialty: domain.linkedSpecialty || "",
       sortOrder: domain.sortOrder ?? 100,
-      active: domain.active !== false
+      active: domain.active !== false,
+      brandId: domain.brandId ?? null
     });
     setOpen(true);
   };
@@ -178,6 +181,11 @@ const AiKnowledgeDomains = () => {
             value={form.name}
             onChange={e => setForm({ ...form, name: e.target.value })}
             helperText="Nome exibido no painel (ex.: Financeiro, Suporte)."
+          />
+          <BrandSelect
+            value={form.brandId ?? null}
+            onChange={brandId => setForm({ ...form, brandId })}
+            helperText="Marca dona deste domínio. Uma marca pode ter vários domínios; as bases dele seguem a mesma marca."
           />
           <AiFormTextField
             label="Slug"

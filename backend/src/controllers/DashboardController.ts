@@ -39,7 +39,11 @@ export const ticketsStatistic = async (
   const startedAt = Date.now();
 
   try {
-    const result = await ticketsStatisticsService(companyId, params);
+    const result = await ticketsStatisticsService(
+      companyId,
+      params,
+      req.user.id
+    );
     logger.info(
       { companyId, route: "dashboard/tickets", ms: Date.now() - startedAt },
       "Dashboard tickets statistics"
@@ -68,7 +72,7 @@ export const usersReport = async (
   const startedAt = Date.now();
 
   try {
-    const result = await usersReportService(companyId, params);
+    const result = await usersReportService(companyId, params, req.user.id);
     logger.info(
       { companyId, route: "dashboard/users", ms: Date.now() - startedAt },
       "Dashboard users report"
@@ -100,7 +104,7 @@ export const statusSummary = async (
   const startedAt = Date.now();
 
   try {
-    const dashboardData = await statusSummaryService(companyId);
+    const dashboardData = await statusSummaryService(companyId, req.user.id);
     logger.info(
       { companyId, route: "dashboard/status", ms: Date.now() - startedAt },
       "Dashboard status summary"

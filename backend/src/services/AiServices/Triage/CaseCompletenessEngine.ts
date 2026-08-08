@@ -114,10 +114,6 @@ const INFORMATIONAL_INTENT_PATTERNS = [
   /faz(?:er)? (?:pela|para) (?:minha|meu|a)?\s*empresa/i,
   /(?:qual [eé]|o que [eé]) (?:a |o )?(?:finalidade|funç(?:ão|ao))/i,
   /(?:d[uú]vida|informaç(?:ão|oes)) (?:sobre|do|da)/i,
-  /(?:o que [eé]|qual [eé]) (?:o |a )?n[ií]vel/i,
-  /n[ií]vel/i,
-  /cashback/i,
-  /fideliza(?:ç|c)[aã]o/i,
   /ajudar (?:a )?(?:minha|meu)/i,
   /funcionalidades|recursos/i,
   /benef[ií]cios/i,
@@ -159,6 +155,33 @@ const INVESTIGATION_TEMPLATE_PATTERNS = [
   /celular ou computador/i,
   /print, [aá]udio ou comprovante/i
 ];
+
+const normalizeForVocabulary = (value: string): string =>
+  (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+/** Casa termo próprio da marca respeitando limite de palavra. */
+export const matchesBrandVocabulary = (
+  text: string,
+  vocabulary: string[] = []
+): boolean => {
+  if (!vocabulary.length) {
+    return false;
+  }
+
+  const haystack = normalizeForVocabulary(text);
+
+  return vocabulary
+    .map(normalizeForVocabulary)
+    .filter(term => term.length >= 3)
+    .some(term =>
+      new RegExp(`\\b${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(
+        haystack
+      )
+    );
+};
 
 const hasAny = (text: string, patterns: (string | RegExp)[]): boolean =>
   patterns.some(pattern =>
@@ -269,7 +292,18 @@ export const isMetaConversationIntent = (text: string): boolean => {
   return META_CONVERSATION_PATTERNS.some(pattern => pattern.test(normalized));
 };
 
-export const isInformationalIntent = (text: string): boolean => {
+/**
+ * Intenção informativa.
+ *
+ * O vocabulário próprio de cada marca entra por `brandVocabulary`, vindo do
+ * registro da Brand. Antes, /nível/, /cashback/ e /fidelização/ estavam
+ * embutidos aqui — o classificador compartilhado conhecia uma marca só, e o
+ * vocabulário de uma marca nova era invisível até alguém editar este arquivo.
+ */
+export const isInformationalIntent = (
+  text: string,
+  brandVocabulary: string[] = []
+): boolean => {
   const normalized = text.trim();
   if (!normalized) {
     return false;
@@ -283,13 +317,20 @@ export const isInformationalIntent = (text: string): boolean => {
     return true;
   }
 
+  if (matchesBrandVocabulary(normalized, brandVocabulary)) {
+    return true;
+  }
+
   return INFORMATIONAL_INTENT_PATTERNS.some(pattern =>
     pattern.test(normalized)
   );
 };
 
-export const shouldSkipSupportInvestigation = (text: string): boolean =>
-  isInformationalIntent(text) || isShortHelpRequest(text);
+export const shouldSkipSupportInvestigation = (
+  text: string,
+  brandVocabulary: string[] = []
+): boolean =>
+  isInformationalIntent(text, brandVocabulary) || isShortHelpRequest(text);
 
 export const isInvestigationTemplateMessage = (body: string): boolean =>
   INVESTIGATION_TEMPLATE_PATTERNS.some(pattern => pattern.test(body.trim()));
@@ -500,13 +541,16 @@ export const evaluateCaseCompleteness = ({
 
 export const buildInvestigationQuestion = (
   snapshot: CaseCompletenessSnapshot,
-  latestMessage = ""
+  latestMessage = "",
+  brandVocabulary: string[] = []
 ): string | null => {
   if (isShortHelpRequest(latestMessage.trim())) {
     return buildShortHelpReply();
   }
 
-  if (shouldSkipSupportInvestigation(latestMessage)) {
+  // Pergunta sobre um termo próprio da marca é dúvida informativa, não caso
+  // de suporte — sem isso o robô abre triagem para "me explique o <produto>".
+  if (shouldSkipSupportInvestigation(latestMessage, brandVocabulary)) {
     return null;
   }
 

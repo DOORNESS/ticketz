@@ -318,7 +318,7 @@ const AiKnowledgeBases = () => {
               })
             }
             options={domainOptions}
-            helperText="Agrupa a base dentro de um domínio de negócio."
+            helperText="Agrupa a base dentro de um domínio de negócio. A marca da base é herdada do domínio — não há como uma base ficar em marca diferente da do seu domínio."
           />
           <AiFormTextField
             label="Descrição"

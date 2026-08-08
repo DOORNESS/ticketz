@@ -13,6 +13,8 @@ import Queue from "../models/Queue";
 import WhatsappQueue from "../models/WhatsappQueue";
 import UserQueue from "../models/UserQueue";
 import Company from "../models/Company";
+import Brand from "../models/Brand";
+import UserBrand from "../models/UserBrand";
 import Plan from "../models/Plan";
 import TicketNote from "../models/TicketNote";
 import QuickMessage from "../models/QuickMessage";
@@ -83,7 +85,9 @@ const sequelize = new Sequelize(dbConfig);
 
 const models = [
   Company,
+  Brand,
   User,
+  UserBrand,
   UserSocketSession,
   Contact,
   ContactTag,

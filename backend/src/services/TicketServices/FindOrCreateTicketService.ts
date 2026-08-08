@@ -10,6 +10,7 @@ import sequelize from "../../database";
 import Whatsapp from "../../models/Whatsapp";
 import Queue from "../../models/Queue";
 import { incrementCounter } from "../CounterServices/IncrementCounter";
+import { resolveBrandIdForWhatsapp } from "../BrandServices/BrandResolutionService";
 
 const createTicketMutex = new Mutex();
 
@@ -132,6 +133,11 @@ const internalFindOrCreateTicketService = async (
     }
 
     if (!ticket) {
+      // A origem define a marca, e ela é gravada no nascimento do ticket.
+      // A partir daqui a identidade é histórica: trocar conexão, fila ou
+      // agente depois não reescreve de qual operação foi este atendimento.
+      const brandId = await resolveBrandIdForWhatsapp(companyId, whatsappId);
+
       ticket = await Ticket.create({
         contactId: groupContact ? groupContact.id : contact.id,
         status: "pending",
@@ -139,7 +145,8 @@ const internalFindOrCreateTicketService = async (
         unreadMessages: incrementUnread ? 1 : 0,
         whatsappId,
         queueId,
-        companyId
+        companyId,
+        brandId
       });
 
       justCreated = true;

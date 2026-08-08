@@ -28,6 +28,8 @@ import { WhatsAppsContext } from "../../context/WhatsApp/WhatsAppsContext";
 import { Can } from "../Can";
 import TicketsQueueSelect from "../TicketsQueueSelect";
 import TicketsWhatsappFilter from "../TicketsWhatsappFilter";
+import TicketsBrandFilter from "../TicketsBrandFilter";
+import useBrands from "../../hooks/useBrands";
 import { Box, Button } from "@material-ui/core";
 import { TagsFilter } from "../TagsFilter";
 import { UsersFilter } from "../UsersFilter";
@@ -181,6 +183,37 @@ const TicketsManagerTabs = () => {
   const userQueueIds = userQueues.map(q => q.id);
   const [selectedQueueIds, setSelectedQueueIds] = useState(userQueueIds || []);
   const [selectedWhatsappIds, setSelectedWhatsappIds] = useState([]);
+  const { brands } = useBrands();
+  // Persistido por usuário: trocar de login não herda o filtro do anterior,
+  // e o backend revalida a permissão em toda consulta de qualquer forma.
+  const brandStorageKey = `ticketz:brandFilter:${user?.id || "anon"}`;
+  const [selectedBrandIds, setSelectedBrandIds] = useState(() => {
+    try {
+      const raw = localStorage.getItem(brandStorageKey);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(brandStorageKey, JSON.stringify(selectedBrandIds));
+    } catch {
+      // storage cheio ou indisponível — filtro segue valendo na sessão
+    }
+  }, [brandStorageKey, selectedBrandIds]);
+
+  // Marca removida do acesso do usuário some do filtro sozinha.
+  useEffect(() => {
+    if (!brands.length || !selectedBrandIds.length) return;
+    const allowed = brands.map(brand => brand.id);
+    const pruned = selectedBrandIds.filter(id => allowed.includes(id));
+    if (pruned.length !== selectedBrandIds.length) {
+      setSelectedBrandIds(pruned);
+    }
+  }, [brands, selectedBrandIds]);
   const [prefetchSiblingLists, setPrefetchSiblingLists] = useState(false);
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
@@ -369,9 +402,15 @@ const TicketsManagerTabs = () => {
           />
         </Tabs>
       </Paper>
+      <TicketsBrandFilter
+        brands={brands}
+        selectedBrandIds={selectedBrandIds}
+        onChange={setSelectedBrandIds}
+      />
       <TicketsWhatsappFilter
         whatsapps={whatsApps || []}
         selectedWhatsappIds={selectedWhatsappIds}
+        selectedBrandIds={selectedBrandIds}
         onChange={setSelectedWhatsappIds}
       />
       <Paper square elevation={0} className={classes.ticketOptionsBox}>
@@ -424,6 +463,7 @@ const TicketsManagerTabs = () => {
           style={{ marginLeft: 6 }}
           selectedQueueIds={selectedQueueIds}
           selectedWhatsappIds={selectedWhatsappIds}
+          selectedBrandIds={selectedBrandIds}
           userQueues={user?.queues}
           onChange={values => setSelectedQueueIds(values)}
         />
@@ -487,6 +527,7 @@ const TicketsManagerTabs = () => {
             supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
             selectedWhatsappIds={selectedWhatsappIds}
+            selectedBrandIds={selectedBrandIds}
             fetchEnabled={tabOpen === "open" || prefetchSiblingLists}
             updateCount={val => setOpenCount(val)}
             style={applyPanelStyle("open")}
@@ -498,6 +539,7 @@ const TicketsManagerTabs = () => {
             supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
             selectedWhatsappIds={selectedWhatsappIds}
+            selectedBrandIds={selectedBrandIds}
             fetchEnabled={tabOpen === "pending" || prefetchSiblingLists}
             updateCount={val => setPendingCount(val)}
             style={applyPanelStyle("pending")}
@@ -510,6 +552,7 @@ const TicketsManagerTabs = () => {
             supervision={isMasterAdmin}
             selectedQueueIds={selectedQueueIds}
             selectedWhatsappIds={selectedWhatsappIds}
+            selectedBrandIds={selectedBrandIds}
             fetchEnabled={tabOpen === "ai" || prefetchSiblingLists}
             updateCount={val => setAiCount(val)}
             style={applyPanelStyle("ai")}
@@ -524,6 +567,7 @@ const TicketsManagerTabs = () => {
           showAll={true}
           selectedQueueIds={selectedQueueIds}
           selectedWhatsappIds={selectedWhatsappIds}
+          selectedBrandIds={selectedBrandIds}
           showTabGroups={showTabGroups}
         />
       </TabPanel>
@@ -533,6 +577,7 @@ const TicketsManagerTabs = () => {
           showAll={true}
           selectedQueueIds={selectedQueueIds}
           selectedWhatsappIds={selectedWhatsappIds}
+          selectedBrandIds={selectedBrandIds}
           showTabGroups={showTabGroups}
         />
       </TabPanel>
@@ -558,6 +603,7 @@ const TicketsManagerTabs = () => {
           users={selectedUsers}
           selectedQueueIds={selectedQueueIds}
           selectedWhatsappIds={selectedWhatsappIds}
+          selectedBrandIds={selectedBrandIds}
           showTabGroups={showTabGroups}
         />
       </TabPanel>

@@ -12,6 +12,7 @@ import { buildDefaultOperationalRules } from "./AiPromptBuilder";
 import { buildContextualRetrievalQuery } from "./ContextualRetrievalQuery";
 import { buildConversationAttemptState } from "./ConversationAttemptStateService";
 import { dropDuplicatedCurrentTurn } from "./conversationHistoryUtils";
+import { restrictKnowledgeBasesToBrand } from "../BrandServices/BrandAiConfigService";
 
 const getKnowledgeLookupTimeoutMs = (): number =>
   parsePositiveInt(process.env.AI_INFORMATIONAL_KNOWLEDGE_TIMEOUT_MS, 8000);
@@ -97,10 +98,12 @@ export const tryInformationalDirectReply = async ({
   agent: AiAgent;
   userText: string;
 }): Promise<InformationalDirectReplyResult> => {
-  const knowledgeBaseIds = await getKnowledgeBaseIdsForAgent(
+  // Isolamento de marca: qualquer base que pertença a outra marca sai do
+  // contexto antes de chegar ao RAG.
+  const knowledgeBaseIds = await restrictKnowledgeBasesToBrand(
     companyId,
-    agent.id,
-    ticket.queueId
+    ticket.brandId,
+    await getKnowledgeBaseIdsForAgent(companyId, agent.id, ticket.queueId)
   );
 
   let chunkCount = 0;

@@ -29,6 +29,7 @@ import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import QueueSelect from "../QueueSelect";
+import BrandSelect from "../BrandSelect";
 import HelpOutlineOutlinedIcon from "@material-ui/icons/HelpOutlineOutlined";
 
 import { SelectLanguage } from "../SelectLanguage";
@@ -82,6 +83,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
     language: localStorage.getItem("language") || ""
   };
   const [whatsApp, setWhatsApp] = useState(initialState);
+  const [brandId, setBrandId] = useState(null);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
 
   useEffect(() => {
@@ -91,6 +93,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
       try {
         const { data } = await api.get(`whatsapp/${whatsAppId}?session=0`);
         setWhatsApp(data);
+        setBrandId(data.brandId ?? null);
 
         const whatsQueueIds = data.queues?.map(queue => queue.id);
         setSelectedQueueIds(whatsQueueIds);
@@ -102,7 +105,7 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
   }, [whatsAppId]);
 
   const handleSaveWhatsApp = async values => {
-    const whatsappData = { ...values, queueIds: selectedQueueIds };
+    const whatsappData = { ...values, brandId, queueIds: selectedQueueIds };
     delete whatsappData["queues"];
     delete whatsappData["session"];
 
@@ -307,6 +310,11 @@ const WhatsAppModal = ({ open, onClose, whatsAppId }) => {
                     helperText="Opcional. Deixe vazio para conectar via QR Code. Use só se integrar por API."
                   />
                 </div>
+                <BrandSelect
+                  value={brandId}
+                  onChange={setBrandId}
+                  helperText="Define a marca dos atendimentos que nascem nesta conexão."
+                />
                 <QueueSelect
                   selectedQueueIds={selectedQueueIds}
                   onChange={selectedIds => setSelectedQueueIds(selectedIds)}

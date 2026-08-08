@@ -26,6 +26,7 @@ import { listToolExecutionLogs } from "../services/AiServices/tools/ToolExecutor
 import canAccessTicketAiData from "../helpers/canAccessTicketAiData";
 import { serializeTicketWithOperationalState } from "../services/TicketServices/TicketOperationalStateService";
 import { sendTicketEscalationEmail } from "../services/AiServices/EscalationEmailService";
+import { assertCanViewTicketBrand } from "../services/BrandServices/BrandAccessService";
 
 const loadTicketForUser = async (req: Request) => {
   const { ticketId } = req.params;
@@ -36,6 +37,11 @@ const loadTicketForUser = async (req: Request) => {
   if (!user || user.companyId !== companyId) {
     throw new AppError("ERR_FORBIDDEN", 403);
   }
+
+  // Isolamento de marca no loader: todas as ações de IA sobre ticket passam
+  // por aqui, então o gate cobre assumir, pausar, copiloto e timeline de uma
+  // vez, em vez de depender de lembrar em cada handler.
+  await assertCanViewTicketBrand(ticket, userId);
 
   return { ticket, user };
 };

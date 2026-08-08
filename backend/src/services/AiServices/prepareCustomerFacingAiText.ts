@@ -17,15 +17,29 @@ const mentionsInboundImage = (text: string): boolean =>
   /\bveja (?:a )?imagem\b/i.test(text) ||
   /\benviei (?:a )?imagem\b/i.test(text);
 
+type AgentWithBrand = Pick<AiAgent, "name" | "basePrompt"> & {
+  brand?: {
+    slug?: string | null;
+    supportContacts?: { whatsapp?: string | null }[] | null;
+  } | null;
+};
+
 export const prepareCustomerFacingAiText = (
   text: string,
   userText: string,
-  agent?: Pick<AiAgent, "name" | "basePrompt"> | null
+  agent?: AgentWithBrand | null
 ): string => {
   const brand = detectAgentBrand(agent);
-  let sanitized = sanitizeAiOutboundText(text, {
-    allowSupportPhone: detectAgentBrand(agent) === "fortmax"
-  }).trim();
+
+  // Divulgar telefone é propriedade da marca, não do slug "fortmax": quem tem
+  // contato de suporte cadastrado pode divulgá-lo. Uma marca nova com contatos
+  // passa a poder sem tocar em código; a Nível, sem contatos, segue sem poder.
+  const contacts = agent?.brand?.supportContacts;
+  const allowSupportPhone = contacts
+    ? contacts.some(contact => contact?.whatsapp)
+    : brand === "fortmax";
+
+  let sanitized = sanitizeAiOutboundText(text, { allowSupportPhone }).trim();
 
   if (
     (mentionsInboundImage(userText) || mentionsInboundImage(text)) &&
@@ -39,12 +53,15 @@ export const prepareCustomerFacingAiText = (
   }
 
   const unsupportedProcedure = UNSUPPORTED_PROCEDURE_PATTERN.test(sanitized);
-  const unsupportedFortmaxPortal =
-    brand === "fortmax" &&
+
+  // Mandar o cliente "acessar o portal" sem dizer onde não ajuda ninguém, e
+  // isso não é específico da Fortmax — vale para qualquer marca. Antes a
+  // checagem estava presa ao slug e nascia desligada para marca nova.
+  const portalWithoutUrl =
     /portal (?:de|do) clientes?/i.test(sanitized) &&
     !/https?:\/\//i.test(sanitized);
 
-  if (unsupportedProcedure || unsupportedFortmaxPortal) {
+  if (unsupportedProcedure || portalWithoutUrl) {
     return resolveAgentInformationalFallback(agent, userText);
   }
 

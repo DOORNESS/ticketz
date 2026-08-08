@@ -23,6 +23,8 @@ import { i18n } from "../../translate/i18n";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import QueueSelect from "../QueueSelect";
+import UserBrandsSelect from "../UserBrandsSelect";
+import useBrands from "../../hooks/useBrands";
 import { AuthContext } from "../../context/Auth/AuthContext";
 import { Can } from "../Can";
 
@@ -79,6 +81,8 @@ const UserModal = ({ open, onClose, userId }) => {
 
   const [user, setUser] = useState(initialState);
   const [selectedQueueIds, setSelectedQueueIds] = useState([]);
+  const { brands } = useBrands();
+  const [userBrandLinks, setUserBrandLinks] = useState([]);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -90,6 +94,14 @@ const UserModal = ({ open, onClose, userId }) => {
         });
         const userQueueIds = data.queues?.map(queue => queue.id);
         setSelectedQueueIds(userQueueIds);
+
+        const { data: links } = await api.get(`/users/${userId}/brands`);
+        setUserBrandLinks(
+          (Array.isArray(links) ? links : []).map(link => ({
+            brandId: link.brandId,
+            canAttend: link.canAttend !== false
+          }))
+        );
       } catch (err) {
         toastError(err);
       }
@@ -106,11 +118,22 @@ const UserModal = ({ open, onClose, userId }) => {
   const handleSaveUser = async values => {
     const userData = { ...values, queueIds: selectedQueueIds };
     try {
+      let savedUserId = userId;
       if (userId) {
         await api.put(`/users/${userId}`, userData);
       } else {
-        await api.post("/users", userData);
+        const { data } = await api.post("/users", userData);
+        savedUserId = data?.id;
       }
+
+      // Vínculo de marca vive em rota própria: o cadastro do usuário não
+      // conhece UserBrand, e assim a permissão pode evoluir sem tocar aqui.
+      if (savedUserId) {
+        await api.put(`/users/${savedUserId}/brands`, {
+          brands: userBrandLinks
+        });
+      }
+
       toast.success(i18n.t("userModal.success"));
     } catch (err) {
       toastError(err);
@@ -223,10 +246,17 @@ const UserModal = ({ open, onClose, userId }) => {
                   role={loggedInUser.profile}
                   perform="user-modal:editQueues"
                   yes={() => (
-                    <QueueSelect
-                      selectedQueueIds={selectedQueueIds}
-                      onChange={values => setSelectedQueueIds(values)}
-                    />
+                    <>
+                      <QueueSelect
+                        selectedQueueIds={selectedQueueIds}
+                        onChange={values => setSelectedQueueIds(values)}
+                      />
+                      <UserBrandsSelect
+                        brands={brands}
+                        value={userBrandLinks}
+                        onChange={setUserBrandLinks}
+                      />
+                    </>
                   )}
                 />
               </DialogContent>

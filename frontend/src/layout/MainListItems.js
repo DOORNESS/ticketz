@@ -14,6 +14,7 @@ import SettingsOutlinedIcon from "@material-ui/icons/SettingsOutlined";
 import PeopleAltOutlinedIcon from "@material-ui/icons/PeopleAltOutlined";
 import ContactPhoneOutlinedIcon from "@material-ui/icons/ContactPhoneOutlined";
 import AccountTreeOutlinedIcon from "@material-ui/icons/AccountTreeOutlined";
+import BusinessOutlinedIcon from "@material-ui/icons/BusinessOutlined";
 import FlashOnIcon from "@material-ui/icons/FlashOn";
 import HelpOutlineIcon from "@material-ui/icons/HelpOutline";
 import CodeRoundedIcon from "@material-ui/icons/CodeRounded";
@@ -536,6 +537,11 @@ const MainListItems = props => {
               to="/queues"
               primary={i18n.t("mainDrawer.listItems.queues")}
               icon={<AccountTreeOutlinedIcon />}
+            />
+            <ListItemLink
+              to="/brands"
+              primary="Marcas"
+              icon={<BusinessOutlinedIcon />}
             />
             <ListItem button onClick={() => setOpenAiSubmenu(prev => !prev)}>
               <ListItemIcon>

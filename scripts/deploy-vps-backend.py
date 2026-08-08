@@ -38,8 +38,13 @@ UPLOAD_VERIFY_PAUSE_SEC = float(os.environ.get("DEPLOY_UPLOAD_VERIFY_PAUSE_SEC",
 ENCODED_COMMAND_THRESHOLD = int(
     os.environ.get("DEPLOY_ENCODED_COMMAND_THRESHOLD", "3500")
 )
-DEPLOY_LOCK = r"C:\ticketz\deploy-cache\.deploy.lock"
-UPLOAD_STAGING = r"C:\ticketz\dc"
+# Raiz remota do ambiente. Sem a variável, o valor e o comportamento sao
+# exatamente os de producao — nada muda para o deploy-prod.yml. O workflow de
+# homologacao define DEPLOY_ROOT explicitamente, e um guard la verifica que ele
+# NAO e a raiz de producao.
+DEPLOY_ROOT = (os.environ.get("DEPLOY_ROOT") or r"C:\ticketz").rstrip("\\")
+DEPLOY_LOCK = rf"{DEPLOY_ROOT}\deploy-cache\.deploy.lock"
+UPLOAD_STAGING = rf"{DEPLOY_ROOT}\dc"
 # Lock file younger than this → another deploy is still running (unless holder PID is gone).
 LOCK_MAX_AGE_SEC = int(
     os.environ.get("DEPLOY_LOCK_MAX_AGE_SEC")
@@ -484,8 +489,8 @@ def build_zip_bundle(files: List[Path], extra_scripts: List[Path]) -> Path:
 
 def upload_zip_bundle(s, zip_path: Path) -> None:
     """Envia 1 ZIP e extrai em C:\\ticketz\\backend (muito mais rápido que N arquivos)."""
-    remote_zip = r"C:\ticketz\deploy-cache\ticketz-dist.zip"
-    remote_root = r"C:\ticketz\backend"
+    remote_zip = rf"{DEPLOY_ROOT}\deploy-cache\ticketz-dist.zip"
+    remote_root = rf"{DEPLOY_ROOT}\backend"
     size_mb = zip_path.stat().st_size / (1024 * 1024)
     print(
         f"Uploading single ZIP bundle ({size_mb:.1f} MB) — "
@@ -494,7 +499,7 @@ def upload_zip_bundle(s, zip_path: Path) -> None:
     )
     run_ps(
         s,
-        r"New-Item -ItemType Directory -Force -Path C:\ticketz\deploy-cache | Out-Null",
+        rf"New-Item -ItemType Directory -Force -Path {DEPLOY_ROOT}\deploy-cache | Out-Null",
     )
     upload_file(s, zip_path, remote_zip)
     code, out, err = run_ps(
@@ -502,6 +507,15 @@ def upload_zip_bundle(s, zip_path: Path) -> None:
         f"""
 $zip = '{remote_zip}'
 $root = '{remote_root}'
+
+# Guarda a versao atual antes de sobrescrever. E o que torna o rollback uma
+# troca de pastas em segundos, sem rede e sem build.
+if (Test-Path "$root\\dist") {{
+  if (Test-Path "$root\\dist-previous") {{ Remove-Item "$root\\dist-previous" -Recurse -Force }}
+  Copy-Item "$root\\dist" "$root\\dist-previous" -Recurse -Force
+  Write-Output 'versao anterior preservada em dist-previous'
+}}
+
 Expand-Archive -Path $zip -DestinationPath $root -Force
 Remove-Item $zip -Force -EA SilentlyContinue
 $count = (Get-ChildItem "$root\\dist" -Recurse -File -EA SilentlyContinue | Measure-Object).Count
@@ -640,7 +654,7 @@ def main() -> int:
         switch = "-SkipWhatsAppReset" if skip_reset else ""
         print("Restart backend..." + (" (no WhatsApp reset)" if skip_reset else ""))
         restart_ps = (
-            f"& 'C:\\ticketz\\backend\\scripts\\restart-after-deploy.ps1' {switch}; "
+            f"& '{DEPLOY_ROOT}\\backend\\scripts\\restart-after-deploy.ps1' {switch}; "
             f"exit $LASTEXITCODE"
         )
         code, out, err = run_ps(s, restart_ps)

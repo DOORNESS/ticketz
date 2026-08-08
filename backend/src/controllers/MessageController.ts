@@ -30,6 +30,10 @@ import { verifyMessage } from "../services/WbotServices/wbotMessageListener";
 import { getJidOf } from "../services/WbotServices/getJidOf";
 import ShowContactService from "../services/ContactServices/ShowContactService";
 import { verifyContact } from "../services/WbotServices/verifyContact";
+import {
+  assertCanAttendTicketBrand,
+  assertCanViewTicketBrand
+} from "../services/BrandServices/BrandAccessService";
 
 type IndexQuery = {
   nextId?: string;
@@ -53,6 +57,16 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   const requestUser = await User.findByPk(req.user.id, {
     include: [{ model: Queue, as: "queues" }]
   });
+
+  // Histórico completo por id de ticket: sem este gate, saber o id bastava
+  // para ler a conversa de outra marca.
+  const scopedTicket = await Ticket.findOne({
+    where: { id: ticketId, companyId },
+    attributes: ["id", "brandId"]
+  });
+  if (scopedTicket) {
+    await assertCanViewTicketBrand(scopedTicket, req.user.id);
+  }
 
   if (profile !== "admin" && !requestUser?.super) {
     requestUser?.queues.forEach(queue => {
@@ -140,6 +154,10 @@ export const store = async (req: Request, res: Response): Promise<Response> => {
 
   const ticket = await ShowTicketService(ticketId, companyId);
   const { channel } = ticket;
+
+  // Responder é ação de atendimento: exige `canAttend` naquela marca.
+  // Quem só supervisiona pode abrir e acompanhar, mas não fala com o cliente.
+  await assertCanAttendTicketBrand(ticket, req.user.id);
 
   const requestUser = await User.findByPk(userId);
   const isOwner = !!ticket.userId && Number(ticket.userId) === Number(userId);

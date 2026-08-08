@@ -80,6 +80,8 @@ const normalizeAgentPayload = (body: Record<string, unknown>) => {
     temperature: Number(body.temperature ?? 0.3),
     maxTokens: Number(body.maxTokens ?? 1024),
     fallbackQueueId: body.fallbackQueueId ? Number(body.fallbackQueueId) : null,
+    // Marca da operação: define quais bases e persona este agente usa.
+    brandId: body.brandId ? Number(body.brandId) : null,
     handoffMessage: (body.handoffMessage as string) || null,
     ackEnabled: body.ackEnabled === true,
     ackMessage: (body.ackMessage as string) || null,

@@ -154,7 +154,20 @@ const splitDescriptionSections = (text: string): string[] => {
   return slices.filter(Boolean);
 };
 
-const scoreSectionForQuery = (section: string, query: string): number => {
+/**
+ * Pontuação de seção por sobreposição de termos.
+ *
+ * O bônus fixo para "cashback"/"nível" foi removido: uma marca era favorecida
+ * no ranking de todas as outras, e o vocabulário de uma marca nova nunca
+ * receberia o mesmo peso. O reforço agora vem do vocabulário da própria marca
+ * do atendimento (`brandVocabulary`), então cada operação pontua com os seus
+ * termos e nenhuma tem vantagem embutida no código.
+ */
+const scoreSectionForQuery = (
+  section: string,
+  query: string,
+  brandVocabulary: string[] = []
+): number => {
   const normalizedQuery = query.toLowerCase();
   const normalizedSection = section.toLowerCase();
   let score = 0;
@@ -168,14 +181,14 @@ const scoreSectionForQuery = (section: string, query: string): number => {
       }
     });
 
-  if (
-    (normalizedQuery.includes("cashback") ||
-      normalizedQuery.includes("nível") ||
-      normalizedQuery.includes("nivel")) &&
-    (normalizedSection.includes("cashback") ||
-      normalizedSection.includes("nível") ||
-      normalizedSection.includes("nivel"))
-  ) {
+  const vocabularyHit = brandVocabulary
+    .map(term => term.toLowerCase())
+    .filter(term => term.length >= 3)
+    .some(
+      term => normalizedQuery.includes(term) && normalizedSection.includes(term)
+    );
+
+  if (vocabularyHit) {
     score += 3;
   }
 
@@ -186,7 +199,8 @@ export const loadKnowledgeBaseDescriptionChunks = async (
   companyId: number,
   knowledgeBaseIds: number[],
   userText = "",
-  limit = MAX_DESCRIPTION_SECTIONS
+  limit = MAX_DESCRIPTION_SECTIONS,
+  brandVocabulary: string[] = []
 ): Promise<ContextChunk[]> => {
   if (!knowledgeBaseIds.length) {
     return [];
@@ -218,7 +232,9 @@ export const loadKnowledgeBaseDescriptionChunks = async (
       sections.push({
         id: base.id * 10000 + index,
         content: part.slice(0, MAX_CHUNK_SNIPPET),
-        similarity: userText ? scoreSectionForQuery(part, userText) : 0.35,
+        similarity: userText
+          ? scoreSectionForQuery(part, userText, brandVocabulary)
+          : 0.35,
         documentTitle: base.name
       });
     });
@@ -429,6 +445,7 @@ export const buildKnowledgeContextForQuery = async ({
   userText,
   provider,
   loadStrategy = "auto",
+  brandVocabulary = [],
   skipReingest = false
 }: {
   companyId: number;
@@ -436,6 +453,8 @@ export const buildKnowledgeContextForQuery = async ({
   userText: string;
   provider?: string;
   loadStrategy?: "auto" | "full";
+  /** Vocabulário da marca do atendimento — reforça o ranking de seções. */
+  brandVocabulary?: string[];
   skipReingest?: boolean;
 }): Promise<KnowledgeContextResult> => {
   const expandedKnowledgeBaseIds = await expandKnowledgeBaseIdsByDomain(
@@ -492,7 +511,8 @@ export const buildKnowledgeContextForQuery = async ({
       companyId,
       expandedKnowledgeBaseIds,
       userText,
-      descriptionLimit
+      descriptionLimit,
+      brandVocabulary
     );
     const usedChunks = mergeContextChunks(
       documentChunks,
@@ -550,7 +570,8 @@ export const buildKnowledgeContextForQuery = async ({
       companyId,
       expandedKnowledgeBaseIds,
       userText,
-      descriptionLimit
+      descriptionLimit,
+      brandVocabulary
     );
     usedChunks = mergeContextChunks(usedChunks, descriptionChunks, 48);
   }

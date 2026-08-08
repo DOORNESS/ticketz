@@ -9,3 +9,6 @@
 /.settings/
 /private/*
 !/private/index.html
+# Config local de testes: valores descartáveis, mas fica fora do repo
+# para nunca virar rota de vazamento de credencial.
+.env.test

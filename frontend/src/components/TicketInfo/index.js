@@ -10,6 +10,7 @@ import {
 } from "../../helpers/formatWhatsappDisplay";
 import { getInitials } from "../../helpers/getInitials";
 import { generateColor } from "../../helpers/colorGenerator";
+import BrandBadge from "../BrandBadge";
 
 const TicketInfo = ({ contact, ticket, onClick }) => {
   const { user } = ticket;
@@ -39,6 +40,15 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
       }
     }
   }, [contact, user]);
+
+  // Origem do atendimento sempre visível: marca · conexão · fila.
+  const originLine = [
+    ticket.brand?.name,
+    ticket.whatsapp?.name,
+    ticket.queue?.name
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <>
@@ -71,8 +81,22 @@ const TicketInfo = ({ contact, ticket, onClick }) => {
             {getInitials(contactName)}
           </Avatar>
         }
-        title={conversationTitle}
-        subheader={ticket.user && `${userName}`}
+        title={
+          <span
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            <BrandBadge brand={ticket.brand} />
+            <span>{conversationTitle}</span>
+          </span>
+        }
+        subheader={
+          <span
+            style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+          >
+            {originLine}
+            {ticket.user ? <span>· {userName}</span> : null}
+          </span>
+        }
       />
     </>
   );

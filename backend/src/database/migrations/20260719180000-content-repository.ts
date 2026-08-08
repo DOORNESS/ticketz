@@ -1,7 +1,41 @@
 import { QueryInterface, DataTypes } from "sequelize";
 
+/**
+ * Esta migration referencia `KnowledgeDomains` e `KnowledgeAssets`, que só são
+ * criadas por `20260725100000-ai-phase2-knowledge-cms` — timestamp POSTERIOR.
+ *
+ * Nos ambientes atuais isso nunca apareceu, porque as tabelas foram criadas
+ * incrementalmente na ordem cronológica real. Mas num banco vazio a cadeia
+ * aborta aqui, e nenhuma instalação nova conseguia nascer.
+ *
+ * Renomear ou re-datar esta migration faria produção considerá-la nova e
+ * executá-la de novo. A saída segura é declarar as duas FKs condicionalmente:
+ * quando a tabela ainda não existe, a coluna nasce sem a constraint, e
+ * `20260820110000-content-repository-deferred-fks` a adiciona depois — de forma
+ * idempotente, então em banco existente ela é no-op.
+ */
+const tableExists = async (
+  queryInterface: QueryInterface,
+  table: string
+): Promise<boolean> => {
+  const [rows] = await queryInterface.sequelize.query(
+    `SELECT to_regclass(:qualified) IS NOT NULL AS "exists"`,
+    { replacements: { qualified: `"${table}"` } }
+  );
+  return Boolean((rows as { exists: boolean }[])[0]?.exists);
+};
+
 export default {
   up: async (queryInterface: QueryInterface) => {
+    const hasKnowledgeDomains = await tableExists(
+      queryInterface,
+      "KnowledgeDomains"
+    );
+    const hasKnowledgeAssets = await tableExists(
+      queryInterface,
+      "KnowledgeAssets"
+    );
+
     await queryInterface.createTable("ContentRepositoryItems", {
       id: {
         allowNull: false,
@@ -32,9 +66,13 @@ export default {
       knowledgeDomainId: {
         type: DataTypes.INTEGER,
         allowNull: true,
-        references: { model: "KnowledgeDomains", key: "id" },
-        onUpdate: "CASCADE",
-        onDelete: "SET NULL"
+        ...(hasKnowledgeDomains
+          ? {
+              references: { model: "KnowledgeDomains", key: "id" },
+              onUpdate: "CASCADE",
+              onDelete: "SET NULL"
+            }
+          : {})
       },
       knowledgeBaseId: {
         type: DataTypes.INTEGER,
@@ -46,9 +84,13 @@ export default {
       knowledgeAssetId: {
         type: DataTypes.INTEGER,
         allowNull: true,
-        references: { model: "KnowledgeAssets", key: "id" },
-        onUpdate: "CASCADE",
-        onDelete: "SET NULL"
+        ...(hasKnowledgeAssets
+          ? {
+              references: { model: "KnowledgeAssets", key: "id" },
+              onUpdate: "CASCADE",
+              onDelete: "SET NULL"
+            }
+          : {})
       },
       queueIds: { type: DataTypes.JSONB, allowNull: true },
       agentIds: { type: DataTypes.JSONB, allowNull: true },

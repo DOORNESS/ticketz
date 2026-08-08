@@ -33,11 +33,13 @@ export type HandoffEvaluationContext = {
 
 const buildInvestigateDecision = (
   snapshot: CaseCompletenessSnapshot,
-  latestMessage = ""
+  latestMessage = "",
+  brandVocabulary: string[] = []
 ): HandoffPolicyDecision | null => {
   const investigationQuestion = buildInvestigationQuestion(
     snapshot,
-    latestMessage
+    latestMessage,
+    brandVocabulary
   );
 
   if (!investigationQuestion) {
@@ -51,10 +53,28 @@ const buildInvestigateDecision = (
   };
 };
 
-const investigateOrNone = (): HandoffPolicyDecision => ({
-  action: "none",
-  handoffMode: "none"
-});
+/**
+ * Investiga quando há pergunta útil a fazer; caso contrário, fica em silêncio.
+ *
+ * O corpo desta função era `{ action: "none" }` fixo, e `buildInvestigateDecision`
+ * logo acima nunca era chamada. Ou seja: toda a triagem por investigação estava
+ * inerte — `ProcessInboundMessageService` trata `action === "investigate"`, mas
+ * nada nesta política jamais devolvia isso. O cliente mandava uma mensagem vaga
+ * e a IA simplesmente não perguntava nada.
+ *
+ * O `|| { action: "none" }` preserva o comportamento antigo exatamente onde ele
+ * fazia sentido: quando não existe boa pergunta, `buildInvestigationQuestion`
+ * devolve null e nós calamos, em vez de inventar pergunta genérica.
+ */
+const investigateOrNone = (
+  snapshot: CaseCompletenessSnapshot,
+  latestMessage: string,
+  brandVocabulary: string[] = []
+): HandoffPolicyDecision =>
+  buildInvestigateDecision(snapshot, latestMessage, brandVocabulary) || {
+    action: "none",
+    handoffMode: "none"
+  };
 
 const buildConfirmHandoffDecision = (
   schedule: Awaited<ReturnType<typeof getAiScheduleContext>>,
@@ -81,14 +101,12 @@ export const evaluateHandoffPolicy = async (
     hasMediaEvidence: context.hasMediaEvidence
   });
 
-  if (shouldSkipSupportInvestigation(context.userText)) {
-    return { action: "none", handoffMode: "none" };
-  }
-
-  if (detectSensitiveTopic(context.userText)) {
-    return { action: "none", handoffMode: "none" };
-  }
-
+  // Pedido explícito de humano decide antes de qualquer classificação.
+  //
+  // Estava depois de `shouldSkipSupportInvestigation`, e "Quero falar com um
+  // atendente humano agora" casa TAMBÉM com `isInformationalIntent` — então o
+  // pedido era engolido e o cliente ficava sem transferência nenhuma fora do
+  // horário. Quem pede humano com todas as letras não está pedindo informação.
   if (detectHumanHandoffRequest(context.userText) || context.forceHandoff) {
     if (
       !schedule.inBusinessHours &&
@@ -109,6 +127,14 @@ export const evaluateHandoffPolicy = async (
     };
   }
 
+  if (shouldSkipSupportInvestigation(context.userText)) {
+    return { action: "none", handoffMode: "none" };
+  }
+
+  if (detectSensitiveTopic(context.userText)) {
+    return { action: "none", handoffMode: "none" };
+  }
+
   if (context.providerError) {
     if (isTransientAiError(context.providerError)) {
       return {
@@ -119,11 +145,11 @@ export const evaluateHandoffPolicy = async (
     }
 
     if (snapshot.investigationRound < config.maxInvestigationRounds) {
-      return investigateOrNone();
+      return investigateOrNone(snapshot, context.userText);
     }
 
     if (shouldBlockAutomaticHandoff(snapshot)) {
-      return investigateOrNone();
+      return investigateOrNone(snapshot, context.userText);
     }
 
     return buildConfirmHandoffDecision(schedule, "provider_error");
@@ -141,14 +167,14 @@ export const evaluateHandoffPolicy = async (
       snapshot.isVagueStatement ||
       snapshot.investigationRound < config.maxInvestigationRounds
     ) {
-      return investigateOrNone();
+      return investigateOrNone(snapshot, context.userText);
     }
 
     if (
       shouldBlockAutomaticHandoff(snapshot) ||
       !snapshot.caseReadyForHandoff
     ) {
-      return investigateOrNone();
+      return investigateOrNone(snapshot, context.userText);
     }
 
     return buildConfirmHandoffDecision(schedule, "no_knowledge_found");
@@ -166,7 +192,7 @@ export const evaluateHandoffPolicy = async (
       isVagueCustomerStatement(context.userText) ||
       snapshot.investigationRound < config.maxInvestigationRounds
     ) {
-      return investigateOrNone();
+      return investigateOrNone(snapshot, context.userText);
     }
 
     if ((context.confidenceScore || 0) >= config.minConfidenceForHandoff) {
@@ -177,14 +203,14 @@ export const evaluateHandoffPolicy = async (
       shouldBlockAutomaticHandoff(snapshot) ||
       !snapshot.caseReadyForHandoff
     ) {
-      return investigateOrNone();
+      return investigateOrNone(snapshot, context.userText);
     }
 
     return buildConfirmHandoffDecision(schedule, "low_confidence");
   }
 
   if (snapshot.isVagueStatement) {
-    return investigateOrNone();
+    return investigateOrNone(snapshot, context.userText);
   }
 
   return { action: "none", handoffMode: "none" };

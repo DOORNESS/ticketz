@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.6.0 — auditada contra o código
+**Versão:** 1.7.0 — auditada contra o código
 **Data:** agosto/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -159,7 +159,61 @@ server.ts → http.createServer(appFast)
 ## 3. Conceitos fundamentais
 
 ### Company (`backend/src/models/Company.ts`)
-Tenant: usuários, WhatsApps, filas, tickets, `planId`, `dueDate`, idioma, status.
+Tenant: usuários, WhatsApps, filas, tickets, `planId`, `dueDate`, idioma, status. **Isolamento, login e cobrança.**
+
+### Brand (`backend/src/models/Brand.ts`)
+Marca / linha de atendimento **dentro** de uma Company. Uma Company tem N Brands (Grupo Fortmax → Nível Cashback + Fortmax/WebG3 + futuras).
+
+Brand é entidade própria, e não uma evolução de `KnowledgeDomain`: domínio é taxonomia editorial do CMS (agrupa bases, tem `linkedSpecialty`), marca é unidade operacional (conexões, filas, agentes, tema, contatos, permissões). Fundir os dois impediria uma marca de ter dois domínios — caso real da Nível ("Nivel site clientes" + "Nivel empresa"). Relação: **Brand 1—N KnowledgeDomain**.
+
+Centraliza o que antes estava em código: `identityName`/`identityReply` (persona), `escalationUrl`, `informationalFallback`, `supportContacts` (JSONB), `vocabulary` (JSONB), `logoUrl`, `primaryColor`, `shortLabel`, `settings`.
+
+| FK adicionada | Papel |
+|---------------|-------|
+| `Whatsapps.brandId` | **Origem define a marca** — é daqui que a resolução parte |
+| `Queues.brandId`, `AiAgents.brandId` | Roteamento e agente por marca |
+| `KnowledgeDomains.brandId`, `KnowledgeBases.brandId` | Isolamento de conhecimento |
+| `Tickets.brandId` | **Identidade histórica do atendimento** |
+
+`Tickets.brandId` é gravado no nascimento (`FindOrCreateTicketService`) e nunca rederivado: trocar conexão, fila ou agente depois não reescreve de qual operação foi aquele atendimento. O texto da mensagem **nunca** participa dessa decisão — conteúdo define intenção, origem define empresa.
+
+### UserBrand (`backend/src/models/UserBrand.ts`)
+N:N entre funcionário e marca, sem duplicar login. `canAttend = false` = supervisiona sem assumir (barrado em `assertCanAcceptTicket`).
+
+**Ausência de vínculo** depende do Setting `brandIsolationEnforced`:
+
+| Setting | Usuário comum sem vínculo |
+|---------|---------------------------|
+| `disabled` (padrão) | Mantém o acesso legado — estado de transição |
+| `enabled` | Sem acesso — estado final |
+
+A troca é por configuração, não deploy, e reversível na mesma velocidade. Admin e super não são afetados. O gate síncrono (`canViewTicket`) lê um snapshot do Setting carregado por `ShowUserService` em `user.brandIsolationEnforced`.
+
+**Administração:** Administração → Marcas (`pages/Brands`) cria e edita marcas; o cadastro do funcionário (`UserModal` → `UserBrandsSelect`) atribui as marcas.
+
+### Marcas em operação
+
+| Marca | Recursos próprios |
+|-------|-------------------|
+| `nivel` — Nível Cashback | conexão, fila, agente (Nivelton), domínio, bases, tickets, usuários |
+| `fortmax` — Fortmax / WebG3 | conexão, fila, agente (Webin), domínio, bases (inclui FortControl), tickets, usuários |
+
+**FortControl não é marca.** É produto da suíte Fortmax (PCP, estoque, financeiro): varrendo o código, ele aparece apenas como assunto dentro do conhecimento Fortmax, nunca com conexão, fila, agente ou base próprios. Por isso `fortcontrol` está no **vocabulário** da marca Fortmax e `legacyMatchBrandSlugByName` resolve qualquer conexão que o cite para `fortmax`. Criar uma marca vazia "para deixar preparado" só produziria uma linha inútil no painel.
+
+Se um dia FortControl ganhar canal próprio, o caminho é Administração → Marcas + vincular a conexão na tela de Conexões. Nenhum código muda: a FK vence o casamento por nome.
+
+### Fim da detecção por substring no runtime
+
+Nenhuma decisão de runtime depende mais de `includes("nivel")`, `includes("fortmax")`, `includes("webg3")` ou `includes("fortcontrol")` para descobrir a marca:
+
+| Ponto | Antes | Agora |
+|-------|-------|-------|
+| `AgentPersonaService.detectAgentBrand` | lia nome/prompt do agente | usa `AiAgent.brand.slug`; texto só como transição, com log `legacyAgentBrandFallback` |
+| `AiHelpers.resolveBrandKnowledgeBaseIds` | procurava domínio e base por nome | consulta `KnowledgeBases.brandId` |
+| `prepareCustomerFacingAiText` | `brand === "fortmax"` liberava telefone | libera quando a marca tem `supportContacts` com WhatsApp |
+| `resolveQueueIdForTicket` | qualquer fila da conexão | só filas da marca do ticket; sem fila própria, mantém todas |
+
+`rankQueuesForAutomaticAiRouting` continua olhando nome de fila **de propósito**: nesse ponto a marca já foi decidida, e o que resta é preferência operacional entre filas da mesma marca. Marca nova cai no ramo genérico e funciona sem código novo.
 
 ### Whatsapp (`backend/src/models/Whatsapp.ts`)
 Conexão WhatsApp: status, mensagens automáticas, token API, filas via `WhatsappQueue`.

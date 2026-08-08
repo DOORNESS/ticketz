@@ -6,6 +6,112 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.4] — 2026-08-08
+
+### Decidido — FortControl permanece dentro de Fortmax/WebG3
+- A varredura do código mostrou FortControl apenas como assunto do conhecimento Fortmax (PCP, estoque, financeiro), sem conexão, fila, agente ou base próprios. Não foi criada marca para ele: `fortcontrol` segue no vocabulário da marca Fortmax e resolve para `fortmax`.
+- Três testes em `BrandIsolation.spec.ts` travam a decisão, incluindo a prova de que uma marca futura vem da FK e não de nome novo no código.
+- Manual §Brand: tabela de marcas em operação e a razão da decisão.
+
+### Alterado — fim do substring no runtime
+- `detectAgentBrand` passa a usar `AiAgent.brand.slug`; casamento por texto vira transição instrumentada (`legacyAgentBrandFallback`).
+- `resolveBrandKnowledgeBaseIds` consulta `KnowledgeBases.brandId` em vez de procurar domínio/base por nome.
+- `prepareCustomerFacingAiText`: liberar telefone passa a depender de `supportContacts` da marca, não do slug `fortmax`. Checagem de "portal sem URL" deixa de ser exclusiva da Fortmax.
+- `resolveQueueIdForTicket` filtra filas pela marca do ticket antes de ranquear.
+
+### Corrigido — triagem
+- Pedido explícito de humano era engolido por `shouldSkipSupportInvestigation` (a frase casa também com "informacional"), e o cliente ficava sem transferência fora do horário. A checagem passou para antes da classificação.
+- `investigateOrNone` retornava `action: "none"` fixo e `buildInvestigateDecision` nunca era chamada: toda a triagem por investigação estava inerte, embora `ProcessInboundMessageService` já tratasse `action === "investigate"`. Agora investiga quando há pergunta útil e cala quando não há.
+- Mock desatualizado em `AssetStorageKey.spec.ts` (faltava `extractStructuredTextFromBuffer`).
+- Resultado: suíte backend de 442/448 para **448/448**.
+
+---
+
+## [1.7.3] — 2026-08-08
+
+### Adicionado — isolamento fechado
+
+- **Relatórios por atendente escopados:** `userReport` e `usersStatusSummary` recebem o escopo de marca. As contagens de aberto/fechado são subqueries `literal()` e não passam pelo `where` do Sequelize, então ganharam `brandSqlFilter` — sem isso o relatório de um funcionário somaria atendimentos de marcas que quem consulta não pode ver.
+- **Marca em Domínios:** `BrandSelect` na tela de domínios; `KnowledgeDomainService` passou a aceitar `brandId` no create e no update (fazia whitelist de campos e o descartava).
+- **Marca de Base é derivada do domínio:** `KnowledgeBaseController` resolve `brandId` a partir do `knowledgeDomainId`. Um seletor próprio permitiria base da marca A dentro de domínio da marca B — a combinação inválida fica impossível por construção, não por validação.
+
+### Corrigido — caminhos equivalentes ao vazamento do socket
+
+Auditoria específica de isolamento encontrou três endpoints que carregavam ticket por id sem nenhum gate de marca:
+
+- **`MessageController.index`** — histórico completo da conversa. Saber o id bastava para ler a conversa de outra marca.
+- **`TicketAiController`** — o gate entrou em `loadTicketForUser`, o loader compartilhado, então cobre assumir, pausar, copiloto e timeline de uma vez.
+- **`AiLearningController`** — endpoints de aprendizado sobre ticket.
+
+### Testes
+
+- `BrandEnforcementTransition.spec.ts` — os dois estados do Setting e a diferença entre eles, que é a única mudança capaz de tirar acesso de quem hoje trabalha normalmente.
+- Prova ponta a ponta da terceira marca ("Aurora Pet", nome sem nenhum termo das marcas existentes) contra Postgres real: **11/11**, incluindo religamento pelo laço genérico sem `wireBrand3Line`, ticket nascendo com `brandId`, RAG sem vazamento e renomear a conexão para "Fortmax Suporte Renomeado" sem alterar a marca.
+
+## [1.7.2] — 2026-08-08
+
+### Adicionado — isolamento completo
+
+- **Dashboard por marca:** `statusSummaryService` e `ticketsStatisticsService` recebem o usuário e aplicam `resolveDashboardBrandScope`. "Todas" continua significando todas as **permitidas**.
+- **`canAttend` no envio de mensagem:** `MessageController.store` chama `assertCanAttendTicketBrand`. Quem só supervisiona abre e acompanha, mas não fala com o cliente.
+- **Campo Marca nas telas administrativas:** Conexões, Filas e Agentes IA (`BrandSelect`). Uma marca nova é configurável ponta a ponta pela interface.
+- **`WireBrandLinesService`:** religamento genérico por Brand, substituindo `wireNivelLine`/`wireFortmaxLine`. `bootstrapAiPlatform` prefere o caminho genérico e só cai no legado enquanto alguma marca estiver incompleta — com `legacyBrandWiringFallback` no log.
+- **`npm run audit:brands`:** diagnóstico somente-leitura com marcas, órfãos de cada tipo, conexões ambíguas, funcionários sem marca e vínculos somente-supervisão. Sai com código 1 enquanto houver pendência bloqueante. É o relatório que autoriza ligar `brandIsolationEnforced`.
+
+### Corrigido — vazamento por websocket
+
+- `libs/socket.ts` carregava o usuário **sem** `brands`, então `canViewTicket` passava batido no socket enquanto a API HTTP barrava corretamente. Agora carrega `brands` + o snapshot de `brandIsolationEnforced`, na conexão e no `joinChatBox`.
+- `socketQueuesForUser` (`helpers/socketBrandScope.ts`): um atendente restrito não entra mais na sala de fila de outra marca, mesmo que a fila esteja no cadastro dele. Extraído para helper próprio para o teste importar a regra real em vez de replicá-la.
+
+### Documentado
+
+- `docs/PENDENCIA-migration-content-repository.md` — `db:migrate` do zero quebra em `20260719180000-content-repository` (FK para `KnowledgeDomains`, criada por migration posterior). Causa, impacto, por que **não** renomear e caminho seguro de correção.
+
+## [1.7.1] — 2026-08-08
+
+### Validado contra Postgres real
+
+- Migration `20260820100000-multibrand-foundation` aplicada em cluster descartável (PG 17 + pgvector): **UP → DOWN → UP** limpos, tabelas e colunas criadas e removidas corretamente.
+- Backfill executado: 2 Brands criadas, vínculos de conexão/fila/agente/domínio/base corretos, tickets herdando a marca da conexão de origem. Idempotente na segunda execução.
+- **Bug pré-existente encontrado:** `db:migrate` do zero falha em `20260719180000-content-repository`, que referencia `KnowledgeDomains` — tabela criada só por `20260725100000-ai-phase2-knowledge-cms`, de timestamp posterior. Não afeta ambientes existentes (as tabelas já existem), mas quebra instalação nova. Não corrigido aqui.
+
+### Corrigido
+
+- **Contagem do backfill:** `Model.update` devolve `[affectedCount]`; ler o índice 1 fazia o relatório dizer 0 tickets mesmo com o UPDATE aplicado. É esse número que autoriza concluir a migração.
+
+### Adicionado
+
+- **Administração → Marcas** (`pages/Brands` + `BrandModal`): criar, editar, ativar/desativar; nome, slug, nome curto, logo, cor, persona, vocabulário, URL de escalação, fallback e contatos.
+- **Funcionário × Marcas** (`UserBrandsSelect` no `UserModal`): seleção múltipla com o mesmo login e switch **Pode atender / Só supervisiona**.
+- **`canAttend` no backend:** `assertCanAcceptTicket` barra assumir ticket de marca marcada como somente-supervisão.
+- **`BrandPersonaService`:** persona, fallback, contatos, URLs e regras operacionais derivados dos DADOS da Brand. `AgentPersonaService` ganhou camada `*ForBrand` que prefere o registro e mantém o caminho antigo como fallback.
+- **Setting `brandIsolationEnforced`** (padrão `disabled`): fecha a exceção de transição. Ligado, usuário comum sem vínculo perde o acesso em vez de ganhar acesso total. Troca por configuração, reversível na mesma velocidade.
+
+### Alterado — hardcodes removidos
+
+- `CaseCompletenessEngine`: `/nível/`, `/cashback/` e `/fidelização/` saíram do classificador de intenção; o vocabulário entra por `brandVocabulary`, vindo do registro da Brand. `shouldSkipSupportInvestigation` e `buildInvestigationQuestion` também recebem o vocabulário.
+- `KnowledgeContextService`: removido o bônus fixo de +3 no ranking para "cashback"/"nível" — uma marca era favorecida sobre todas as outras. O reforço agora vem do vocabulário da marca do atendimento.
+
+## [1.7.0] — 2026-08-08
+
+### Adicionado — arquitetura multimarca
+
+- **`Brand`**: marca/linha de atendimento dentro da Company. Entidade própria (não evolução de `KnowledgeDomain`, que segue como taxonomia do CMS — relação Brand 1—N KnowledgeDomain). Centraliza persona, contatos, URLs, fallback, vocabulário e tema, que antes estavam compilados no código (§3).
+- **`Tickets.brandId`**: identidade histórica do atendimento, gravada no nascimento por `FindOrCreateTicketService` e nunca rederivada. Origem define a empresa; conteúdo da mensagem, apenas a intenção.
+- **FKs de marca** em `Whatsapps`, `Queues`, `AiAgents`, `KnowledgeDomains`, `KnowledgeBases` — todas `allowNull`, para o fluxo legado continuar operando antes do backfill.
+- **`UserBrand`**: permissão N:N por funcionário, com `canAttend` separando supervisionar de atender. Sem vínculo = sem restrição (usuário legado), para o deploy não derrubar atendentes existentes.
+- **Autorização no backend**: `BrandAccessService` + gate em `canViewTicket`, ponto único já usado por socket, controller de ticket, mídia e aceite. `resolveBrandFilterForQuery` cruza o filtro pedido pela UI com a permissão, então querystring não amplia alcance.
+- **Isolamento de conhecimento**: `restrictKnowledgeBasesToBrand` remove do contexto RAG qualquer base de outra marca, nos dois caminhos de resposta. Base sem marca (legado) é preservada.
+- **Agente por marca**: `getActiveAgentForTicket` resolve pelo `brandId` do ticket; resolução por fila permanece como fallback.
+- **API**: `GET /brands` (seletor, já filtrado por permissão), CRUD admin, `GET|PUT /users/:userId/brands`, `POST /brands/backfill`.
+- **Frontend**: `BrandBadge` (logo + rótulo textual, não só cor) na lista e no cabeçalho; `TicketsBrandFilter` global com "Todas" = todas as permitidas; filtro persistido por usuário em `localStorage`.
+- **Backfill idempotente** (`BackfillBrandsService`): cria Nível e Fortmax a partir dos vínculos existentes. Único lugar onde o casamento por nome é usado de propósito — para gravá-lo em FK uma vez.
+- **Migration** `20260820100000-multibrand-foundation`.
+
+### Alterado
+
+- `BrandResolutionService` substitui `name.includes("nivel")` por FK. O fallback legado por nome permanece durante a transição, instrumentado com `legacyBrandFallback` no log — é a evidência que autoriza removê-lo.
+
 ## [1.6.1] — 2026-08-07
 
 ### Corrigido

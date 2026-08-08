@@ -141,7 +141,14 @@ jobs:
           CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
           CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP }}
           SKIP_WHATSAPP_RESET: "1"
-          DEPLOY_MODE: "patch"
+          # `full` porque a entrega multimarcas cria arquivos que o modo
+          # `patch` nao enviaria: models/Brand, models/UserBrand,
+          # services/BrandServices/**, controllers/BrandController,
+          # routes/brandRoutes, helpers/socketBrandScope e a migration
+          # 20260820100000. O `patch` envia models/Ticket.js — que agora
+          # importa ./Brand — sem enviar o Brand.js, e o backend morreria com
+          # "Cannot find module './Brand'". Verificado rodando collect_files().
+          DEPLOY_MODE: "full"
           DEPLOY_USE_ZIP: "1"
           DEPLOY_B64_CHUNK: "1500"
           DEPLOY_LOCK_WAIT_SEC: "1200"
@@ -161,6 +168,29 @@ jobs:
           export CONTABO_HOST
           echo "Deploy target host: ${CONTABO_HOST}"
           python3 scripts/deploy-vps-backend.py
+
+      # O pipeline nunca aplicou migration: nao havia passo de banco, e
+      # AUTO_MIGRATE=true so dispara applyAiSchema(), que e um script fixo do
+      # schema de IA. O schema era atualizado a mao na VPS. Isso deixou de
+      # servir com multimarcas: models/Ticket passa a declarar brandId, entao
+      # codigo novo sobre schema velho quebra toda consulta a Ticket.
+      # Roda depois do upload do dist e antes do restart do passo seguinte.
+      - name: Aplicar migrations no banco de produção
+        if: env.DEPLOY_BACKEND == 'true'
+        env:
+          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP }}
+        run: |
+          set -euo pipefail
+          pip install pywinrm
+          if [ -z "${CONTABO_PASSWORD:-}" ]; then unset CONTABO_PASSWORD; fi
+          CONTABO_HOST="${CONTABO_HOST:-31.220.103.226}"
+          CONTABO_HOST="${CONTABO_HOST#https://}"
+          CONTABO_HOST="${CONTABO_HOST#http://}"
+          CONTABO_HOST="${CONTABO_HOST%%/*}"
+          CONTABO_HOST="${CONTABO_HOST%%:*}"
+          export CONTABO_HOST
+          python3 scripts/apply-migrations-vps.py
 
       - name: Corrigir .env PORT/HOST e scripts de start na VPS
         if: env.DEPLOY_BACKEND == 'true'
