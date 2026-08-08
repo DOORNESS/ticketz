@@ -31,6 +31,9 @@ env:
   FORBIDDEN_API_HOST: api.fortmax.com.br
   FORBIDDEN_FRONTEND_HOST: suporte.fortmax.com.br
   FORBIDDEN_CF_PROJECT: fortmax-ticketz-prod
+  FORBIDDEN_BACKEND_PORT: "8080"
+  # Redis de produção roda em 6379 na mesma VPS. Homologação usa 6380.
+  FORBIDDEN_REDIS_PORT: "6379"
 
 jobs:
   guard:
@@ -61,6 +64,7 @@ jobs:
           check_ne "SERVICE_NAME"   "${SERVICE_NAME}"   "${FORBIDDEN_SERVICE}"
           check_ne "API_HOST"       "${API_HOST}"       "${FORBIDDEN_API_HOST}"
           check_ne "FRONTEND_HOST"  "${FRONTEND_HOST}"  "${FORBIDDEN_FRONTEND_HOST}"
+          check_ne "BACKEND_PORT"   "${BACKEND_PORT}"   "${FORBIDDEN_BACKEND_PORT}"
           [ "${fail}" = "0" ] || exit 1
           echo "Destinos de homologação validados."
 
@@ -75,6 +79,11 @@ jobs:
           HOMOLOG_JWT_SECRET: ${{ secrets.HOMOLOG_JWT_SECRET }}
           HOMOLOG_JWT_REFRESH_SECRET: ${{ secrets.HOMOLOG_JWT_REFRESH_SECRET }}
           HOMOLOG_CF_PROJECT_NAME: ${{ secrets.HOMOLOG_CF_PROJECT_NAME }}
+          HOMOLOG_REDIS_URI: ${{ secrets.HOMOLOG_REDIS_URI }}
+          HOMOLOG_B2_BUCKET: ${{ secrets.HOMOLOG_B2_BUCKET }}
+          HOMOLOG_B2_KEY_ID: ${{ secrets.HOMOLOG_B2_KEY_ID }}
+          HOMOLOG_B2_APPLICATION_KEY: ${{ secrets.HOMOLOG_B2_APPLICATION_KEY }}
+          HOMOLOG_B2_ENDPOINT: ${{ secrets.HOMOLOG_B2_ENDPOINT }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -98,6 +107,11 @@ jobs:
           require HOMOLOG_JWT_SECRET          "${HOMOLOG_JWT_SECRET:-}"
           require HOMOLOG_JWT_REFRESH_SECRET  "${HOMOLOG_JWT_REFRESH_SECRET:-}"
           require HOMOLOG_CF_PROJECT_NAME     "${HOMOLOG_CF_PROJECT_NAME:-}"
+          require HOMOLOG_REDIS_URI           "${HOMOLOG_REDIS_URI:-}"
+          require HOMOLOG_B2_BUCKET           "${HOMOLOG_B2_BUCKET:-}"
+          require HOMOLOG_B2_KEY_ID           "${HOMOLOG_B2_KEY_ID:-}"
+          require HOMOLOG_B2_APPLICATION_KEY  "${HOMOLOG_B2_APPLICATION_KEY:-}"
+          require HOMOLOG_B2_ENDPOINT         "${HOMOLOG_B2_ENDPOINT:-}"
           require CLOUDFLARE_API_TOKEN        "${CLOUDFLARE_API_TOKEN:-}"
           require CLOUDFLARE_ZONE_ID          "${CLOUDFLARE_ZONE_ID:-}"
           [ "${missing}" = "0" ] || exit 1
@@ -130,6 +144,40 @@ jobs:
             exit 1
           fi
           echo "Banco e projeto de frontend validados como não-produção."
+
+      - name: Bloquear Redis e bucket de produção
+        env:
+          HOMOLOG_REDIS_URI: ${{ secrets.HOMOLOG_REDIS_URI }}
+          HOMOLOG_B2_BUCKET: ${{ secrets.HOMOLOG_B2_BUCKET }}
+          PROD_B2_BUCKET: ${{ secrets.PROD_B2_BUCKET }}
+        run: |
+          set -euo pipefail
+
+          # Redis nao tem namespace no Ticketz: as filas Bull nao definem
+          # `prefix` e os locks da IA sao chaveados por ticketId, que colide
+          # entre ambientes. Database separado tambem nao basta, porque o
+          # pub/sub do Redis ignora o numero do database. Por isso a exigencia
+          # e instancia propria — e a porta e o que prova isso.
+          case "${HOMOLOG_REDIS_URI}" in
+            *":${FORBIDDEN_REDIS_PORT}"*|*":${FORBIDDEN_REDIS_PORT}/"*)
+              echo "::error::HOMOLOG_REDIS_URI usa a porta ${FORBIDDEN_REDIS_PORT} (Redis de PRODUÇÃO). Abortado."
+              exit 1
+              ;;
+          esac
+          echo "Redis de homologação: instância própria confirmada."
+
+          # As chaves de storage sao `companies/{companyId}/...` e ignoram
+          # STORAGE_ROOT_PREFIX, entao os dois ambientes gerariam caminhos
+          # identicos. Prefixo nao protege: so bucket separado protege.
+          if [ -n "${PROD_B2_BUCKET:-}" ]; then
+            if [ "${HOMOLOG_B2_BUCKET}" = "${PROD_B2_BUCKET}" ]; then
+              echo "::error::HOMOLOG_B2_BUCKET é o bucket de PRODUÇÃO. Abortado."
+              exit 1
+            fi
+          else
+            echo "::warning::PROD_B2_BUCKET não definido — comparação com o bucket de produção não foi feita."
+          fi
+          echo "Bucket de homologação validado como não-produção."
 
   deploy-homolog:
     name: Deploy homologação
@@ -213,7 +261,13 @@ jobs:
           HOMOLOG_JWT_SECRET: ${{ secrets.HOMOLOG_JWT_SECRET }}
           HOMOLOG_JWT_REFRESH_SECRET: ${{ secrets.HOMOLOG_JWT_REFRESH_SECRET }}
           HOMOLOG_REDIS_URI: ${{ secrets.HOMOLOG_REDIS_URI }}
+          HOMOLOG_B2_BUCKET: ${{ secrets.HOMOLOG_B2_BUCKET }}
+          HOMOLOG_B2_KEY_ID: ${{ secrets.HOMOLOG_B2_KEY_ID }}
+          HOMOLOG_B2_APPLICATION_KEY: ${{ secrets.HOMOLOG_B2_APPLICATION_KEY }}
+          HOMOLOG_B2_ENDPOINT: ${{ secrets.HOMOLOG_B2_ENDPOINT }}
           HOMOLOG_OPENAI_API_KEY: ${{ secrets.HOMOLOG_OPENAI_API_KEY }}
+          HOMOLOG_RESEND_API_KEY: ${{ secrets.HOMOLOG_RESEND_API_KEY }}
+          HOMOLOG_ESCALATION_EMAIL_TO: ${{ secrets.HOMOLOG_ESCALATION_EMAIL_TO }}
         run: |
           set -euo pipefail
           pip install pywinrm

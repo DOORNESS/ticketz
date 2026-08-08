@@ -24,6 +24,7 @@ PRODUCTION = {
     "site": "ticketz-prod",
     "api_host": "api.fortmax.com.br",
     "port": "8080",
+    "redis_port": "6379",
 }
 
 DEFAULTS = {
@@ -32,6 +33,9 @@ DEFAULTS = {
     "site": "ticketz-homolog",
     "api_host": "api-homolog.fortmax.com.br",
     "port": "8090",
+    # Instancia Redis propria. Database separado nao serviria: o pub/sub do
+    # Redis ignora o numero do database e os eventos do Bull cruzariam.
+    "redis_port": "6380",
 }
 
 
@@ -42,6 +46,8 @@ def resolve_config() -> dict:
         "site": os.environ.get("IIS_SITE") or DEFAULTS["site"],
         "api_host": os.environ.get("API_HOST") or DEFAULTS["api_host"],
         "port": os.environ.get("BACKEND_PORT") or DEFAULTS["port"],
+        "redis_port": os.environ.get("HOMOLOG_REDIS_PORT")
+        or DEFAULTS["redis_port"],
     }
 
     clashes = [
@@ -70,6 +76,7 @@ $service = '{cfg["service"]}'
 $site    = '{cfg["site"]}'
 $port    = '{cfg["port"]}'
 $apiHost = '{cfg["api_host"]}'
+$redisPort = '{cfg["redis_port"]}'
 
 Write-Output '=== 1. Diretórios de homologação ==='
 foreach ($d in @($root, $backend, "$root\\deploy-cache", "$root\\dc")) {{
@@ -94,6 +101,39 @@ if ($LASTEXITCODE -ne 0) {{
   Write-Output "tarefa criada: $service"
 }} else {{
   Write-Output "tarefa já existe: $service"
+}}
+
+Write-Output '=== 3b. Redis exclusivo de homologação ==='
+$redisSrc = 'C:\\ticketz\\redis'
+$redisDst = "$root\\redis"
+if (Test-Path $redisSrc) {{
+  New-Item -ItemType Directory -Force -Path $redisDst | Out-Null
+  Copy-Item "$redisSrc\\*" $redisDst -Recurse -Force -ErrorAction SilentlyContinue
+  # Config propria: porta 6380 e arquivo de dump separado, para os dois Redis
+  # nunca compartilharem keyspace nem persistencia.
+  @"
+port $redisPort
+bind 127.0.0.1
+dir $redisDst
+dbfilename homolog.rdb
+appendonly no
+"@ | Set-Content -Path "$redisDst\\redis-homolog.conf" -Encoding ASCII
+
+  @"
+@echo off
+cd /d $redisDst
+redis-server.exe redis-homolog.conf
+"@ | Set-Content -Path "$root\\start-redis-homolog.cmd" -Encoding ASCII
+
+  schtasks /Query /TN 'TicketzRedisHomolog' 2>$null | Out-Null
+  if ($LASTEXITCODE -ne 0) {{
+    schtasks /Create /TN 'TicketzRedisHomolog' /TR "cmd /c $root\\start-redis-homolog.cmd" /SC ONSTART /RU SYSTEM /RL HIGHEST /F | Out-Null
+    Write-Output "tarefa criada: TicketzRedisHomolog (porta $redisPort)"
+  }} else {{
+    Write-Output 'tarefa TicketzRedisHomolog ja existe'
+  }}
+}} else {{
+  Write-Output "AVISO: $redisSrc nao encontrado — instale o Redis de homologacao manualmente na porta $redisPort"
 }}
 
 Write-Output '=== 4. Site IIS de homologação ==='

@@ -17,6 +17,20 @@ async function startWhatsAppAndBillingServices() {
     return;
   }
 
+  // Ambiente não-produtivo não pode reconectar números reais vindos de um dump
+  // de produção. Em produção este guard é inerte (ENVIRONMENT_NAME ausente).
+  const { assertNoImportedWhatsAppCredentials } =
+    await import("./helpers/assertNoImportedWhatsAppCredentials");
+  try {
+    await assertNoImportedWhatsAppCredentials();
+  } catch (error) {
+    logger.error(
+      { error },
+      "Início das sessões WhatsApp bloqueado pela guarda de credenciais importadas"
+    );
+    return;
+  }
+
   const { StartAllWhatsAppsSessions } =
     await import("./services/WbotServices/StartAllWhatsAppsSessions");
   const Company = (await import("./models/Company")).default;

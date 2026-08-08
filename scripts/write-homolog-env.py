@@ -30,9 +30,17 @@ REQUIRED = [
     "HOMOLOG_DB_PASS",
     "HOMOLOG_JWT_SECRET",
     "HOMOLOG_JWT_REFRESH_SECRET",
+    # Redis e storage sao obrigatorios: sem instancia e bucket proprios,
+    # homologacao compartilha filas, locks e objetos com producao.
+    "HOMOLOG_REDIS_URI",
+    "HOMOLOG_B2_BUCKET",
+    "HOMOLOG_B2_KEY_ID",
+    "HOMOLOG_B2_APPLICATION_KEY",
+    "HOMOLOG_B2_ENDPOINT",
 ]
 
 PRODUCTION_ROOT = r"C:\ticketz"
+PRODUCTION_REDIS_PORT = "6379"
 
 
 def require_env() -> dict:
@@ -46,12 +54,33 @@ def require_env() -> dict:
     return {name: os.environ[name].strip() for name in REQUIRED}
 
 
-def guard_not_production(deploy_root: str) -> None:
-    """Última barreira antes de escrever no disco da VPS."""
-    normalized = deploy_root.rstrip("\\").lower()
-    if normalized == PRODUCTION_ROOT.lower():
+def guard_not_production(cfg: dict) -> None:
+    """Última barreira antes de escrever no disco da VPS.
+
+    Repete verificações que o workflow já faz. É redundância proposital: este
+    script escreve o arquivo que define a qual banco, fila e bucket o backend
+    vai se conectar, e não deve depender de o chamador ter feito a checagem.
+    """
+    if cfg["DEPLOY_ROOT"].rstrip("\\").lower() == PRODUCTION_ROOT.lower():
         print(
             "DEPLOY_ROOT aponta para a raiz de PRODUÇÃO. Abortado.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    redis_uri = cfg["HOMOLOG_REDIS_URI"]
+    if f":{PRODUCTION_REDIS_PORT}" in redis_uri:
+        print(
+            f"HOMOLOG_REDIS_URI usa a porta {PRODUCTION_REDIS_PORT} "
+            "(Redis de PRODUÇÃO). Abortado.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    prod_bucket = (os.environ.get("PROD_B2_BUCKET") or "").strip()
+    if prod_bucket and cfg["HOMOLOG_B2_BUCKET"] == prod_bucket:
+        print(
+            "HOMOLOG_B2_BUCKET é o bucket de PRODUÇÃO. Abortado.",
             file=sys.stderr,
         )
         sys.exit(1)
@@ -59,9 +88,12 @@ def guard_not_production(deploy_root: str) -> None:
 
 def build_env(cfg: dict) -> str:
     optional = {
-        "REDIS_URI": os.environ.get("HOMOLOG_REDIS_URI", "redis://127.0.0.1:6379"),
         "DB_PORT": os.environ.get("HOMOLOG_DB_PORT", "5432"),
+        # Vazios de proposito: sem chave, nao envia e-mail e a IA nao responde.
+        # Preferimos homologacao muda a homologacao falando com cliente real.
         "OPENAI_API_KEY": os.environ.get("HOMOLOG_OPENAI_API_KEY", ""),
+        "RESEND_API_KEY": os.environ.get("HOMOLOG_RESEND_API_KEY", ""),
+        "ESCALATION_EMAIL_TO": os.environ.get("HOMOLOG_ESCALATION_EMAIL_TO", ""),
     }
 
     lines = [
@@ -85,7 +117,16 @@ def build_env(cfg: dict) -> str:
         "DB_SSL_REJECT_UNAUTHORIZED=false",
         "DB_TIMEZONE=-03:00",
         "",
-        f"REDIS_URI={optional['REDIS_URI']}",
+        # Instancia Redis exclusiva. Bull, cache, locks da IA e buffers leem
+        # todos desta mesma URI (auditado: 10 consumidores, todos REDIS_URI).
+        f"REDIS_URI={cfg['HOMOLOG_REDIS_URI']}",
+        "",
+        "STORAGE_PROVIDER=backblaze",
+        f"B2_BUCKET={cfg['HOMOLOG_B2_BUCKET']}",
+        f"B2_KEY_ID={cfg['HOMOLOG_B2_KEY_ID']}",
+        f"B2_APPLICATION_KEY={cfg['HOMOLOG_B2_APPLICATION_KEY']}",
+        f"B2_ENDPOINT={cfg['HOMOLOG_B2_ENDPOINT']}",
+        "B2_USE_PRIVATE_ACCESS=true",
         "",
         f"JWT_SECRET={cfg['HOMOLOG_JWT_SECRET']}",
         f"JWT_REFRESH_SECRET={cfg['HOMOLOG_JWT_REFRESH_SECRET']}",
@@ -98,13 +139,18 @@ def build_env(cfg: dict) -> str:
         "WHATSAPP_AUTO_START=false",
         "",
         f"OPENAI_API_KEY={optional['OPENAI_API_KEY']}",
+        f"RESEND_API_KEY={optional['RESEND_API_KEY']}",
+        f"ESCALATION_EMAIL_TO={optional['ESCALATION_EMAIL_TO']}",
+        "",
+        # Marca o ambiente para a guarda de credenciais WhatsApp importadas.
+        "ENVIRONMENT_NAME=homolog",
     ]
     return "\n".join(lines) + "\n"
 
 
 def main() -> None:
     cfg = require_env()
-    guard_not_production(cfg["DEPLOY_ROOT"])
+    guard_not_production(cfg)
 
     env_content = build_env(cfg)
     backend_dir = f"{cfg['DEPLOY_ROOT'].rstrip(chr(92))}\\backend"
