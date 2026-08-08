@@ -507,6 +507,15 @@ def upload_zip_bundle(s, zip_path: Path) -> None:
         f"""
 $zip = '{remote_zip}'
 $root = '{remote_root}'
+
+# Guarda a versao atual antes de sobrescrever. E o que torna o rollback uma
+# troca de pastas em segundos, sem rede e sem build.
+if (Test-Path "$root\\dist") {{
+  if (Test-Path "$root\\dist-previous") {{ Remove-Item "$root\\dist-previous" -Recurse -Force }}
+  Copy-Item "$root\\dist" "$root\\dist-previous" -Recurse -Force
+  Write-Output 'versao anterior preservada em dist-previous'
+}}
+
 Expand-Archive -Path $zip -DestinationPath $root -Force
 Remove-Item $zip -Force -EA SilentlyContinue
 $count = (Get-ChildItem "$root\\dist" -Recurse -File -EA SilentlyContinue | Measure-Object).Count

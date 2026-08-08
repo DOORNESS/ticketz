@@ -311,6 +311,47 @@ jobs:
             --branch homolog \
             --commit-dirty=true
 
+      - name: Diagnóstico em caso de falha
+        if: failure()
+        env:
+          CONTABO_HOST: ${{ secrets.HOMOLOG_VPS_IP }}
+          CONTABO_PASSWORD: ${{ secrets.HOMOLOG_VPS_PASSWORD }}
+          DEPLOY_ROOT: ${{ env.DEPLOY_ROOT }}
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          BACKEND_PORT: ${{ env.BACKEND_PORT }}
+        run: |
+          set +e
+          # Falha de deploy sem log obriga a entrar na VPS a mao. Este passo
+          # traz o essencial para o proprio run: SHA no ar, estado do servico,
+          # porta escutando e ultimas linhas do log.
+          pip install pywinrm -q
+          python3 - <<'PY'
+          import os, winrm
+          host = os.environ["CONTABO_HOST"]; pwd = os.environ["CONTABO_PASSWORD"]
+          root = os.environ["DEPLOY_ROOT"].rstrip("\\")
+          svc = os.environ["SERVICE_NAME"]; port = os.environ["BACKEND_PORT"]
+          s = winrm.Session(f"https://{host}:5986/wsman", auth=("administrator", pwd),
+                            transport="ntlm", server_cert_validation="ignore")
+          ps = f'''
+          Write-Output '--- SHA implantado ---'
+          if (Test-Path '{root}\\backend\\dist\\gitinfo.js') {{ Get-Content '{root}\\backend\\dist\\gitinfo.js' }}
+          Write-Output '--- servico ---'
+          Get-Service -Name '{svc}' -EA SilentlyContinue | Format-List Name,Status
+          schtasks /Query /TN '{svc}' /FO LIST 2>$null | Select-String 'TaskName|Status'
+          Write-Output '--- porta {port} ---'
+          Get-NetTCPConnection -LocalPort {port} -State Listen -EA SilentlyContinue | Select-Object LocalAddress,LocalPort,OwningProcess | Format-Table | Out-String
+          Write-Output '--- .env (sem segredos) ---'
+          Select-String -Path '{root}\\backend\\.env' -Pattern '^(DB_HOST|DB_NAME|DB_SCHEMA|REDIS_URI|B2_BUCKET|PORT|ENVIRONMENT_NAME|AUTO_MIGRATE|WHATSAPP_AUTO_START)=' | ForEach-Object {{ $_.Line }}
+          Write-Output '--- ultimas linhas de log ---'
+          Get-ChildItem '{root}' -Filter '*.log' -Recurse -EA SilentlyContinue |
+            Sort-Object LastWriteTime -Desc | Select-Object -First 1 |
+            ForEach-Object {{ Get-Content $_.FullName -Tail 60 }}
+          '''
+          r = s.run_ps(ps)
+          print(r.std_out.decode("utf-8", "ignore"))
+          print(r.std_err.decode("utf-8", "ignore"))
+          PY
+
       - name: Verificar saúde da homologação
         env:
           API_HOST: ${{ env.API_HOST }}
