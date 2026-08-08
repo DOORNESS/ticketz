@@ -3,6 +3,7 @@ import UserBrand from "../../models/UserBrand";
 import User from "../../models/User";
 import Ticket from "../../models/Ticket";
 import AppError from "../../errors/AppError";
+import { GetCompanySetting } from "../../helpers/CheckSettings";
 
 /**
  * Autorização por marca.
@@ -22,6 +23,19 @@ export type BrandAccess = {
   attendableBrandIds: number[] | null;
   isUnrestricted: boolean;
 };
+
+/**
+ * Fecha a exceção de transição. `disabled` (padrão) mantém o comportamento
+ * legado; `enabled` exige vínculo explícito para todo usuário comum.
+ */
+export const isBrandIsolationEnforced = async (
+  companyId: number
+): Promise<boolean> =>
+  String(
+    await GetCompanySetting(companyId, "brandIsolationEnforced", "disabled")
+  )
+    .trim()
+    .toLowerCase() === "enabled";
 
 const isUnrestrictedProfile = (user: {
   profile?: string | null;
@@ -57,20 +71,27 @@ export const getBrandAccessForUser = async (
   });
 
   /**
-   * Nenhum vínculo = usuário legado, ainda não configurado pelo admin.
+   * Usuário comum sem nenhum vínculo de marca.
    *
-   * Trata-se como "sem restrição" de propósito. A alternativa — tratar como
-   * "sem acesso" — derrubaria todos os atendentes existentes no instante do
-   * deploy, já que ninguém tem vínculo antes de o admin abrir o cadastro.
-   * O isolamento passa a valer para o usuário assim que ele recebe a primeira
-   * marca. Mesma regra em `canViewTicket.userCanSeeTicketBrand`.
+   * Durante a migração isso significa "ainda não configurado" e precisa
+   * manter o acesso atual — senão o deploy derrubaria todos os atendentes de
+   * uma vez, já que ninguém tem vínculo antes de o admin abrir o cadastro.
+   *
+   * Depois que os vínculos estiverem configurados, o admin liga o Setting
+   * `brandIsolationEnforced` e a ausência de configuração passa a significar
+   * "sem acesso" — que é o estado final desejado. A troca é por configuração,
+   * não por deploy, e pode ser revertida na mesma velocidade se algo escapar.
    */
   if (!links.length) {
-    return {
-      visibleBrandIds: null,
-      attendableBrandIds: null,
-      isUnrestricted: true
-    };
+    const enforced = await isBrandIsolationEnforced(user.companyId);
+
+    return enforced
+      ? { visibleBrandIds: [], attendableBrandIds: [], isUnrestricted: false }
+      : {
+          visibleBrandIds: null,
+          attendableBrandIds: null,
+          isUnrestricted: true
+        };
   }
 
   return {

@@ -1,5 +1,49 @@
 import AiAgent from "../../models/AiAgent";
+import Brand from "../../models/Brand";
 import { buildTimeBasedGreeting } from "./Triage/CaseCompletenessEngine";
+import {
+  buildBrandExternalSupportReply,
+  buildBrandIdentityReply,
+  buildBrandInformationalFallback,
+  buildBrandOperationalRules
+} from "../BrandServices/BrandPersonaService";
+
+/**
+ * Camada de compatibilidade durante a migração para multimarca.
+ *
+ * Quando a Brand do ticket chega, ela manda: persona, fallback, contatos e
+ * regras saem do registro. Sem Brand (ticket legado, antes do backfill), o
+ * caminho antigo por `detectAgentBrand` permanece.
+ *
+ * Estas funções `*ForBrand` são as que código novo deve chamar. As versões
+ * sem Brand ficam até o log de fallback parar de aparecer.
+ */
+export const resolveIdentityReplyForBrand = (
+  brand: Brand | null | undefined,
+  agent?: Partial<Pick<AiAgent, "name" | "basePrompt">> | null
+): string => buildBrandIdentityReply(brand) || buildAgentIdentityReply(agent);
+
+export const resolveInformationalFallbackForBrand = (
+  brand: Brand | null | undefined,
+  agent?: Partial<Pick<AiAgent, "name" | "basePrompt">> | null,
+  userText = ""
+): string =>
+  buildBrandInformationalFallback(brand) ||
+  resolveAgentInformationalFallback(agent, userText);
+
+export const resolveExternalSupportReplyForBrand = (
+  brand: Brand | null | undefined,
+  agent?: Partial<Pick<AiAgent, "name" | "basePrompt">> | null,
+  userText = ""
+): string | null =>
+  buildBrandExternalSupportReply(brand) ||
+  resolveAgentExternalSupportReply(agent, userText);
+
+export const resolveOperationalRulesForBrand = (
+  brand: Brand | null | undefined,
+  agent?: Partial<Pick<AiAgent, "name" | "basePrompt">> | null
+): string =>
+  buildBrandOperationalRules(brand) || buildAgentOperationalRules(agent);
 
 export type AgentBrand = "nivel" | "fortmax" | "generic";
 

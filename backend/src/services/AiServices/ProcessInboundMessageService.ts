@@ -71,14 +71,18 @@ import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
 import { responseMimicsHumanHandoff } from "./Triage/detectImpliedHandoffMessage";
 import {
   resolveAgentExternalSupportReply,
-  resolveAgentInformationalFallback
+  resolveAgentInformationalFallback,
+  resolveOperationalRulesForBrand
 } from "./AgentPersonaService";
 import { getRagMinimumSimilarity } from "./RagConfig";
 import { buildContextualRetrievalQuery } from "./ContextualRetrievalQuery";
 import { buildConversationAttemptState } from "./ConversationAttemptStateService";
 import { dropDuplicatedCurrentTurn } from "./conversationHistoryUtils";
 import { resolveAccountRecoverySuccessReply } from "./AccountRecoverySuccessReplyService";
-import { restrictKnowledgeBasesToBrand } from "../BrandServices/BrandAiConfigService";
+import {
+  restrictKnowledgeBasesToBrand,
+  getBrandForTicket
+} from "../BrandServices/BrandAiConfigService";
 
 export type InboundMessageItem = {
   messageBody: string;
@@ -781,6 +785,8 @@ const ProcessInboundMessageService = async ({
     );
     const retrievalQuery = buildContextualRetrievalQuery(userText, history);
     const attemptState = buildConversationAttemptState(history, userText);
+    // Persona e regras vêm da marca do ticket; sem marca, cai no caminho antigo.
+    const ticketBrand = await getBrandForTicket(ticket);
 
     const [
       scheduleContext,
@@ -834,7 +840,8 @@ const ProcessInboundMessageService = async ({
       knowledgeContextBlock: contextHint,
       verifiedMemory,
       toolsEnabled,
-      conversationState: attemptState.promptBlock
+      conversationState: attemptState.promptBlock,
+      brandRules: resolveOperationalRulesForBrand(ticketBrand, agent)
     });
 
     const requestStartedAt = Date.now();

@@ -13,6 +13,8 @@ export type AiPromptBuilderInput = {
   operationalRules?: string;
   /** Bloco de `ConversationAttemptStateService`: o que já foi tentado e falhou. */
   conversationState?: string;
+  /** Regras derivadas da Brand — vencem `buildAgentOperationalRules`. */
+  brandRules?: string;
 };
 
 export const DEFAULT_OPERATIONAL_RULES = `
@@ -105,8 +107,12 @@ export const buildAiSystemPrompt = (input: AiPromptBuilderInput): string => {
     blocks.push(`Base de conhecimento:\n${input.knowledgeContextBlock.trim()}`);
   }
 
+  // As regras da marca substituem as regras por-marca inferidas do agente.
   blocks.push(
-    input.operationalRules?.trim() || buildDefaultOperationalRules(input.agent)
+    input.operationalRules?.trim() ||
+      (input.brandRules?.trim()
+        ? `${DEFAULT_OPERATIONAL_RULES}\n${input.brandRules.trim()}`
+        : buildDefaultOperationalRules(input.agent))
   );
 
   // Depois das regras e da base: é a restrição mais específica do turno e

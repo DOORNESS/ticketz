@@ -79,6 +79,14 @@ class User extends Model<User> {
   @BelongsToMany(() => Brand, () => UserBrand)
   brands: Brand[];
 
+  /**
+   * Snapshot do Setting `brandIsolationEnforced`, carregado por
+   * `ShowUserService`. Não é coluna: existe para `canViewTicket` — que é
+   * síncrono e é o gate usado por socket, controller, mídia e aceite — poder
+   * decidir sem virar async e sem consultar o banco a cada verificação.
+   */
+  brandIsolationEnforced?: boolean;
+
   @HasMany(() => QuickMessage, {
     onUpdate: "CASCADE",
     onDelete: "CASCADE",

@@ -6,6 +6,31 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.1] — 2026-08-08
+
+### Validado contra Postgres real
+
+- Migration `20260820100000-multibrand-foundation` aplicada em cluster descartável (PG 17 + pgvector): **UP → DOWN → UP** limpos, tabelas e colunas criadas e removidas corretamente.
+- Backfill executado: 2 Brands criadas, vínculos de conexão/fila/agente/domínio/base corretos, tickets herdando a marca da conexão de origem. Idempotente na segunda execução.
+- **Bug pré-existente encontrado:** `db:migrate` do zero falha em `20260719180000-content-repository`, que referencia `KnowledgeDomains` — tabela criada só por `20260725100000-ai-phase2-knowledge-cms`, de timestamp posterior. Não afeta ambientes existentes (as tabelas já existem), mas quebra instalação nova. Não corrigido aqui.
+
+### Corrigido
+
+- **Contagem do backfill:** `Model.update` devolve `[affectedCount]`; ler o índice 1 fazia o relatório dizer 0 tickets mesmo com o UPDATE aplicado. É esse número que autoriza concluir a migração.
+
+### Adicionado
+
+- **Administração → Marcas** (`pages/Brands` + `BrandModal`): criar, editar, ativar/desativar; nome, slug, nome curto, logo, cor, persona, vocabulário, URL de escalação, fallback e contatos.
+- **Funcionário × Marcas** (`UserBrandsSelect` no `UserModal`): seleção múltipla com o mesmo login e switch **Pode atender / Só supervisiona**.
+- **`canAttend` no backend:** `assertCanAcceptTicket` barra assumir ticket de marca marcada como somente-supervisão.
+- **`BrandPersonaService`:** persona, fallback, contatos, URLs e regras operacionais derivados dos DADOS da Brand. `AgentPersonaService` ganhou camada `*ForBrand` que prefere o registro e mantém o caminho antigo como fallback.
+- **Setting `brandIsolationEnforced`** (padrão `disabled`): fecha a exceção de transição. Ligado, usuário comum sem vínculo perde o acesso em vez de ganhar acesso total. Troca por configuração, reversível na mesma velocidade.
+
+### Alterado — hardcodes removidos
+
+- `CaseCompletenessEngine`: `/nível/`, `/cashback/` e `/fidelização/` saíram do classificador de intenção; o vocabulário entra por `brandVocabulary`, vindo do registro da Brand. `shouldSkipSupportInvestigation` e `buildInvestigationQuestion` também recebem o vocabulário.
+- `KnowledgeContextService`: removido o bônus fixo de +3 no ranking para "cashback"/"nível" — uma marca era favorecida sobre todas as outras. O reforço agora vem do vocabulário da marca do atendimento.
+
 ## [1.7.0] — 2026-08-08
 
 ### Adicionado — arquitetura multimarca

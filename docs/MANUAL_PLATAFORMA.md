@@ -178,7 +178,18 @@ Centraliza o que antes estava em código: `identityName`/`identityReply` (person
 `Tickets.brandId` é gravado no nascimento (`FindOrCreateTicketService`) e nunca rederivado: trocar conexão, fila ou agente depois não reescreve de qual operação foi aquele atendimento. O texto da mensagem **nunca** participa dessa decisão — conteúdo define intenção, origem define empresa.
 
 ### UserBrand (`backend/src/models/UserBrand.ts`)
-N:N entre funcionário e marca, sem duplicar login. `canAttend = false` = supervisiona sem assumir. Ausência de vínculo é tratada como **sem restrição** (usuário legado), para o isolamento não derrubar a operação no deploy; passa a valer assim que o admin atribui a primeira marca.
+N:N entre funcionário e marca, sem duplicar login. `canAttend = false` = supervisiona sem assumir (barrado em `assertCanAcceptTicket`).
+
+**Ausência de vínculo** depende do Setting `brandIsolationEnforced`:
+
+| Setting | Usuário comum sem vínculo |
+|---------|---------------------------|
+| `disabled` (padrão) | Mantém o acesso legado — estado de transição |
+| `enabled` | Sem acesso — estado final |
+
+A troca é por configuração, não deploy, e reversível na mesma velocidade. Admin e super não são afetados. O gate síncrono (`canViewTicket`) lê um snapshot do Setting carregado por `ShowUserService` em `user.brandIsolationEnforced`.
+
+**Administração:** Administração → Marcas (`pages/Brands`) cria e edita marcas; o cadastro do funcionário (`UserModal` → `UserBrandsSelect`) atribui as marcas.
 
 ### Whatsapp (`backend/src/models/Whatsapp.ts`)
 Conexão WhatsApp: status, mensagens automáticas, token API, filas via `WhatsappQueue`.

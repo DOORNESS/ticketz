@@ -18,11 +18,11 @@ export const userCanSeeTicketBrand = (ticket: Ticket, user: User): boolean => {
 
   const allowed = (user.brands || []).map(brand => Number(brand.id));
 
-  // Sem vínculo de marca o usuário é legado: mantém o comportamento anterior
-  // para não derrubar operação durante a transição. Assim que o admin marcar
-  // ao menos uma marca no cadastro, o isolamento passa a valer para ele.
+  // Sem vínculo, o comportamento depende do Setting `brandIsolationEnforced`:
+  // desligado (padrão) mantém o acesso legado durante a transição; ligado, a
+  // ausência de configuração vira ausência de acesso — o estado final.
   if (!allowed.length) {
-    return true;
+    return user.brandIsolationEnforced !== true;
   }
 
   if (!ticket.brandId) {

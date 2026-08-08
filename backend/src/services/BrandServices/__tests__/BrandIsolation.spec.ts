@@ -32,6 +32,11 @@ jest.mock("../../../models/AiAgent");
 jest.mock("../../../models/KnowledgeBase");
 jest.mock("../../../models/User");
 jest.mock("../../../models/UserBrand");
+// O acesso por marca consulta o Setting `brandIsolationEnforced`; aqui o
+// cenário é o de transição (desligado), que é o padrão em produção hoje.
+jest.mock("../../../helpers/CheckSettings", () => ({
+  GetCompanySetting: jest.fn(async () => "disabled")
+}));
 
 const NIVEL = { id: 10, slug: "nivel", companyId: 1 };
 const FORTMAX = { id: 20, slug: "fortmax", companyId: 1 };

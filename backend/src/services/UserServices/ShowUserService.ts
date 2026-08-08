@@ -3,6 +3,7 @@ import AppError from "../../errors/AppError";
 import Queue from "../../models/Queue";
 import Company from "../../models/Company";
 import Brand from "../../models/Brand";
+import { isBrandIsolationEnforced } from "../BrandServices/BrandAccessService";
 
 const ShowUserService = async (
   id: string | number,
@@ -47,6 +48,8 @@ const ShowUserService = async (
   ) {
     throw new AppError("ERR_FORBIDDEN", 403);
   }
+
+  user.brandIsolationEnforced = await isBrandIsolationEnforced(user.companyId);
 
   return user;
 };

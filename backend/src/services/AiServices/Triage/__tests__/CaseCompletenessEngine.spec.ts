@@ -166,18 +166,27 @@ describe("CaseCompletenessEngine", () => {
     ).toBeNull();
   });
 
-  it("detects explain requests about Nivel as informational", () => {
+  /**
+   * O termo da marca deixou de estar embutido no classificador: agora entra
+   * por `brandVocabulary`, vindo do registro da Brand. Sem o vocabulário, a
+   * frase é genérica — que é o comportamento correto para uma company que
+   * não tem essa marca.
+   */
+  it("detects explain requests about a brand term as informational", () => {
     const userText = "Me explique o nível";
+    const brandVocabulary = ["nivel", "cashback"];
 
-    expect(isInformationalIntent(userText)).toBe(true);
-    expect(isVagueCustomerStatement(userText)).toBe(false);
+    expect(isInformationalIntent(userText, brandVocabulary)).toBe(true);
+    // Sem o vocabulário da marca a frase é só genérica — sem favoritismo.
+    expect(isInformationalIntent(userText)).toBe(false);
     expect(
       buildInvestigationQuestion(
         evaluateCaseCompleteness({
           latestMessage: userText,
           conversationText: `user: ${userText}`
         }),
-        userText
+        userText,
+        brandVocabulary
       )
     ).toBeNull();
   });

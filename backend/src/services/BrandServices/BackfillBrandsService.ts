@@ -237,7 +237,11 @@ export const backfillBrandsForCompany = async (
     // Tickets herdam a marca da conexão de origem.
     let ticketCount = 0;
     if (brandWhatsappIds.length) {
-      const [, affected] = (await Ticket.update(
+      // `Model.update` devolve `[affectedCount]`; o segundo elemento só existe
+      // com `returning: true`. Ler o índice 1 fazia o relatório dizer 0 mesmo
+      // com o UPDATE tendo funcionado — e é esse número que autoriza concluir
+      // a migração, então precisa ser confiável.
+      const [affected] = (await Ticket.update(
         { brandId: brand.id },
         {
           where: {
@@ -246,7 +250,7 @@ export const backfillBrandsForCompany = async (
             brandId: { [Op.is]: null }
           }
         }
-      )) as unknown as [unknown, number];
+      )) as unknown as [number];
       ticketCount = Number(affected || 0);
     }
 

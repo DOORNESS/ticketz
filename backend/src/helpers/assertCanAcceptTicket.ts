@@ -17,6 +17,29 @@ export const assertCanAcceptTicket = async (
     return;
   }
 
+  /**
+   * Marca com `canAttend = false` supervisiona mas não assume.
+   * Checado antes de qualquer regra de fila: é permissão, não roteamento.
+   */
+  const brandLinks = (user.brands || []) as unknown as {
+    id: number;
+    UserBrand?: { canAttend?: boolean };
+  }[];
+
+  if (brandLinks.length) {
+    const link = brandLinks.find(
+      brand => Number(brand.id) === Number(ticket.brandId)
+    );
+
+    if (!link) {
+      throw new AppError("ERR_NO_PERMISSION_BRAND", 403);
+    }
+
+    if (link.UserBrand && link.UserBrand.canAttend === false) {
+      throw new AppError("ERR_BRAND_VIEW_ONLY", 403);
+    }
+  }
+
   if (ticket.status === "closed") {
     throw new AppError("ERR_TICKET_CLOSED", 400);
   }
