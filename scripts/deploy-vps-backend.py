@@ -644,6 +644,19 @@ def main() -> int:
         finally:
             zip_path.unlink(missing_ok=True)
 
+        # Separar upload de restart é o que permite rodar migration ENTRE os
+        # dois. Extrair o zip não afeta o processo em execução — o Node já
+        # carregou os módulos em memória —, então o backend antigo continua
+        # servindo até alguém reiniciar de fato. Se a migration falhar, o
+        # deploy para aqui e é o backend ANTIGO que segue no ar, coerente com
+        # o schema antigo.
+        if os.environ.get("DEPLOY_SKIP_RESTART", "").lower() in ("1", "true", "yes"):
+            print(
+                "Upload concluído. Restart adiado (DEPLOY_SKIP_RESTART=1): "
+                "a migration roda antes de o backend novo subir."
+            )
+            return 0
+
         skip_reset = os.environ.get("SKIP_WHATSAPP_RESET", "").lower() in (
             "1",
             "true",

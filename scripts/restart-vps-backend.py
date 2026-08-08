@@ -1,121 +1,60 @@
 #!/usr/bin/env python3
-"""Restart Ticketz on Contabo VPS (C:\\ticketz — processos .cmd, não Scheduled Tasks)."""
+"""Reinicia o backend na VPS — passo separado do upload.
+
+Existe para que o deploy possa ser: upload → migration → restart.
+
+Antes, `deploy-vps-backend.py` fazia upload e restart no mesmo passo, então o
+backend novo subia ANTES da migration. Em 08/08 isso colocou em produção um
+código que declarava `Tickets.brandId` sobre um schema que ainda não tinha a
+coluna. Com os dois passos separados, uma migration que falha interrompe o
+deploy com o backend ANTIGO ainda no ar — que é coerente com o schema antigo.
+
+A lógica de parada, verificação e health continua em
+`backend/scripts/restart-after-deploy.ps1`; aqui só a chamamos.
+"""
 
 import os
 import sys
-from typing import Optional
 
 import winrm
 
-DEFAULT_HOST = "31.220.103.226"
-
-
-def normalize_host(value: Optional[str]) -> str:
-    raw = (value or "").strip()
-    if not raw:
-        return DEFAULT_HOST
-    raw = raw.replace("https://", "").replace("http://", "").strip("/")
-    raw = raw.split("/")[0].split(":")[0].strip()
-    return raw or DEFAULT_HOST
-
-
-HOST = normalize_host(os.environ.get("CONTABO_HOST"))
-USER = os.environ.get("CONTABO_USER", "administrator")
+HOST = os.environ.get("CONTABO_HOST", "31.220.103.226")
 PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip() or "74h9UFeGPbGni0"
-
-RESTART_PS = r"""
-$ErrorActionPreference = 'Continue'
-$Root = 'C:\ticketz'
-
-schtasks /Change /TN TicketzBackend /DISABLE 2>&1 | Out-Null
-schtasks /Change /TN TicketzRedis /DISABLE 2>&1 | Out-Null
-
-Get-Process node -EA SilentlyContinue | Stop-Process -Force
-Get-Process redis-server -EA SilentlyContinue | Stop-Process -Force
-Start-Sleep 2
-
-$redis = @(
-  "$Root\start-redis.cmd",
-  "$Root\run-redis.cmd"
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
-if ($redis) {
-  Start-Process $redis -WindowStyle Hidden
-  Write-Output "redis started via $redis"
-} else {
-  Write-Output "redis script missing"
-}
-
-Start-Sleep 3
-
-$backend = @(
-  "$Root\start-backend-watch.cmd",
-  "$Root\start-backend.cmd",
-  "$Root\run-backend.cmd"
-) | Where-Object { Test-Path $_ } | Select-Object -First 1
-if ($backend) {
-  Start-Process $backend -WindowStyle Hidden
-  Write-Output "backend started via $backend"
-} else {
-  Push-Location "$Root\backend"
-  Start-Process node -ArgumentList 'dist\server.js' -WorkingDirectory "$Root\backend" -WindowStyle Hidden
-  Pop-Location
-  Write-Output 'backend started via node dist\server.js'
-}
-
-Start-Sleep 40
-Get-Process node,redis-server -EA SilentlyContinue | Select-Object Name,Id
-netstat -ano | findstr ':8080'
-try {
-  Write-Output "health=$((Invoke-WebRequest http://127.0.0.1:8080/health -UseBasicParsing -TimeoutSec 20).Content)"
-} catch {
-  Write-Output "health=FAIL $($_.Exception.Message)"
-}
-try {
-  $r = Invoke-WebRequest 'http://127.0.0.1/health' -Headers @{Host='api.fortmax.com.br'} -UseBasicParsing -TimeoutSec 15
-  Write-Output "iis_proxy=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(120,$r.Content.Length)))"
-} catch {
-  Write-Output "iis_proxy=FAIL $($_.Exception.Message)"
-}
-try {
-  $r = Invoke-WebRequest 'http://31.220.103.226/health' -Headers @{Host='api.fortmax.com.br'} -UseBasicParsing -TimeoutSec 15
-  Write-Output "iis_public_ip=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(120,$r.Content.Length)))"
-} catch {
-  Write-Output "iis_public_ip=FAIL $($_.Exception.Message)"
-}
-try {
-  [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-  $r = Invoke-WebRequest 'https://127.0.0.1/health' -Headers @{Host='api.fortmax.com.br'} -UseBasicParsing -TimeoutSec 15
-  Write-Output "iis_https_local=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(120,$r.Content.Length)))"
-} catch {
-  Write-Output "iis_https_local=FAIL $($_.Exception.Message)"
-}
-try {
-  [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-  $r = Invoke-WebRequest 'https://31.220.103.226/health' -Headers @{Host='api.fortmax.com.br'} -UseBasicParsing -TimeoutSec 15
-  Write-Output "iis_https_ip=$($r.StatusCode) $($r.Content.Substring(0,[Math]::Min(120,$r.Content.Length)))"
-} catch {
-  Write-Output "iis_https_ip=FAIL $($_.Exception.Message)"
-}
-"""
+ROOT = os.environ.get("DEPLOY_ROOT", r"C:\ticketz")
 
 
 def main() -> int:
-    s = winrm.Session(
+    skip_reset = os.environ.get("SKIP_WHATSAPP_RESET", "").lower() in (
+        "1",
+        "true",
+        "yes",
+    )
+    switch = "-SkipWhatsAppReset" if skip_reset else ""
+
+    session = winrm.Session(
         f"https://{HOST}:5986/wsman",
-        auth=(USER, PASSWORD),
+        auth=("administrator", PASSWORD),
         transport="basic",
         server_cert_validation="ignore",
-        operation_timeout_sec=120,
-        read_timeout_sec=150,
+        operation_timeout_sec=300,
+        read_timeout_sec=330,
     )
-    print(f"Restarting Ticketz on {HOST}...")
-    r = s.run_ps(RESTART_PS)
-    out = (r.std_out or b"").decode("utf-8", errors="replace")
-    err = (r.std_err or b"").decode("utf-8", errors="replace")
-    print(out)
-    if err.strip():
-        print(err[-1500:])
-    return 0 if r.status_code == 0 else 1
+
+    print("Restart backend..." + (" (no WhatsApp reset)" if skip_reset else ""))
+    result = session.run_ps(
+        f"& '{ROOT}\\backend\\scripts\\restart-after-deploy.ps1' {switch}; "
+        f"exit $LASTEXITCODE"
+    )
+
+    print((result.std_out or b"").decode("utf-8", errors="replace"))
+    err = (result.std_err or b"").decode("utf-8", errors="replace").strip()
+    if err:
+        print(err[-2000:], file=sys.stderr)
+
+    if result.status_code != 0:
+        print("::error::Backend local health check failed after restart")
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

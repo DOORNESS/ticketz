@@ -66,7 +66,10 @@ const SEEDS: BrandSeed[] = [
       "Não encontrei uma orientação segura para esse caso nos materiais disponíveis. Para que a equipe analise sua solicitação sem eu arriscar uma informação incorreta, abra um chamado em https://nivelvelo.com/chamado e descreva o que aconteceu.",
     supportContacts: [],
     vocabulary: ["nivel", "nível", "cashback", "fidelização", "fidelizacao"],
-    queuePatterns: ["suporte nivel", "suporte nível"],
+    // Os padroes casam pelo NOME DA MARCA, nao por "Suporte X": em producao
+    // as filas se chamam "01 - Suporte Consumidor Nivel", "03 - Recuperar
+    // Conta Nivel" etc. Exigir o prefixo deixava 6 das 7 filas sem marca.
+    queuePatterns: ["nivel", "nível"],
     agentPatterns: ["nivelton", "agente nivel cashback"],
     domainPatterns: ["nivel cashback", "nível cashback"]
   },
@@ -89,7 +92,8 @@ const SEEDS: BrandSeed[] = [
       }
     ],
     vocabulary: ["fortmax", "webg3", "web g3", "fortcontrol"],
-    queuePatterns: ["suporte fortmax", "suporte webg3", "suporte web g3"],
+    // Idem: "Financeiro Fortmax", "Gerencia Fortmax", "Programacao Fortmax".
+    queuePatterns: ["fortmax", "webg3", "web g3"],
     agentPatterns: ["webin", "atendente virtual webg3"],
     domainPatterns: ["fortmax", "suporte fortmax"]
   }

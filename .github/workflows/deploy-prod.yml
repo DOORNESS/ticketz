@@ -149,6 +149,10 @@ jobs:
           # importa ./Brand — sem enviar o Brand.js, e o backend morreria com
           # "Cannot find module './Brand'". Verificado rodando collect_files().
           DEPLOY_MODE: "full"
+          # Sobe os arquivos e NAO reinicia. Extrair o zip nao afeta o processo
+          # em execucao, entao o backend antigo segue servindo ate o passo de
+          # restart — que so acontece depois de a migration passar.
+          DEPLOY_SKIP_RESTART: "1"
           DEPLOY_USE_ZIP: "1"
           DEPLOY_B64_CHUNK: "1500"
           DEPLOY_LOCK_WAIT_SEC: "1200"
@@ -169,12 +173,19 @@ jobs:
           echo "Deploy target host: ${CONTABO_HOST}"
           python3 scripts/deploy-vps-backend.py
 
+      # ORDEM OBRIGATORIA: upload -> migration -> restart.
+      #
       # O pipeline nunca aplicou migration: nao havia passo de banco, e
-      # AUTO_MIGRATE=true so dispara applyAiSchema(), que e um script fixo do
-      # schema de IA. O schema era atualizado a mao na VPS. Isso deixou de
-      # servir com multimarcas: models/Ticket passa a declarar brandId, entao
-      # codigo novo sobre schema velho quebra toda consulta a Ticket.
-      # Roda depois do upload do dist e antes do restart do passo seguinte.
+      # AUTO_MIGRATE=true so dispara applyAiSchema(), um script fixo do schema
+      # de IA. O schema era atualizado a mao na VPS.
+      #
+      # Em 08/08 a primeira versao deste passo ficava DEPOIS de um passo que
+      # ja reiniciava o backend: o codigo novo subiu declarando Tickets.brandId
+      # sobre um schema sem a coluna, e como aquele passo falhou, a migration
+      # nunca chegou a rodar. Agora o upload nao reinicia nada, e o restart e
+      # um passo proprio, depois daqui.
+      #
+      # Migration falhou = deploy para = backend ANTIGO continua no ar.
       - name: Aplicar migrations no banco de produção
         if: env.DEPLOY_BACKEND == 'true'
         env:
@@ -191,6 +202,25 @@ jobs:
           CONTABO_HOST="${CONTABO_HOST%%:*}"
           export CONTABO_HOST
           python3 scripts/apply-migrations-vps.py
+
+      # So agora o backend novo sobe, ja sobre o schema novo.
+      - name: Reiniciar backend (após migration)
+        if: env.DEPLOY_BACKEND == 'true'
+        env:
+          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP }}
+          SKIP_WHATSAPP_RESET: "1"
+        run: |
+          set -euo pipefail
+          pip install pywinrm
+          if [ -z "${CONTABO_PASSWORD:-}" ]; then unset CONTABO_PASSWORD; fi
+          CONTABO_HOST="${CONTABO_HOST:-31.220.103.226}"
+          CONTABO_HOST="${CONTABO_HOST#https://}"
+          CONTABO_HOST="${CONTABO_HOST#http://}"
+          CONTABO_HOST="${CONTABO_HOST%%/*}"
+          CONTABO_HOST="${CONTABO_HOST%%:*}"
+          export CONTABO_HOST
+          python3 scripts/restart-vps-backend.py
 
       - name: Corrigir .env PORT/HOST e scripts de start na VPS
         if: env.DEPLOY_BACKEND == 'true'
