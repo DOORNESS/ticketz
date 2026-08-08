@@ -87,6 +87,9 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          HOMOLOG_DB_PORT: ${{ secrets.HOMOLOG_DB_PORT }}
+          PROD_DB_HOST_FRAGMENT: ${{ secrets.PROD_DB_HOST_FRAGMENT }}
+          PROD_B2_BUCKET: ${{ secrets.PROD_B2_BUCKET }}
         run: |
           set -euo pipefail
           # Sem fallback: ausente = falha. Cair para uma variável de produção
@@ -112,8 +115,22 @@ jobs:
           require HOMOLOG_B2_KEY_ID           "${HOMOLOG_B2_KEY_ID:-}"
           require HOMOLOG_B2_APPLICATION_KEY  "${HOMOLOG_B2_APPLICATION_KEY:-}"
           require HOMOLOG_B2_ENDPOINT         "${HOMOLOG_B2_ENDPOINT:-}"
+          # A porta entra explicitamente: deixar 5432 implicito enquanto host,
+          # base, usuario e senha sao parametrizados esconde o unico campo que
+          # muda em Postgres gerenciado com pooler.
+          require HOMOLOG_DB_PORT             "${HOMOLOG_DB_PORT:-}"
           require CLOUDFLARE_API_TOKEN        "${CLOUDFLARE_API_TOKEN:-}"
           require CLOUDFLARE_ZONE_ID          "${CLOUDFLARE_ZONE_ID:-}"
+          # Usado no deploy do frontend (wrangler pages). Faltando, o deploy
+          # quebraria no ultimo passo, depois de ja ter mexido na VPS.
+          require CLOUDFLARE_ACCOUNT_ID       "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+          # Os dois valores de producao sao obrigatorios porque sao a UNICA
+          # forma de provar que o banco e o bucket de homologacao nao sao os de
+          # producao. Sem eles a comparacao vira no-op e o guard passa a dar uma
+          # garantia que nao tem — pior do que nao existir.
+          require PROD_DB_HOST_FRAGMENT       "${PROD_DB_HOST_FRAGMENT:-}"
+          require PROD_B2_BUCKET              "${PROD_B2_BUCKET:-}"
           [ "${missing}" = "0" ] || exit 1
           echo "Todos os secrets de homologação presentes."
 
@@ -128,16 +145,17 @@ jobs:
           # O host do banco de produção é passado como fragmento por secret para
           # não ficar em texto claro no repositório. Se não estiver definido, a
           # comparação é pulada — mas o alerta fica visível no log.
-          if [ -n "${PROD_DB_HOST_FRAGMENT:-}" ]; then
-            case "${HOMOLOG_DB_HOST}" in
-              *"${PROD_DB_HOST_FRAGMENT}"*)
-                echo "::error::HOMOLOG_DB_HOST aponta para o banco de PRODUÇÃO. Abortado."
-                exit 1
-                ;;
-            esac
-          else
-            echo "::warning::PROD_DB_HOST_FRAGMENT não definido — comparação com o banco de produção não foi feita."
+          if [ -z "${PROD_DB_HOST_FRAGMENT:-}" ]; then
+            echo "::error::PROD_DB_HOST_FRAGMENT ausente — sem ele não há como provar que o banco não é o de produção."
+            exit 1
           fi
+
+          case "${HOMOLOG_DB_HOST}" in
+            *"${PROD_DB_HOST_FRAGMENT}"*)
+              echo "::error::HOMOLOG_DB_HOST aponta para o banco de PRODUÇÃO. Abortado."
+              exit 1
+              ;;
+          esac
 
           if [ "${HOMOLOG_CF_PROJECT_NAME}" = "${FORBIDDEN_CF_PROJECT}" ]; then
             echo "::error::HOMOLOG_CF_PROJECT_NAME é o projeto de produção. Abortado."
@@ -169,13 +187,14 @@ jobs:
           # As chaves de storage sao `companies/{companyId}/...` e ignoram
           # STORAGE_ROOT_PREFIX, entao os dois ambientes gerariam caminhos
           # identicos. Prefixo nao protege: so bucket separado protege.
-          if [ -n "${PROD_B2_BUCKET:-}" ]; then
-            if [ "${HOMOLOG_B2_BUCKET}" = "${PROD_B2_BUCKET}" ]; then
-              echo "::error::HOMOLOG_B2_BUCKET é o bucket de PRODUÇÃO. Abortado."
-              exit 1
-            fi
-          else
-            echo "::warning::PROD_B2_BUCKET não definido — comparação com o bucket de produção não foi feita."
+          if [ -z "${PROD_B2_BUCKET:-}" ]; then
+            echo "::error::PROD_B2_BUCKET ausente — sem ele não há como provar que o bucket não é o de produção."
+            exit 1
+          fi
+
+          if [ "${HOMOLOG_B2_BUCKET}" = "${PROD_B2_BUCKET}" ]; then
+            echo "::error::HOMOLOG_B2_BUCKET é o bucket de PRODUÇÃO. Abortado."
+            exit 1
           fi
           echo "Bucket de homologação validado como não-produção."
 
@@ -268,6 +287,11 @@ jobs:
           HOMOLOG_OPENAI_API_KEY: ${{ secrets.HOMOLOG_OPENAI_API_KEY }}
           HOMOLOG_RESEND_API_KEY: ${{ secrets.HOMOLOG_RESEND_API_KEY }}
           HOMOLOG_ESCALATION_EMAIL_TO: ${{ secrets.HOMOLOG_ESCALATION_EMAIL_TO }}
+          # O script repete as comparacoes com producao antes de escrever no
+          # disco da VPS. Sem estes dois valores essa repeticao era um no-op
+          # silencioso — o guard existia, mas nao guardava nada.
+          PROD_DB_HOST_FRAGMENT: ${{ secrets.PROD_DB_HOST_FRAGMENT }}
+          PROD_B2_BUCKET: ${{ secrets.PROD_B2_BUCKET }}
         run: |
           set -euo pipefail
           pip install pywinrm

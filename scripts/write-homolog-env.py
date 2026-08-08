@@ -25,6 +25,11 @@ REQUIRED = [
     "DEPLOY_ROOT",
     "BACKEND_PORT",
     "HOMOLOG_DB_HOST",
+    # A porta e explicita de proposito. Com host, base, usuario e senha vindo de
+    # secret, deixar so a porta com default 5432 esconde justamente o campo que
+    # muda em Postgres gerenciado com pooler (6543 no Supabase, por exemplo) —
+    # e o sintoma seria "conexao recusada" em vez de "secret faltando".
+    "HOMOLOG_DB_PORT",
     "HOMOLOG_DB_NAME",
     "HOMOLOG_DB_USER",
     "HOMOLOG_DB_PASS",
@@ -37,6 +42,12 @@ REQUIRED = [
     "HOMOLOG_B2_KEY_ID",
     "HOMOLOG_B2_APPLICATION_KEY",
     "HOMOLOG_B2_ENDPOINT",
+    # Valores de producao usados apenas para COMPARACAO, nunca para conectar.
+    # Sao obrigatorios porque sao a unica evidencia de que o banco e o bucket
+    # de homologacao nao sao os de producao: ausentes, as checagens abaixo
+    # passariam sempre, dando uma garantia que nao existe.
+    "PROD_DB_HOST_FRAGMENT",
+    "PROD_B2_BUCKET",
 ]
 
 PRODUCTION_ROOT = r"C:\ticketz"
@@ -68,6 +79,15 @@ def guard_not_production(cfg: dict) -> None:
         )
         sys.exit(1)
 
+    # O .env escrito aqui e o que decide a qual banco o backend conecta. Se o
+    # host de homologacao contem o fragmento do host de producao, e producao.
+    if cfg["PROD_DB_HOST_FRAGMENT"] in cfg["HOMOLOG_DB_HOST"]:
+        print(
+            "HOMOLOG_DB_HOST aponta para o banco de PRODUÇÃO. Abortado.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     redis_uri = cfg["HOMOLOG_REDIS_URI"]
     if f":{PRODUCTION_REDIS_PORT}" in redis_uri:
         print(
@@ -77,8 +97,7 @@ def guard_not_production(cfg: dict) -> None:
         )
         sys.exit(1)
 
-    prod_bucket = (os.environ.get("PROD_B2_BUCKET") or "").strip()
-    if prod_bucket and cfg["HOMOLOG_B2_BUCKET"] == prod_bucket:
+    if cfg["HOMOLOG_B2_BUCKET"] == cfg["PROD_B2_BUCKET"]:
         print(
             "HOMOLOG_B2_BUCKET é o bucket de PRODUÇÃO. Abortado.",
             file=sys.stderr,
@@ -88,7 +107,6 @@ def guard_not_production(cfg: dict) -> None:
 
 def build_env(cfg: dict) -> str:
     optional = {
-        "DB_PORT": os.environ.get("HOMOLOG_DB_PORT", "5432"),
         # Vazios de proposito: sem chave, nao envia e-mail e a IA nao responde.
         # Preferimos homologacao muda a homologacao falando com cliente real.
         "OPENAI_API_KEY": os.environ.get("HOMOLOG_OPENAI_API_KEY", ""),
@@ -106,7 +124,7 @@ def build_env(cfg: dict) -> str:
         "",
         "DB_DIALECT=postgres",
         f"DB_HOST={cfg['HOMOLOG_DB_HOST']}",
-        f"DB_PORT={optional['DB_PORT']}",
+        f"DB_PORT={cfg['HOMOLOG_DB_PORT']}",
         f"DB_NAME={cfg['HOMOLOG_DB_NAME']}",
         f"DB_USER={cfg['HOMOLOG_DB_USER']}",
         f"DB_PASS={cfg['HOMOLOG_DB_PASS']}",

@@ -50,7 +50,7 @@ Copie de *Settings → Database*: host, porta, database, user, senha.
 | `HOMOLOG_VPS_IP` | IP da VPS Contabo |
 | `HOMOLOG_VPS_PASSWORD` | senha do administrator |
 | `HOMOLOG_DB_HOST` | host do Postgres de homologação |
-| `HOMOLOG_DB_PORT` | `5432` |
+| `HOMOLOG_DB_PORT` | porta do Postgres (`5432`, ou `6543` em pooler) |
 | `HOMOLOG_DB_NAME` | database |
 | `HOMOLOG_DB_USER` | usuário |
 | `HOMOLOG_DB_PASS` | senha |
@@ -64,6 +64,16 @@ Copie de *Settings → Database*: host, porta, database, user, senha.
 | `HOMOLOG_CF_PROJECT_NAME` | nome do projeto Pages |
 | `PROD_DB_HOST_FRAGMENT` | trecho do host de produção (guard) |
 | `PROD_B2_BUCKET` | nome do bucket de produção (guard) |
+
+Os 17 acima são **obrigatórios**: o guard aborta se qualquer um faltar. Os dois
+`PROD_*` entram na lista porque são a única evidência de que o banco e o bucket
+de homologação não são os de produção — ausentes, a comparação viraria no-op e o
+guard passaria a dar uma garantia que não tem.
+
+`CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ZONE_ID` e `CLOUDFLARE_ACCOUNT_ID` também são
+obrigatórios, mas **já existem** no repositório (produção usa os mesmos). O
+`ACCOUNT_ID` é exigido no guard porque só seria usado no último passo, o publish
+do Pages — faltando, o deploy quebraria depois de já ter mexido na VPS.
 
 Opcionais — vazio significa desligado:
 `HOMOLOG_OPENAI_API_KEY`, `HOMOLOG_RESEND_API_KEY`, `HOMOLOG_ESCALATION_EMAIL_TO`
