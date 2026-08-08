@@ -90,6 +90,41 @@ const linha = (nome, ok, detalhe) =>
       `agente=${agente ? agente.name : 'nenhum'} bases=[${nomes.map(n=>n.name).join(' | ')}] negadas=${negadas.length}`));
   }
 
+
+  // Dashboard, busca, relatorios e socket: mesmas regras, caminhos distintos.
+  const socketScope = require('./dist/helpers/socketBrandScope');
+  const dash = require('./dist/services/ReportService/DashboardService');
+
+  for (const u of usuarios) {
+    const full = await User.findByPk(u.id, { include: [Brand, Queue] });
+    const acesso = await access.getBrandAccessForUser(u.id);
+
+    // busca / listagem: filtro aplicado na consulta
+    const filtro = access.resolveBrandFilterForQuery(acesso, undefined);
+    const visiveis = filtro === null
+      ? tickets
+      : tickets.filter(t => filtro.includes(Number(t.brandId)));
+    saida.push(linha(`busca/listagem de ${u.name}`, true,
+      `${visiveis.length} de ${tickets.length} ticket(s)`));
+
+    // dashboard: conta so o que o usuario pode ver
+    let resumo = 'n/d';
+    try {
+      const escopo = await dash.resolveDashboardBrandScope(u.id);
+      const st = await dash.statusSummaryService(companyId, u.id);
+      resumo = `escopoMarcas=${JSON.stringify(escopo)} tickets=${JSON.stringify(st.ticketsStatusSummary)}`;
+    } catch (e) { resumo = 'erro: ' + e.message; }
+    saida.push(linha(`dashboard de ${u.name}`, true, resumo.slice(0, 160)));
+
+    // socket: salas de fila que o usuario pode ouvir
+    try {
+      const salas = await socketScope.socketQueuesForUser(full);
+      saida.push(linha(`socket de ${u.name}`, true, `filas=${JSON.stringify(salas)}`));
+    } catch (e) {
+      saida.push(linha(`socket de ${u.name}`, false, e.message));
+    }
+  }
+
   const conexoes = await q(
     `SELECT w.name, w.status, b.slug FROM "${sc}"."Whatsapps" w
       LEFT JOIN "${sc}"."Brands" b ON b.id=w."brandId" WHERE w."companyId"=1 ORDER BY w.id`
