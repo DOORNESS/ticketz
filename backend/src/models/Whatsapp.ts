@@ -20,6 +20,7 @@ import Queue from "./Queue";
 import Ticket from "./Ticket";
 import WhatsappQueue from "./WhatsappQueue";
 import Company from "./Company";
+import Brand from "./Brand";
 import Wavoip from "./Wavoip";
 
 @Table
@@ -108,6 +109,13 @@ class Whatsapp extends Model<Whatsapp> {
 
   @BelongsTo(() => Company)
   company: Company;
+
+  @ForeignKey(() => Brand)
+  @Column
+  brandId: number;
+
+  @BelongsTo(() => Brand)
+  brand: Brand;
 
   @Column
   token: string;

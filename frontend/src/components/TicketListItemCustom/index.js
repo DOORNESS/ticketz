@@ -16,6 +16,7 @@ import Badge from "@material-ui/core/Badge";
 import Box from "@material-ui/core/Box";
 
 import { i18n } from "../../translate/i18n";
+import BrandBadge from "../BrandBadge";
 import { formatWhatsappContactName } from "../../helpers/formatWhatsappDisplay";
 
 import api from "../../services/api";
@@ -424,6 +425,12 @@ const TicketListItemCustom = ({ ticket, setTabOpen, groupActionButtons }) => {
               marginRight: 3
             }}
           />
+
+          {ticket.brand ? (
+            <span style={{ marginRight: 4 }}>
+              <BrandBadge brand={ticket.brand} />
+            </span>
+          ) : null}
 
           {ticket.whatsappId && (
             <Badge

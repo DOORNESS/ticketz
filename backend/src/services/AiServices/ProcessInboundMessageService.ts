@@ -78,6 +78,7 @@ import { buildContextualRetrievalQuery } from "./ContextualRetrievalQuery";
 import { buildConversationAttemptState } from "./ConversationAttemptStateService";
 import { dropDuplicatedCurrentTurn } from "./conversationHistoryUtils";
 import { resolveAccountRecoverySuccessReply } from "./AccountRecoverySuccessReplyService";
+import { restrictKnowledgeBasesToBrand } from "../BrandServices/BrandAiConfigService";
 
 export type InboundMessageItem = {
   messageBody: string;
@@ -767,11 +768,12 @@ const ProcessInboundMessageService = async ({
       routingMeta = resolved.routing;
     }
 
-    const knowledgeBaseIds = await getKnowledgeBaseIdsForAgent(
+    const knowledgeBaseIds = await restrictKnowledgeBasesToBrand(
       companyId,
-      agent.id,
-      ticket.queueId,
-      { orchestratorMode }
+      ticket.brandId,
+      await getKnowledgeBaseIdsForAgent(companyId, agent.id, ticket.queueId, {
+        orchestratorMode
+      })
     );
     const history = dropDuplicatedCurrentTurn(
       await buildConversationHistory(ticket.id, 6),

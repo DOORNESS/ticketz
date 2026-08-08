@@ -31,6 +31,7 @@ import versionRoutes from "./versionRoutes";
 import ticketzOSSRoutes from "./ticketzOSSRoutes";
 import i18nRoutes from "./i18nRoutes";
 import wavoipRoutes from "./wavoipRoutes";
+import brandRoutes from "./brandRoutes";
 import aiRoutes from "./aiRoutes";
 import mediaRoutes from "./mediaRoutes";
 
@@ -67,6 +68,7 @@ heavyRoutes.use(versionRoutes);
 heavyRoutes.use(ticketzOSSRoutes);
 heavyRoutes.use(i18nRoutes);
 heavyRoutes.use(wavoipRoutes);
+heavyRoutes.use(brandRoutes);
 heavyRoutes.use(aiRoutes);
 heavyRoutes.use(mediaRoutes);
 

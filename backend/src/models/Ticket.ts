@@ -23,6 +23,7 @@ import Queue from "./Queue";
 import User from "./User";
 import Whatsapp from "./Whatsapp";
 import Company from "./Company";
+import Brand from "./Brand";
 import QueueOption from "./QueueOption";
 import Tag from "./Tag";
 import TicketTag from "./TicketTag";
@@ -110,6 +111,13 @@ class Ticket extends Model<Ticket> {
 
   @BelongsTo(() => Company)
   company: Company;
+
+  @ForeignKey(() => Brand)
+  @Column
+  brandId: number;
+
+  @BelongsTo(() => Brand)
+  brand: Brand;
 
   @Default(false)
   @Column

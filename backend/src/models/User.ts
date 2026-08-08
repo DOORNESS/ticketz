@@ -19,6 +19,8 @@ import { hash, compare } from "bcryptjs";
 import Ticket from "./Ticket";
 import Queue from "./Queue";
 import UserQueue from "./UserQueue";
+import Brand from "./Brand";
+import UserBrand from "./UserBrand";
 import Company from "./Company";
 import QuickMessage from "./QuickMessage";
 import UserSocketSession from "./UserSocketSession"; // Importação da nova model
@@ -71,6 +73,11 @@ class User extends Model<User> {
 
   @BelongsToMany(() => Queue, () => UserQueue)
   queues: Queue[];
+
+  /** Marcas que este funcionário pode acessar. Vazio = sem restrição
+   *  apenas para admin/super; para os demais significa sem acesso. */
+  @BelongsToMany(() => Brand, () => UserBrand)
+  brands: Brand[];
 
   @HasMany(() => QuickMessage, {
     onUpdate: "CASCADE",

@@ -13,6 +13,7 @@ import {
   DataType
 } from "sequelize-typescript";
 import Company from "./Company";
+import Brand from "./Brand";
 import Queue from "./Queue";
 import AiAgentQueue from "./AiAgentQueue";
 import AiAgentKnowledgeBase from "./AiAgentKnowledgeBase";
@@ -30,6 +31,13 @@ class AiAgent extends Model<AiAgent> {
 
   @BelongsTo(() => Company)
   company: Company;
+
+  @ForeignKey(() => Brand)
+  @Column
+  brandId: number;
+
+  @BelongsTo(() => Brand)
+  brand: Brand;
 
   @Column
   name: string;

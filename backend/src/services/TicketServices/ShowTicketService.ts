@@ -8,6 +8,7 @@ import Whatsapp from "../../models/Whatsapp";
 import UserSocketSession from "../../models/UserSocketSession";
 import Company from "../../models/Company";
 import { healHumanAssignedTicketStatus } from "../../helpers/ticketHumanHandling";
+import Brand from "../../models/Brand";
 
 const ShowTicketService = async (
   id: string | number,
@@ -18,6 +19,12 @@ const ShowTicketService = async (
       id
     },
     include: [
+    {
+      model: Brand,
+      as: "brand",
+      attributes: ["id", "slug", "name", "shortLabel", "primaryColor", "logoUrl"]
+    },
+
       {
         model: Contact,
         as: "contact",

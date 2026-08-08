@@ -12,6 +12,7 @@ import {
   Default
 } from "sequelize-typescript";
 import Company from "./Company";
+import Brand from "./Brand";
 import KnowledgeDocument from "./KnowledgeDocument";
 import KnowledgeDomain from "./KnowledgeDomain";
 
@@ -28,6 +29,13 @@ class KnowledgeBase extends Model<KnowledgeBase> {
 
   @BelongsTo(() => Company)
   company: Company;
+
+  @ForeignKey(() => Brand)
+  @Column
+  brandId: number;
+
+  @BelongsTo(() => Brand)
+  brand: Brand;
 
   @Column
   name: string;

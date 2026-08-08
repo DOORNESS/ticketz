@@ -14,6 +14,11 @@ import TicketTag from "../../models/TicketTag";
 import Whatsapp from "../../models/Whatsapp";
 import { GetCompanySetting } from "../../helpers/CheckSettings";
 import ContactTag from "../../models/ContactTag";
+import Brand from "../../models/Brand";
+import {
+  getBrandAccessForUser,
+  resolveBrandFilterForQuery
+} from "../BrandServices/BrandAccessService";
 import {
   AI_TICKET_FILTERS,
   AiTicketFilter
@@ -35,6 +40,7 @@ interface Request {
   all?: boolean;
   queueIds: number[];
   whatsappIds?: number[];
+  brandIds?: number[];
   contactId?: number;
   tags: number[];
   users: number[];
@@ -54,6 +60,7 @@ const ListTicketsService = async ({
   nextUpdatedAt,
   queueIds,
   whatsappIds,
+  brandIds,
   contactId,
   tags,
   users,
@@ -200,6 +207,11 @@ const ListTicketsService = async ({
       model: Whatsapp,
       as: "whatsapp",
       attributes: ["id", "name"]
+    },
+    {
+      model: Brand,
+      as: "brand",
+      attributes: ["id", "slug", "name", "shortLabel", "primaryColor", "logoUrl"]
     }
   ];
 
@@ -424,6 +436,19 @@ const ListTicketsService = async ({
     whereCondition = {
       ...whereCondition,
       whatsappId: { [Op.in]: whatsappIds }
+    };
+  }
+
+  // Escopo de marca. `resolveBrandFilterForQuery` cruza o que a UI pediu com
+  // o que o usuário pode ver, então um atendente restrito nunca amplia o
+  // próprio alcance mandando brandIds na querystring.
+  const brandAccess = await getBrandAccessForUser(userId);
+  const effectiveBrandIds = resolveBrandFilterForQuery(brandAccess, brandIds);
+
+  if (effectiveBrandIds !== null) {
+    whereCondition = {
+      ...whereCondition,
+      brandId: { [Op.in]: effectiveBrandIds }
     };
   }
 

@@ -2,6 +2,7 @@ import User from "../../models/User";
 import AppError from "../../errors/AppError";
 import Queue from "../../models/Queue";
 import Company from "../../models/Company";
+import Brand from "../../models/Brand";
 
 const ShowUserService = async (
   id: string | number,
@@ -23,6 +24,12 @@ const ShowUserService = async (
         model: Queue,
         as: "queues",
         attributes: ["id", "name", "color"]
+      },
+      {
+        model: Brand,
+        as: "brands",
+        attributes: ["id", "slug", "name", "shortLabel", "primaryColor"],
+        through: { attributes: ["canAttend"] }
       },
       { model: Company, as: "company", attributes: ["id", "name", "dueDate"] }
     ],

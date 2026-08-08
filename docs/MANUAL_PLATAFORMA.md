@@ -159,7 +159,26 @@ server.ts → http.createServer(appFast)
 ## 3. Conceitos fundamentais
 
 ### Company (`backend/src/models/Company.ts`)
-Tenant: usuários, WhatsApps, filas, tickets, `planId`, `dueDate`, idioma, status.
+Tenant: usuários, WhatsApps, filas, tickets, `planId`, `dueDate`, idioma, status. **Isolamento, login e cobrança.**
+
+### Brand (`backend/src/models/Brand.ts`)
+Marca / linha de atendimento **dentro** de uma Company. Uma Company tem N Brands (Grupo Fortmax → Nível Cashback + Fortmax/WebG3 + futuras).
+
+Brand é entidade própria, e não uma evolução de `KnowledgeDomain`: domínio é taxonomia editorial do CMS (agrupa bases, tem `linkedSpecialty`), marca é unidade operacional (conexões, filas, agentes, tema, contatos, permissões). Fundir os dois impediria uma marca de ter dois domínios — caso real da Nível ("Nivel site clientes" + "Nivel empresa"). Relação: **Brand 1—N KnowledgeDomain**.
+
+Centraliza o que antes estava em código: `identityName`/`identityReply` (persona), `escalationUrl`, `informationalFallback`, `supportContacts` (JSONB), `vocabulary` (JSONB), `logoUrl`, `primaryColor`, `shortLabel`, `settings`.
+
+| FK adicionada | Papel |
+|---------------|-------|
+| `Whatsapps.brandId` | **Origem define a marca** — é daqui que a resolução parte |
+| `Queues.brandId`, `AiAgents.brandId` | Roteamento e agente por marca |
+| `KnowledgeDomains.brandId`, `KnowledgeBases.brandId` | Isolamento de conhecimento |
+| `Tickets.brandId` | **Identidade histórica do atendimento** |
+
+`Tickets.brandId` é gravado no nascimento (`FindOrCreateTicketService`) e nunca rederivado: trocar conexão, fila ou agente depois não reescreve de qual operação foi aquele atendimento. O texto da mensagem **nunca** participa dessa decisão — conteúdo define intenção, origem define empresa.
+
+### UserBrand (`backend/src/models/UserBrand.ts`)
+N:N entre funcionário e marca, sem duplicar login. `canAttend = false` = supervisiona sem assumir. Ausência de vínculo é tratada como **sem restrição** (usuário legado), para o isolamento não derrubar a operação no deploy; passa a valer assim que o admin atribui a primeira marca.
 
 ### Whatsapp (`backend/src/models/Whatsapp.ts`)
 Conexão WhatsApp: status, mensagens automáticas, token API, filas via `WhatsappQueue`.

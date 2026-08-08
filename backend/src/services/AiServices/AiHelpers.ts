@@ -224,6 +224,17 @@ export const getActiveAgent = async (
 export const getActiveAgentForTicket = async (
   ticket: Ticket
 ): Promise<AiAgent | null> => {
+  // A marca do ticket é a fonte primária: o agente vem do vínculo explícito,
+  // não de nome de conexão nem de fila. A resolução por fila continua como
+  // fallback enquanto existirem tickets anteriores ao backfill.
+  const { getAgentForBrand } = await import(
+    "../BrandServices/BrandAiConfigService"
+  );
+  const brandAgent = await getAgentForBrand(ticket.companyId, ticket.brandId);
+  if (brandAgent) {
+    return brandAgent;
+  }
+
   const queueId = await ensureTicketQueueFromWhatsapp(ticket);
   return getActiveAgent(ticket.companyId, queueId);
 };

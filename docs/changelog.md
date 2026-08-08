@@ -6,6 +6,26 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.0] — 2026-08-08
+
+### Adicionado — arquitetura multimarca
+
+- **`Brand`**: marca/linha de atendimento dentro da Company. Entidade própria (não evolução de `KnowledgeDomain`, que segue como taxonomia do CMS — relação Brand 1—N KnowledgeDomain). Centraliza persona, contatos, URLs, fallback, vocabulário e tema, que antes estavam compilados no código (§3).
+- **`Tickets.brandId`**: identidade histórica do atendimento, gravada no nascimento por `FindOrCreateTicketService` e nunca rederivada. Origem define a empresa; conteúdo da mensagem, apenas a intenção.
+- **FKs de marca** em `Whatsapps`, `Queues`, `AiAgents`, `KnowledgeDomains`, `KnowledgeBases` — todas `allowNull`, para o fluxo legado continuar operando antes do backfill.
+- **`UserBrand`**: permissão N:N por funcionário, com `canAttend` separando supervisionar de atender. Sem vínculo = sem restrição (usuário legado), para o deploy não derrubar atendentes existentes.
+- **Autorização no backend**: `BrandAccessService` + gate em `canViewTicket`, ponto único já usado por socket, controller de ticket, mídia e aceite. `resolveBrandFilterForQuery` cruza o filtro pedido pela UI com a permissão, então querystring não amplia alcance.
+- **Isolamento de conhecimento**: `restrictKnowledgeBasesToBrand` remove do contexto RAG qualquer base de outra marca, nos dois caminhos de resposta. Base sem marca (legado) é preservada.
+- **Agente por marca**: `getActiveAgentForTicket` resolve pelo `brandId` do ticket; resolução por fila permanece como fallback.
+- **API**: `GET /brands` (seletor, já filtrado por permissão), CRUD admin, `GET|PUT /users/:userId/brands`, `POST /brands/backfill`.
+- **Frontend**: `BrandBadge` (logo + rótulo textual, não só cor) na lista e no cabeçalho; `TicketsBrandFilter` global com "Todas" = todas as permitidas; filtro persistido por usuário em `localStorage`.
+- **Backfill idempotente** (`BackfillBrandsService`): cria Nível e Fortmax a partir dos vínculos existentes. Único lugar onde o casamento por nome é usado de propósito — para gravá-lo em FK uma vez.
+- **Migration** `20260820100000-multibrand-foundation`.
+
+### Alterado
+
+- `BrandResolutionService` substitui `name.includes("nivel")` por FK. O fallback legado por nome permanece durante a transição, instrumentado com `legacyBrandFallback` no log — é a evidência que autoriza removê-lo.
+
 ## [1.6.1] — 2026-08-07
 
 ### Corrigido

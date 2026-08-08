@@ -7,6 +7,25 @@ import {
 export const isAiSupervisionTicket = ticket =>
   !!ticket?.aiAgentId && ticket?.status !== "closed";
 
+/**
+ * Filtro de marca no cliente.
+ *
+ * Espelha o escopo que o backend já aplica na consulta. Existe para que um
+ * evento de socket de outra marca não injete o ticket na lista filtrada — a
+ * autorização de verdade continua sendo do backend.
+ */
+export const ticketMatchesSelectedBrands = (ticket, selectedBrandIds = []) => {
+  if (!selectedBrandIds?.length) {
+    return true;
+  }
+
+  if (!ticket?.brandId) {
+    return false;
+  }
+
+  return selectedBrandIds.includes(ticket.brandId);
+};
+
 export const ticketMatchesSelectedWhatsapps = (
   ticket,
   selectedWhatsappIds = []
@@ -55,6 +74,7 @@ export const shouldShowTicketInList = ({
   listMode,
   selectedQueueIds,
   selectedWhatsappIds,
+  selectedBrandIds,
   profile,
   showAll,
   userId,
@@ -62,6 +82,10 @@ export const shouldShowTicketInList = ({
   aiFilter
 }) => {
   if (!ticket) {
+    return false;
+  }
+
+  if (!ticketMatchesSelectedBrands(ticket, selectedBrandIds)) {
     return false;
   }
 
@@ -181,11 +205,7 @@ export const isTicketObservationMode = (ticket, user) => {
     return true;
   }
 
-  if (
-    ticket.aiAgentId &&
-    !ticket.userId &&
-    ticket.status !== "closed"
-  ) {
+  if (ticket.aiAgentId && !ticket.userId && ticket.status !== "closed") {
     return true;
   }
 
