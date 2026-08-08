@@ -6,6 +6,27 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.3] — 2026-08-08
+
+### Adicionado — isolamento fechado
+
+- **Relatórios por atendente escopados:** `userReport` e `usersStatusSummary` recebem o escopo de marca. As contagens de aberto/fechado são subqueries `literal()` e não passam pelo `where` do Sequelize, então ganharam `brandSqlFilter` — sem isso o relatório de um funcionário somaria atendimentos de marcas que quem consulta não pode ver.
+- **Marca em Domínios:** `BrandSelect` na tela de domínios; `KnowledgeDomainService` passou a aceitar `brandId` no create e no update (fazia whitelist de campos e o descartava).
+- **Marca de Base é derivada do domínio:** `KnowledgeBaseController` resolve `brandId` a partir do `knowledgeDomainId`. Um seletor próprio permitiria base da marca A dentro de domínio da marca B — a combinação inválida fica impossível por construção, não por validação.
+
+### Corrigido — caminhos equivalentes ao vazamento do socket
+
+Auditoria específica de isolamento encontrou três endpoints que carregavam ticket por id sem nenhum gate de marca:
+
+- **`MessageController.index`** — histórico completo da conversa. Saber o id bastava para ler a conversa de outra marca.
+- **`TicketAiController`** — o gate entrou em `loadTicketForUser`, o loader compartilhado, então cobre assumir, pausar, copiloto e timeline de uma vez.
+- **`AiLearningController`** — endpoints de aprendizado sobre ticket.
+
+### Testes
+
+- `BrandEnforcementTransition.spec.ts` — os dois estados do Setting e a diferença entre eles, que é a única mudança capaz de tirar acesso de quem hoje trabalha normalmente.
+- Prova ponta a ponta da terceira marca ("Aurora Pet", nome sem nenhum termo das marcas existentes) contra Postgres real: **11/11**, incluindo religamento pelo laço genérico sem `wireBrand3Line`, ticket nascendo com `brandId`, RAG sem vazamento e renomear a conexão para "Fortmax Suporte Renomeado" sem alterar a marca.
+
 ## [1.7.2] — 2026-08-08
 
 ### Adicionado — isolamento completo

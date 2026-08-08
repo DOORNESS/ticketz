@@ -7,6 +7,7 @@ import {
   listAgentsGroupedByKnowledgeBase
 } from "../services/AiServices/AiAgentKnowledgeBaseService";
 import { getAssetCountsByKnowledgeBase } from "../services/AiServices/KnowledgeCms/KnowledgeAssetCmsService";
+import KnowledgeDomain from "../models/KnowledgeDomain";
 
 export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
@@ -34,14 +35,39 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   return res.json(enriched);
 };
 
+/**
+ * A marca da base é DERIVADA do domínio, nunca escolhida à parte.
+ *
+ * Um seletor próprio permitiria base da marca A dentro de domínio da marca B —
+ * exatamente a combinação inválida que o isolamento do RAG não conseguiria
+ * resolver depois. Aqui a incoerência é impossível por construção.
+ */
+const resolveBrandFromDomain = async (
+  companyId: number,
+  knowledgeDomainId?: number | null
+): Promise<number | null> => {
+  if (!knowledgeDomainId) {
+    return null;
+  }
+
+  const domain = await KnowledgeDomain.findOne({
+    where: { id: knowledgeDomainId, companyId },
+    attributes: ["brandId"]
+  });
+
+  return domain?.brandId ?? null;
+};
+
 export const store = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
-  const { name, description, active } = req.body;
+  const { name, description, active, knowledgeDomainId } = req.body;
 
   const base = await KnowledgeBase.create({
     companyId,
     name,
     description,
+    knowledgeDomainId: knowledgeDomainId || null,
+    brandId: await resolveBrandFromDomain(companyId, knowledgeDomainId),
     active: active !== false
   });
 
@@ -67,7 +93,17 @@ export const update = async (
     throw new AppError("Knowledge base not found", 404);
   }
 
-  await base.update(req.body);
+  const payload = { ...req.body };
+  // Trocar de domínio move a base de marca junto — os dois nunca divergem.
+  if (payload.knowledgeDomainId !== undefined) {
+    payload.brandId = await resolveBrandFromDomain(
+      companyId,
+      payload.knowledgeDomainId
+    );
+  }
+  delete payload.companyId;
+
+  await base.update(payload);
   return res.json({
     ...base.toJSON(),
     linkedAgents: await listAgentsByKnowledgeBase(companyId, base.id),

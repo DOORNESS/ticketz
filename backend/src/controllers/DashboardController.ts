@@ -72,7 +72,7 @@ export const usersReport = async (
   const startedAt = Date.now();
 
   try {
-    const result = await usersReportService(companyId, params);
+    const result = await usersReportService(companyId, params, req.user.id);
     logger.info(
       { companyId, route: "dashboard/users", ms: Date.now() - startedAt },
       "Dashboard users report"

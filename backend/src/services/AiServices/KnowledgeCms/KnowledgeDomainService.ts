@@ -5,6 +5,8 @@ import { validateKnowledgeMetadata } from "./KnowledgeMetadataSchema";
 import { slugify } from "./slugify";
 
 export type CreateDomainInput = {
+  /** Marca dona deste domínio. Uma Brand pode ter vários domínios. */
+  brandId?: number | null;
   companyId: number;
   name: string;
   slug?: string;
@@ -53,6 +55,7 @@ export const createKnowledgeDomain = async (
     linkedSpecialty: input.linkedSpecialty || null,
     sortOrder: input.sortOrder ?? 100,
     active: input.active !== false,
+    brandId: input.brandId ?? null,
     metadata: validateKnowledgeMetadata(input.metadata)
   });
 };
@@ -91,6 +94,7 @@ export const updateKnowledgeDomain = async (
       : {}),
     ...(input.sortOrder != null ? { sortOrder: input.sortOrder } : {}),
     ...(input.active != null ? { active: input.active } : {}),
+    ...(input.brandId !== undefined ? { brandId: input.brandId } : {}),
     ...(input.metadata != null
       ? { metadata: validateKnowledgeMetadata(input.metadata) }
       : {})
