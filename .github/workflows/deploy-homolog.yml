@@ -1,0 +1,275 @@
+name: Deploy Ticketz — HOMOLOGAÇÃO
+
+# Ambiente de homologação. Isolado de produção em banco, diretório, serviço,
+# porta, .env, domínio e secrets. A única coisa compartilhada é a VPS física.
+#
+# Este workflow NUNCA dispara pela `main` — o gatilho é exclusivo da branch
+# `homolog`, e ainda existe um guard em runtime que aborta se por algum motivo
+# ele for executado a partir de outra ref.
+on:
+  push:
+    branches: [homolog]
+  workflow_dispatch:
+
+concurrency:
+  group: ticketz-homolog
+  cancel-in-progress: true
+
+env:
+  ENVIRONMENT_NAME: homolog
+  # Destinos de homologação. Nenhum deles pode coincidir com produção — o job
+  # `guard` verifica isso antes de qualquer build ou deploy acontecer.
+  DEPLOY_ROOT: 'C:\ticketz-homolog'
+  SERVICE_NAME: TicketzBackendHomolog
+  BACKEND_PORT: "8090"
+  API_HOST: api-homolog.fortmax.com.br
+  FRONTEND_HOST: homolog.fortmax.com.br
+  # Valores de PRODUÇÃO — declarados só para o guard poder compará-los.
+  # Nunca são usados como destino.
+  FORBIDDEN_ROOT: 'C:\ticketz'
+  FORBIDDEN_SERVICE: TicketzBackend
+  FORBIDDEN_API_HOST: api.fortmax.com.br
+  FORBIDDEN_FRONTEND_HOST: suporte.fortmax.com.br
+  FORBIDDEN_CF_PROJECT: fortmax-ticketz-prod
+
+jobs:
+  guard:
+    name: Guarda de ambiente
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bloquear execução fora da branch homolog
+        run: |
+          set -euo pipefail
+          REF="${GITHUB_REF_NAME}"
+          echo "Ref: ${REF}"
+          if [ "${REF}" != "homolog" ]; then
+            echo "::error::Este workflow só roda na branch 'homolog'. Ref recebida: '${REF}'."
+            exit 1
+          fi
+
+      - name: Bloquear destinos de produção
+        run: |
+          set -euo pipefail
+          fail=0
+          check_ne() {
+            if [ "$2" = "$3" ]; then
+              echo "::error::$1 aponta para PRODUÇÃO ('$2'). Abortado."
+              fail=1
+            fi
+          }
+          check_ne "DEPLOY_ROOT"    "${DEPLOY_ROOT}"    "${FORBIDDEN_ROOT}"
+          check_ne "SERVICE_NAME"   "${SERVICE_NAME}"   "${FORBIDDEN_SERVICE}"
+          check_ne "API_HOST"       "${API_HOST}"       "${FORBIDDEN_API_HOST}"
+          check_ne "FRONTEND_HOST"  "${FRONTEND_HOST}"  "${FORBIDDEN_FRONTEND_HOST}"
+          [ "${fail}" = "0" ] || exit 1
+          echo "Destinos de homologação validados."
+
+      - name: Exigir secrets de homologação
+        env:
+          HOMOLOG_VPS_IP: ${{ secrets.HOMOLOG_VPS_IP }}
+          HOMOLOG_VPS_PASSWORD: ${{ secrets.HOMOLOG_VPS_PASSWORD }}
+          HOMOLOG_DB_HOST: ${{ secrets.HOMOLOG_DB_HOST }}
+          HOMOLOG_DB_NAME: ${{ secrets.HOMOLOG_DB_NAME }}
+          HOMOLOG_DB_USER: ${{ secrets.HOMOLOG_DB_USER }}
+          HOMOLOG_DB_PASS: ${{ secrets.HOMOLOG_DB_PASS }}
+          HOMOLOG_JWT_SECRET: ${{ secrets.HOMOLOG_JWT_SECRET }}
+          HOMOLOG_JWT_REFRESH_SECRET: ${{ secrets.HOMOLOG_JWT_REFRESH_SECRET }}
+          HOMOLOG_CF_PROJECT_NAME: ${{ secrets.HOMOLOG_CF_PROJECT_NAME }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          # Sem fallback: ausente = falha. Cair para uma variável de produção
+          # seria pior do que não deployar.
+          missing=0
+          require() {
+            if [ -z "${2:-}" ]; then
+              echo "::error::Secret $1 ausente. Homologação não pode usar valor de produção."
+              missing=1
+            fi
+          }
+          require HOMOLOG_VPS_IP              "${HOMOLOG_VPS_IP:-}"
+          require HOMOLOG_VPS_PASSWORD        "${HOMOLOG_VPS_PASSWORD:-}"
+          require HOMOLOG_DB_HOST             "${HOMOLOG_DB_HOST:-}"
+          require HOMOLOG_DB_NAME             "${HOMOLOG_DB_NAME:-}"
+          require HOMOLOG_DB_USER             "${HOMOLOG_DB_USER:-}"
+          require HOMOLOG_DB_PASS             "${HOMOLOG_DB_PASS:-}"
+          require HOMOLOG_JWT_SECRET          "${HOMOLOG_JWT_SECRET:-}"
+          require HOMOLOG_JWT_REFRESH_SECRET  "${HOMOLOG_JWT_REFRESH_SECRET:-}"
+          require HOMOLOG_CF_PROJECT_NAME     "${HOMOLOG_CF_PROJECT_NAME:-}"
+          require CLOUDFLARE_API_TOKEN        "${CLOUDFLARE_API_TOKEN:-}"
+          require CLOUDFLARE_ZONE_ID          "${CLOUDFLARE_ZONE_ID:-}"
+          [ "${missing}" = "0" ] || exit 1
+          echo "Todos os secrets de homologação presentes."
+
+      - name: Bloquear banco de produção
+        env:
+          HOMOLOG_DB_HOST: ${{ secrets.HOMOLOG_DB_HOST }}
+          HOMOLOG_DB_NAME: ${{ secrets.HOMOLOG_DB_NAME }}
+          PROD_DB_HOST_FRAGMENT: ${{ secrets.PROD_DB_HOST_FRAGMENT }}
+          HOMOLOG_CF_PROJECT_NAME: ${{ secrets.HOMOLOG_CF_PROJECT_NAME }}
+        run: |
+          set -euo pipefail
+          # O host do banco de produção é passado como fragmento por secret para
+          # não ficar em texto claro no repositório. Se não estiver definido, a
+          # comparação é pulada — mas o alerta fica visível no log.
+          if [ -n "${PROD_DB_HOST_FRAGMENT:-}" ]; then
+            case "${HOMOLOG_DB_HOST}" in
+              *"${PROD_DB_HOST_FRAGMENT}"*)
+                echo "::error::HOMOLOG_DB_HOST aponta para o banco de PRODUÇÃO. Abortado."
+                exit 1
+                ;;
+            esac
+          else
+            echo "::warning::PROD_DB_HOST_FRAGMENT não definido — comparação com o banco de produção não foi feita."
+          fi
+
+          if [ "${HOMOLOG_CF_PROJECT_NAME}" = "${FORBIDDEN_CF_PROJECT}" ]; then
+            echo "::error::HOMOLOG_CF_PROJECT_NAME é o projeto de produção. Abortado."
+            exit 1
+          fi
+          echo "Banco e projeto de frontend validados como não-produção."
+
+  deploy-homolog:
+    name: Deploy homologação
+    needs: guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gerar gitinfo (SHA rastreável)
+        run: |
+          set -euo pipefail
+          COMMIT_HASH=$(git rev-parse --short=7 HEAD)
+          COMMIT_FULL=$(git rev-parse HEAD)
+          COMMIT_TS=$(git log -1 --format=%cI)
+          BRANCH=$(git rev-parse --abbrev-ref HEAD)
+          echo "Deploy homolog: ${COMMIT_FULL} (${BRANCH})"
+          cat > backend/src/gitinfo.ts <<EOT
+          export const gitinfo = {
+            commitHash: "${COMMIT_HASH}",
+            commitTimestamp: "${COMMIT_TS}",
+            branchName: "${BRANCH}",
+            environment: "homolog"
+          };
+          EOT
+          mkdir -p frontend/public
+          cat > frontend/public/gitinfo.json <<EOT
+          {
+            "commitHash": "${COMMIT_HASH}",
+            "commitTimestamp": "${COMMIT_TS}",
+            "branchName": "${BRANCH}",
+            "environment": "homolog"
+          }
+          EOT
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Build backend
+        working-directory: backend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Build frontend
+        working-directory: frontend
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
+          REACT_APP_BACKEND_URL: https://${{ env.API_HOST }}
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: DNS da API de homologação
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
+          VPS_IP: ${{ secrets.HOMOLOG_VPS_IP }}
+          API_HOMOLOG_HOST: ${{ env.API_HOST }}
+        run: |
+          set -euo pipefail
+          node scripts/setup-cloudflare-vps-homolog.mjs
+
+      - name: Escrever .env de homologação na VPS
+        env:
+          CONTABO_HOST: ${{ secrets.HOMOLOG_VPS_IP }}
+          CONTABO_PASSWORD: ${{ secrets.HOMOLOG_VPS_PASSWORD }}
+          DEPLOY_ROOT: ${{ env.DEPLOY_ROOT }}
+          BACKEND_PORT: ${{ env.BACKEND_PORT }}
+          HOMOLOG_DB_HOST: ${{ secrets.HOMOLOG_DB_HOST }}
+          HOMOLOG_DB_PORT: ${{ secrets.HOMOLOG_DB_PORT }}
+          HOMOLOG_DB_NAME: ${{ secrets.HOMOLOG_DB_NAME }}
+          HOMOLOG_DB_USER: ${{ secrets.HOMOLOG_DB_USER }}
+          HOMOLOG_DB_PASS: ${{ secrets.HOMOLOG_DB_PASS }}
+          HOMOLOG_JWT_SECRET: ${{ secrets.HOMOLOG_JWT_SECRET }}
+          HOMOLOG_JWT_REFRESH_SECRET: ${{ secrets.HOMOLOG_JWT_REFRESH_SECRET }}
+          HOMOLOG_REDIS_URI: ${{ secrets.HOMOLOG_REDIS_URI }}
+          HOMOLOG_OPENAI_API_KEY: ${{ secrets.HOMOLOG_OPENAI_API_KEY }}
+        run: |
+          set -euo pipefail
+          pip install pywinrm
+          python3 scripts/write-homolog-env.py
+
+      - name: Deploy backend (diretório e serviço de homologação)
+        env:
+          CONTABO_HOST: ${{ secrets.HOMOLOG_VPS_IP }}
+          CONTABO_PASSWORD: ${{ secrets.HOMOLOG_VPS_PASSWORD }}
+          DEPLOY_ROOT: ${{ env.DEPLOY_ROOT }}
+          DEPLOY_MODE: "full"
+          DEPLOY_USE_ZIP: "1"
+          DEPLOY_B64_CHUNK: "1500"
+          SKIP_WHATSAPP_RESET: "1"
+        run: |
+          set -euo pipefail
+          pip install pywinrm
+          echo "Destino: ${DEPLOY_ROOT} em ${CONTABO_HOST}"
+          python3 scripts/deploy-vps-backend.py
+
+      - name: Migrations no banco de HOMOLOGAÇÃO
+        env:
+          CONTABO_HOST: ${{ secrets.HOMOLOG_VPS_IP }}
+          CONTABO_PASSWORD: ${{ secrets.HOMOLOG_VPS_PASSWORD }}
+          DEPLOY_ROOT: ${{ env.DEPLOY_ROOT }}
+          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+        run: |
+          set -euo pipefail
+          pip install pywinrm
+          python3 scripts/homolog-migrate.py
+
+      - name: Publicar frontend de homologação
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_PROJECT_NAME: ${{ secrets.HOMOLOG_CF_PROJECT_NAME }}
+        run: |
+          set -euo pipefail
+          npx wrangler@3 pages deploy frontend/build \
+            --project-name "${CF_PROJECT_NAME}" \
+            --branch homolog \
+            --commit-dirty=true
+
+      - name: Verificar saúde da homologação
+        env:
+          API_HOST: ${{ env.API_HOST }}
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 20); do
+            if curl -fsS "https://${API_HOST}/health" > /tmp/health.json 2>/dev/null; then
+              echo "Homologação no ar:"
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "Aguardando homologação subir... (${i}/20)"
+            sleep 15
+          done
+          echo "::error::Homologação não respondeu em /health."
+          exit 1
