@@ -18,9 +18,8 @@ import { Edit } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
-import BrandScopeSelect from "../../components/BrandScopeSelect";
 import BrandBadge from "../../components/BrandBadge";
-import useBrands from "../../hooks/useBrands";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
@@ -54,8 +53,8 @@ const AiKnowledgeDomains = () => {
   const classes = useAiPageStyles();
   const [domains, setDomains] = useState([]);
 
-  const { brands } = useBrands();
-  const [brandScopeId, setBrandScopeId] = useState(null);
+  // Marca em contexto: escolhida uma vez no cabeçalho, lida por todas as telas.
+  const { brands, brandScopeId } = useBrandScope();
 
   const visibleDomains = React.useMemo(() => {
     if (!brandScopeId) {
@@ -130,11 +129,6 @@ const AiKnowledgeDomains = () => {
     <MainContainer>
       <MainHeader>
         <Title>IA — Domínios de Conhecimento</Title>
-        <BrandScopeSelect
-          brands={brands}
-          value={brandScopeId}
-          onChange={setBrandScopeId}
-        />
         <Button
           variant="contained"
           color="primary"

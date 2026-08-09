@@ -23,9 +23,8 @@ import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
-import BrandScopeSelect from "../../components/BrandScopeSelect";
 import BrandBadge from "../../components/BrandBadge";
-import useBrands from "../../hooks/useBrands";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import api from "../../services/api";
 import { apiGetWithWarmupRetry } from "../../helpers/fetchWithWarmupRetry";
 import {
@@ -111,8 +110,8 @@ const AiKnowledgeBases = () => {
   const cachedBases = readAiListCache(AI_CACHE_KEYS.knowledgeBases);
   const cachedDomains = readAiListCache(AI_CACHE_KEYS.knowledgeDomains);
   const [bases, setBases] = useState(cachedBases || []);
-  const { brands } = useBrands();
-  const [brandScopeId, setBrandScopeId] = useState(null);
+  // Marca em contexto: escolhida uma vez no cabeçalho, lida por todas as telas.
+  const { brands, brandScopeId } = useBrandScope();
 
   /**
    * Recorte por marca. Registros sem marca continuam visíveis em "Todas":
@@ -229,11 +228,6 @@ const AiKnowledgeBases = () => {
     <MainContainer>
       <MainHeader>
         <Title>IA — Base de Conhecimento</Title>
-        <BrandScopeSelect
-          brands={brands}
-          value={brandScopeId}
-          onChange={setBrandScopeId}
-        />
         <Button
           variant="contained"
           color="primary"

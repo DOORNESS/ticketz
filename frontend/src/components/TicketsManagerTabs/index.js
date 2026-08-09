@@ -28,8 +28,7 @@ import { WhatsAppsContext } from "../../context/WhatsApp/WhatsAppsContext";
 import { Can } from "../Can";
 import TicketsQueueSelect from "../TicketsQueueSelect";
 import TicketsWhatsappFilter from "../TicketsWhatsappFilter";
-import TicketsBrandFilter from "../TicketsBrandFilter";
-import useBrands from "../../hooks/useBrands";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import { Box, Button } from "@material-ui/core";
 import { TagsFilter } from "../TagsFilter";
 import { UsersFilter } from "../UsersFilter";
@@ -183,37 +182,14 @@ const TicketsManagerTabs = () => {
   const userQueueIds = userQueues.map(q => q.id);
   const [selectedQueueIds, setSelectedQueueIds] = useState(userQueueIds || []);
   const [selectedWhatsappIds, setSelectedWhatsappIds] = useState([]);
-  const { brands } = useBrands();
-  // Persistido por usuário: trocar de login não herda o filtro do anterior,
-  // e o backend revalida a permissão em toda consulta de qualquer forma.
-  const brandStorageKey = `ticketz:brandFilter:${user?.id || "anon"}`;
-  const [selectedBrandIds, setSelectedBrandIds] = useState(() => {
-    try {
-      const raw = localStorage.getItem(brandStorageKey);
-      const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  });
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(brandStorageKey, JSON.stringify(selectedBrandIds));
-    } catch {
-      // storage cheio ou indisponível — filtro segue valendo na sessão
-    }
-  }, [brandStorageKey, selectedBrandIds]);
-
-  // Marca removida do acesso do usuário some do filtro sozinha.
-  useEffect(() => {
-    if (!brands.length || !selectedBrandIds.length) return;
-    const allowed = brands.map(brand => brand.id);
-    const pruned = selectedBrandIds.filter(id => allowed.includes(id));
-    if (pruned.length !== selectedBrandIds.length) {
-      setSelectedBrandIds(pruned);
-    }
-  }, [brands, selectedBrandIds]);
+  /**
+   * A marca vem do cabeçalho, não de um filtro só desta tela.
+   *
+   * Havia estado próprio aqui, persistido em localStorage: dava para estar em
+   * Nível nos tickets e "Todas" nas filas ao mesmo tempo. A escolha passou a
+   * ser uma só, e a poda de marca sem permissão vive no provider.
+   */
+  const { brandScopeIds: selectedBrandIds } = useBrandScope();
   const [prefetchSiblingLists, setPrefetchSiblingLists] = useState(false);
   const [selectedContact, setSelectedContact] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
@@ -402,11 +378,6 @@ const TicketsManagerTabs = () => {
           />
         </Tabs>
       </Paper>
-      <TicketsBrandFilter
-        brands={brands}
-        selectedBrandIds={selectedBrandIds}
-        onChange={setSelectedBrandIds}
-      />
       <TicketsWhatsappFilter
         whatsapps={whatsApps || []}
         selectedWhatsappIds={selectedWhatsappIds}

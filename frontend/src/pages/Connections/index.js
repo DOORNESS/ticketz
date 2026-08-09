@@ -43,6 +43,8 @@ import {
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
+import BrandBadge from "../../components/BrandBadge";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import Title from "../../components/Title";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
 
@@ -114,6 +116,22 @@ const Connections = () => {
   const classes = useStyles();
 
   const { whatsApps, loading } = useContext(WhatsAppsContext);
+
+  // Marca em contexto, escolhida no cabeçalho.
+  const { brands, brandScopeId } = useBrandScope();
+
+  /**
+   * Conexão sem marca continua aparecendo em "Todas": é legado de antes do
+   * vínculo, e escondê-la faria sumir da tela um canal que ainda atende.
+   */
+  const visibleWhatsApps = React.useMemo(() => {
+    if (!brandScopeId) {
+      return whatsApps || [];
+    }
+    return (whatsApps || []).filter(
+      item => Number(item.brandId) === Number(brandScopeId)
+    );
+  }, [whatsApps, brandScopeId]);
   const [whatsAppModalOpen, setWhatsAppModalOpen] = useState(false);
   const [privacyModalOpen, setPrivacyModalOpen] = useState(false);
   const [qrModalOpen, setQrModalOpen] = useState(false);
@@ -473,6 +491,7 @@ const Connections = () => {
               <TableCell align="center">
                 {i18n.t("connections.table.name")}
               </TableCell>
+              <TableCell align="center">Marca</TableCell>
               <TableCell align="center">
                 {i18n.t("connections.table.status")}
               </TableCell>
@@ -495,10 +514,20 @@ const Connections = () => {
               <TableRowSkeleton />
             ) : (
               <>
-                {whatsApps?.length > 0 &&
-                  whatsApps.map(whatsApp => (
+                {visibleWhatsApps.length > 0 &&
+                  visibleWhatsApps.map(whatsApp => (
                     <TableRow key={whatsApp.id}>
                       <TableCell align="center">{whatsApp.name}</TableCell>
+                      <TableCell align="center">
+                        <div className={classes.customTableCell}>
+                          <BrandBadge
+                            brand={brands.find(
+                              item =>
+                                Number(item.id) === Number(whatsApp.brandId)
+                            )}
+                          />
+                        </div>
+                      </TableCell>
                       <TableCell align="center">
                         {renderStatusToolTips(whatsApp)}
                       </TableCell>

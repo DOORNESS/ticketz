@@ -29,6 +29,11 @@ import { Backendlogs } from "../components/Backendlogs";
 import { PhoneCall } from "../components/PhoneCall";
 import NotificationsVolume from "../components/NotificationsVolume";
 import UserModal from "../components/UserModal";
+import BrandScopeSelect from "../components/BrandScopeSelect";
+import {
+  BrandScopeProvider,
+  useBrandScope
+} from "../context/BrandScope/BrandScopeContext";
 import AboutModal from "../components/AboutModal";
 import { AuthContext } from "../context/Auth/AuthContext";
 import BackdropLoading from "../components/BackdropLoading";
@@ -382,6 +387,32 @@ const useStyles = makeStyles(theme => ({
   }
 }));
 
+/**
+ * Seletor de marca do cabeçalho.
+ *
+ * Componente separado porque precisa estar DENTRO do provider — o layout é
+ * quem monta o provider, então ele mesmo não pode consumir o contexto.
+ * Some sozinho quando há uma marca ou menos.
+ */
+const HeaderBrandScope = () => {
+  const { brands, brandScopeId, setBrandScopeId } = useBrandScope();
+
+  if (brands.length < 2) {
+    return null;
+  }
+
+  return (
+    <BrandScopeSelect
+      brands={brands}
+      value={brandScopeId}
+      onChange={setBrandScopeId}
+      label="Marca"
+      allLabel="Todas"
+      hideWhenSingle={false}
+    />
+  );
+};
+
 const LoggedInLayout = ({ children, themeToggle }) => {
   const classes = useStyles();
   const history = useHistory();
@@ -689,6 +720,8 @@ const LoggedInLayout = ({ children, themeToggle }) => {
 
           <ChatPopover />
 
+          <HeaderBrandScope />
+
           <div className={classes.userInfoWrapper}>
             <div
               aria-label="account of current user"
@@ -810,4 +843,19 @@ const LoggedInLayout = ({ children, themeToggle }) => {
   );
 };
 
-export default LoggedInLayout;
+/**
+ * O provider embrulha o layout inteiro para que qualquer tela — tickets,
+ * filas, agentes, bases, ativos, conexões — leia a mesma marca escolhida no
+ * cabeçalho, em vez de cada uma manter a sua.
+ */
+const LoggedInLayoutWithBrandScope = ({ children, themeToggle }) => {
+  const { user } = useContext(AuthContext);
+
+  return (
+    <BrandScopeProvider userId={user?.id}>
+      <LoggedInLayout themeToggle={themeToggle}>{children}</LoggedInLayout>
+    </BrandScopeProvider>
+  );
+};
+
+export default LoggedInLayoutWithBrandScope;

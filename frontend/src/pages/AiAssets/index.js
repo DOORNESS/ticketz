@@ -47,6 +47,8 @@ import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
+import BrandBadge from "../../components/BrandBadge";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import api from "../../services/api";
 import {
   AI_CACHE_KEYS,
@@ -146,6 +148,9 @@ const AiAssets = () => {
     AI_CACHE_KEYS.assetsList(initialFilters)
   );
   const [assets, setAssets] = useState(cachedAssets || []);
+
+  // Marca escolhida no cabeçalho — a mesma para todas as telas.
+  const { brands, brandScopeId } = useBrandScope();
   const [bases, setBases] = useState(
     cachedBases ? cachedBases.filter(base => base.active) : []
   );
@@ -288,6 +293,29 @@ const AiAssets = () => {
     });
     return map;
   }, [bases]);
+
+  /**
+   * O ativo não carrega marca própria: ele pertence a uma base, e é a base
+   * que tem `brandId`. Derivar daqui evita duplicar o vínculo em mais uma
+   * tabela — a marca do ativo é, por definição, a da base dele.
+   */
+  const brandIdByBase = useMemo(() => {
+    const map = {};
+    bases.forEach(base => {
+      map[base.id] = base.brandId;
+    });
+    return map;
+  }, [bases]);
+
+  const visibleAssets = useMemo(() => {
+    if (!brandScopeId) {
+      return assets;
+    }
+    return assets.filter(
+      asset =>
+        Number(brandIdByBase[asset.knowledgeBaseId]) === Number(brandScopeId)
+    );
+  }, [assets, brandIdByBase, brandScopeId]);
 
   const categoryOptions = useMemo(
     () =>
@@ -916,6 +944,7 @@ const AiAssets = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Título</TableCell>
+                <TableCell>Marca</TableCell>
                 <TableCell>Tipo</TableCell>
                 <TableCell>Base</TableCell>
                 <TableCell>Status editorial</TableCell>
@@ -935,12 +964,21 @@ const AiAssets = () => {
                   </TableCell>
                 </TableRow>
               )}
-              {assets.map(asset => {
+              {visibleAssets.map(asset => {
                 const ingestionStatus = getIngestionStatus(asset);
                 const ingestionError = getIngestionError(asset);
                 return (
                   <TableRow key={asset.id}>
                     <TableCell>{asset.title}</TableCell>
+                    <TableCell>
+                      <BrandBadge
+                        brand={brands.find(
+                          item =>
+                            Number(item.id) ===
+                            Number(brandIdByBase[asset.knowledgeBaseId])
+                        )}
+                      />
+                    </TableCell>
                     <TableCell>{asset.assetType}</TableCell>
                     <TableCell>
                       {baseNameById[asset.knowledgeBaseId] ||

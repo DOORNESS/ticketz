@@ -26,9 +26,8 @@ import { DeleteOutline, Edit } from "@material-ui/icons";
 import QueueModal from "../../components/QueueModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import { SocketContext } from "../../context/Socket/SocketContext";
-import BrandScopeSelect from "../../components/BrandScopeSelect";
 import BrandBadge from "../../components/BrandBadge";
-import useBrands from "../../hooks/useBrands";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 
 const useStyles = makeStyles(theme => ({
   mainPaper: {
@@ -99,8 +98,8 @@ const Queues = () => {
 
   // Contexto de marca da tela. `null` = todas as marcas que este usuário
   // enxerga — a lista já chega filtrada pelo backend.
-  const { brands } = useBrands();
-  const [brandScopeId, setBrandScopeId] = useState(null);
+  // Marca em contexto: escolhida uma vez no cabeçalho, lida por todas as telas.
+  const { brands, brandScopeId } = useBrandScope();
 
   /**
    * A tabela mostra só as filas da marca em contexto. Filas sem marca
@@ -207,11 +206,6 @@ const Queues = () => {
       <MainHeader>
         <Title>{i18n.t("queues.title")}</Title>
         <MainHeaderButtonsWrapper>
-          <BrandScopeSelect
-            brands={brands}
-            value={brandScopeId}
-            onChange={setBrandScopeId}
-          />
           <Button
             variant="contained"
             color="primary"

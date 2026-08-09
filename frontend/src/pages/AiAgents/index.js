@@ -31,9 +31,8 @@ import { DeleteOutline, Edit } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
-import BrandScopeSelect from "../../components/BrandScopeSelect";
 import BrandBadge from "../../components/BrandBadge";
-import useBrands from "../../hooks/useBrands";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import api from "../../services/api";
 import toastError, { resolveErrorMessage } from "../../errors/toastError";
 import { toast } from "react-toastify";
@@ -156,8 +155,8 @@ const SectionBlock = ({ title, subtitle, children }) => {
 const AiAgents = () => {
   const classes = useAiPageStyles();
   const [agents, setAgents] = useState([]);
-  const { brands } = useBrands();
-  const [brandScopeId, setBrandScopeId] = useState(null);
+  // Marca em contexto: escolhida uma vez no cabeçalho, lida por todas as telas.
+  const { brands, brandScopeId } = useBrandScope();
 
   /**
    * Recorte por marca. Registros sem marca continuam visíveis em "Todas":
@@ -614,11 +613,6 @@ const AiAgents = () => {
     <MainContainer>
       <MainHeader>
         <Title>IA — Agentes</Title>
-        <BrandScopeSelect
-          brands={brands}
-          value={brandScopeId}
-          onChange={setBrandScopeId}
-        />
         <Button
           variant="contained"
           color="primary"
