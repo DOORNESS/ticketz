@@ -20,6 +20,10 @@ import {
 import User from "../models/User";
 import Ticket from "../models/Ticket";
 import { assertCanViewTicketBrand } from "../services/BrandServices/BrandAccessService";
+import {
+  resolveTicketIdsForBrandScope,
+  parseRequestedBrandIds
+} from "../services/BrandServices/BrandTicketScopeService";
 
 const loadTicketForUser = async (req: Request) => {
   const { ticketId } = req.params;
@@ -239,6 +243,11 @@ export const replayIndex = async (
   const result = await listAiReplayLogs({
     companyId,
     ticketId: ticketId ? Number(ticketId) : undefined,
+    scopedTicketIds: await resolveTicketIdsForBrandScope(
+      companyId,
+      req.user.id,
+      parseRequestedBrandIds(req.query.brandIds)
+    ),
     limit: limitNum,
     offset: (pageNum - 1) * limitNum
   });

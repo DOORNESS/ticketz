@@ -112,6 +112,17 @@ async function runPostListenBootstrap(_server: http.Server) {
         logger.warn({ error }, "B2 storage settings sync skipped");
       });
     await bootstrapAiPlatform();
+    // Versão presa em `processing` não sai sozinha desse estado: o worker que
+    // a finalizaria morreu junto com o processo anterior. Sem isto, um deploy
+    // no meio de uma indexação deixa o ativo em "Processando" para sempre.
+    const { recoverStalledIngestions } = await import(
+      "./services/AiServices/KnowledgeCms/RecoverStalledIngestionService"
+    );
+    await recoverStalledIngestions().catch(error => {
+      logger.warn({ error }, "Stalled ingestion recovery skipped");
+      return 0;
+    });
+
     const { repairAiTicketStates } =
       await import("./services/AiServices/RepairAiTicketStatesService");
     const repaired = await repairAiTicketStates().catch(error => {

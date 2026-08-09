@@ -11,7 +11,16 @@ import {
 } from "@material-ui/core";
 import { useAiPageStyles } from "./shared";
 
-export const AiSectionPaper = ({ title, subtitle, children, className }) => {
+export const AiSectionPaper = ({
+  title,
+  subtitle,
+  children,
+  className,
+  // Slot para uma ação no canto do cabeçalho da seção — abrir/fechar um
+  // formulário, por exemplo. Fica ao lado do título em vez de empurrar a
+  // lista para baixo.
+  action
+}) => {
   const classes = useAiPageStyles();
 
   return (
@@ -19,10 +28,22 @@ export const AiSectionPaper = ({ title, subtitle, children, className }) => {
       className={`${classes.sectionPaper} ${className || ""}`}
       elevation={0}
     >
-      {title && (
-        <Typography variant="h6" className={classes.sectionTitle}>
-          {title}
-        </Typography>
+      {(title || action) && (
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 12
+          }}
+        >
+          {title && (
+            <Typography variant="h6" className={classes.sectionTitle}>
+              {title}
+            </Typography>
+          )}
+          {action}
+        </div>
       )}
       {subtitle && (
         <Typography variant="body2" className={classes.sectionSubtitle}>

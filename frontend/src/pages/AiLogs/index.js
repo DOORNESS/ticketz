@@ -11,26 +11,34 @@ import {
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { useAiPageStyles } from "../../components/Ai/shared";
 import { AiSectionPaper } from "../../components/Ai/forms";
 
 const AiLogs = () => {
+  // Marca em contexto. O backend cruza com a permissão do usuário,
+  // então mandar isto nunca amplia alcance — no máximo estreita.
+  const { brandScopeIds } = useBrandScope();
+  const brandScopeKey = brandScopeIds.join(",");
+
   const classes = useAiPageStyles();
   const [logs, setLogs] = useState([]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const { data } = await api.get("/ai/logs");
+        const { data } = await api.get("/ai/logs", {
+          params: brandScopeIds.length > 0 ? { brandIds: brandScopeIds } : {}
+        });
         setLogs(data.logs || []);
       } catch (err) {
         toastError(err);
       }
     };
     load();
-  }, []);
+  }, [brandScopeKey]);
 
   return (
     <MainContainer>

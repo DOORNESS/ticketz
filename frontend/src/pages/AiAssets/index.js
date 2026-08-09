@@ -148,6 +148,9 @@ const AiAssets = () => {
     AI_CACHE_KEYS.assetsList(initialFilters)
   );
   const [assets, setAssets] = useState(cachedAssets || []);
+  // Cadastrar é a ação rara; consultar é a frequente. O formulário abre sob
+  // demanda para a lista ocupar a tela.
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Marca escolhida no cabeçalho — a mesma para todas as telas.
   const { brands, brandScopeId } = useBrandScope();
@@ -930,13 +933,6 @@ const AiAssets = () => {
         </AiSectionPaper>
 
         <AiSectionPaper
-          title="Novo ativo"
-          subtitle="Salve arquivos, textos ou sites institucionais. O botão “Salvar documento” grava na base escolhida."
-        >
-          {renderCreateSection()}
-        </AiSectionPaper>
-
-        <AiSectionPaper
           title="Ativos cadastrados"
           subtitle="Workflow: rascunho → revisão → aprovado → publicado. Só conteúdo publicado e indexado entra na busca da IA."
         >
@@ -1117,6 +1113,29 @@ const AiAssets = () => {
               })}
             </TableBody>
           </Table>
+        </AiSectionPaper>
+
+        {/*
+          O formulario de novo ativo vem DEPOIS da lista e fechado por padrao.
+          A tela abria com filtros e um formulario longo, e a lista — que e o
+          que se consulta no dia a dia — ficava embaixo de tudo. Cadastrar e a
+          acao rara; consultar e a frequente.
+        */}
+        <AiSectionPaper
+          title="Novo ativo"
+          subtitle="Salve arquivos, textos ou sites institucionais na base escolhida."
+          action={
+            <Button
+              size="small"
+              variant={createOpen ? "outlined" : "contained"}
+              color="primary"
+              onClick={() => setCreateOpen(open => !open)}
+            >
+              {createOpen ? "Fechar" : "Adicionar ativo"}
+            </Button>
+          }
+        >
+          {createOpen ? renderCreateSection() : null}
         </AiSectionPaper>
       </div>
 

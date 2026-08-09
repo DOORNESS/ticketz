@@ -1,6 +1,11 @@
+import { Op } from "sequelize";
 import { Request, Response } from "express";
 import AiConversationLog from "../models/AiConversationLog";
 import { safeAiQuery } from "../helpers/safeAiQuery";
+import {
+  resolveTicketIdsForBrandScope,
+  parseRequestedBrandIds
+} from "../services/BrandServices/BrandTicketScopeService";
 
 const maskText = (value?: string): string => {
   if (!value) return "";
@@ -13,9 +18,23 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
   const { companyId } = req.user;
   const { ticketId, page = "1", limit = "50" } = req.query;
 
-  const where: { companyId: number; ticketId?: number } = { companyId };
+  const where: {
+    companyId: number;
+    ticketId?: number | { [Op.in]: number[] };
+  } = { companyId };
   if (ticketId) {
     where.ticketId = Number(ticketId);
+  }
+
+  // O log pertence ao atendimento, e o atendimento é quem carrega a marca.
+  // Sem este recorte a tela mostrava conversa da Nível com Fortmax escolhida.
+  const scopedTicketIds = await resolveTicketIdsForBrandScope(
+    companyId,
+    req.user.id,
+    parseRequestedBrandIds(req.query.brandIds)
+  );
+  if (scopedTicketIds !== null && !ticketId) {
+    where.ticketId = { [Op.in]: scopedTicketIds };
   }
 
   const pageNum = Math.max(Number(page), 1);

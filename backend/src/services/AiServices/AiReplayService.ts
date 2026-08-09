@@ -1,3 +1,4 @@
+import { Op } from "sequelize";
 import AiReplayLog from "../../models/AiReplayLog";
 import Ticket from "../../models/Ticket";
 import { estimateAiCostUsd } from "./AiMetricsHelper";
@@ -49,17 +50,23 @@ export const persistAiReplayLog = async (
 export const listAiReplayLogs = async ({
   companyId,
   ticketId,
+  scopedTicketIds,
   limit = 50,
   offset = 0
 }: {
   companyId: number;
   ticketId?: number;
+  /** `null` = sem restrição de marca; lista = só estes tickets. */
+  scopedTicketIds?: number[] | null;
   limit?: number;
   offset?: number;
 }): Promise<{ rows: AiReplayLog[]; count: number }> => {
   const where: Record<string, unknown> = { companyId };
   if (ticketId) {
     where.ticketId = ticketId;
+  } else if (scopedTicketIds !== null && scopedTicketIds !== undefined) {
+    // O replay pertence ao atendimento, e o atendimento carrega a marca.
+    where.ticketId = { [Op.in]: scopedTicketIds };
   }
 
   const { rows, count } = await AiReplayLog.findAndCountAll({

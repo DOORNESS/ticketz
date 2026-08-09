@@ -10,6 +10,7 @@ import {
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { i18n } from "../../translate/i18n";
@@ -56,20 +57,27 @@ const ReplaySection = ({ label, children }) => {
 };
 
 const AiReplay = () => {
+  // Marca em contexto. O backend cruza com a permissão do usuário,
+  // então mandar isto nunca amplia alcance — no máximo estreita.
+  const { brandScopeIds } = useBrandScope();
+  const brandScopeKey = brandScopeIds.join(",");
+
   const classes = useStyles();
   const [replays, setReplays] = useState([]);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const { data } = await api.get("/ai/replay");
+        const { data } = await api.get("/ai/replay", {
+          params: brandScopeIds.length > 0 ? { brandIds: brandScopeIds } : {}
+        });
         setReplays(data.replays || []);
       } catch (err) {
         toastError(err);
       }
     };
     load();
-  }, []);
+  }, [brandScopeKey]);
 
   return (
     <MainContainer>
