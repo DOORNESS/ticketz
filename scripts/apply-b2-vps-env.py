@@ -9,7 +9,12 @@ import winrm
 
 HOST = os.environ.get("CONTABO_HOST", "31.220.103.226")
 USER = os.environ.get("CONTABO_USER", "administrator")
-PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip() or "74h9UFeGPbGni0"
+PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip()
+if not PASSWORD:
+    raise SystemExit(
+        "CONTABO_PASSWORD nao definido. A senha da VPS ficava hardcoded aqui "
+        "como fallback, num repositorio publico. Defina a variavel de ambiente."
+    )
 
 B2_KEYS = [
     ("STORAGE_PROVIDER", "storageProvider", "backblaze"),

@@ -9,7 +9,12 @@ const useStyles = makeStyles(theme => ({
   root: {
     display: "flex",
     alignItems: "center",
-    gap: theme.spacing(1)
+    gap: theme.spacing(1),
+    // O cabeçalho das telas de IA é um flex simples: sem a margem, o seletor
+    // encosta no título e sai "IA — AgentesMarca:". O `auto` à direita empurra
+    // o botão de ação para a borda, onde ele já ficava.
+    marginLeft: theme.spacing(2),
+    marginRight: "auto"
   },
   label: {
     fontSize: "0.75rem",

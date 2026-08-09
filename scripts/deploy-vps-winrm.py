@@ -10,7 +10,12 @@ import winrm
 
 HOST = os.environ.get("CONTABO_HOST", "31.220.103.226")
 USER = os.environ.get("CONTABO_USER", "administrator")
-PASSWORD = os.environ.get("CONTABO_PASSWORD", "74h9UFeGPbGni0")
+PASSWORD = (os.environ.get("CONTABO_PASSWORD") or "").strip()
+if not PASSWORD:
+    raise SystemExit(
+        "CONTABO_PASSWORD nao definido. A senha da VPS ficava hardcoded aqui "
+        "como fallback, num repositorio publico. Defina a variavel de ambiente."
+    )
 TARBALL = os.environ.get("DEPLOY_TARBALL", "/tmp/ticketz-vps-deploy.tar.gz")
 REMOTE_ROOT = r"C:\ticketz"
 CHUNK = 6000

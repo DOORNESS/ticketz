@@ -160,9 +160,12 @@ jobs:
         run: |
           set -euo pipefail
           pip install pywinrm
+          # Nao existe mais fallback: a senha da VPS estava hardcoded nos
+          # scripts, num repositorio publico. Sem o secret, o deploy para aqui
+          # em vez de seguir com uma credencial versionada.
           if [ -z "${CONTABO_PASSWORD:-}" ]; then
-            echo "::warning::CONTABO_PASSWORD vazio — deploy usa fallback do script"
-            unset CONTABO_PASSWORD
+            echo "::error::CONTABO_PASSWORD nao definido — deploy abortado."
+            exit 1
           fi
           CONTABO_HOST="${CONTABO_HOST:-31.220.103.226}"
           CONTABO_HOST="${CONTABO_HOST#https://}"
