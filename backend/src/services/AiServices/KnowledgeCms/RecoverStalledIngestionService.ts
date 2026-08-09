@@ -28,12 +28,19 @@ const STALLED_AFTER_MINUTES = Number(
 export const recoverStalledIngestions = async (): Promise<number> => {
   const cutoff = new Date(Date.now() - STALLED_AFTER_MINUTES * 60 * 1000);
 
+  // `createdAt`, não `updatedAt`: o model é `@Table({ updatedAt: false })` e a
+  // coluna não existe no banco. Filtrar por ela não derrubava a query — o
+  // Sequelize simplesmente não encontrava nada, e a recuperação virava no-op
+  // silencioso. Foi o que aconteceu na primeira tentativa desta correção.
+  //
+  // Usar a criação é até mais fiel: uma versão é criada e indexada na mesma
+  // passagem, então a idade da linha é a idade da tentativa.
   const stalled = await KnowledgeAssetVersion.findAll({
     where: {
       ingestionStatus: "processing",
-      updatedAt: { [Op.lt]: cutoff }
+      createdAt: { [Op.lt]: cutoff }
     },
-    attributes: ["id", "companyId", "knowledgeAssetId", "updatedAt"]
+    attributes: ["id", "companyId", "knowledgeAssetId", "createdAt"]
   });
 
   if (!stalled.length) {
