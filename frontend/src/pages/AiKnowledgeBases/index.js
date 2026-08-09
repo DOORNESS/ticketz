@@ -23,6 +23,9 @@ import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
+import BrandScopeSelect from "../../components/BrandScopeSelect";
+import BrandBadge from "../../components/BrandBadge";
+import useBrands from "../../hooks/useBrands";
 import api from "../../services/api";
 import { apiGetWithWarmupRetry } from "../../helpers/fetchWithWarmupRetry";
 import {
@@ -108,6 +111,21 @@ const AiKnowledgeBases = () => {
   const cachedBases = readAiListCache(AI_CACHE_KEYS.knowledgeBases);
   const cachedDomains = readAiListCache(AI_CACHE_KEYS.knowledgeDomains);
   const [bases, setBases] = useState(cachedBases || []);
+  const { brands } = useBrands();
+  const [brandScopeId, setBrandScopeId] = useState(null);
+
+  /**
+   * Recorte por marca. Registros sem marca continuam visíveis em "Todas":
+   * são legado de antes do vínculo, e escondê-los faria sumir da tela coisa
+   * que ainda está em uso.
+   */
+  const visibleBases = React.useMemo(() => {
+    if (!brandScopeId) {
+      return bases;
+    }
+    return bases.filter(item => Number(item.brandId) === Number(brandScopeId));
+  }, [bases, brandScopeId]);
+
   const [domains, setDomains] = useState(cachedDomains || []);
   const [loading, setLoading] = useState(!cachedBases?.length);
   const [open, setOpen] = useState(false);
@@ -211,6 +229,11 @@ const AiKnowledgeBases = () => {
     <MainContainer>
       <MainHeader>
         <Title>IA — Base de Conhecimento</Title>
+        <BrandScopeSelect
+          brands={brands}
+          value={brandScopeId}
+          onChange={setBrandScopeId}
+        />
         <Button
           variant="contained"
           color="primary"
@@ -233,6 +256,7 @@ const AiKnowledgeBases = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Nome</TableCell>
+                <TableCell>Marca</TableCell>
                 <TableCell>Domínio</TableCell>
                 <TableCell>Descrição</TableCell>
                 <TableCell>Ativos</TableCell>
@@ -245,11 +269,18 @@ const AiKnowledgeBases = () => {
               {loading && !bases.length && (
                 <TableRowSkeleton avatar={false} columns={7} />
               )}
-              {bases.map(base => {
+              {visibleBases.map(base => {
                 const counts = base.assetCounts;
                 return (
                   <TableRow key={base.id}>
                     <TableCell>{base.name}</TableCell>
+                    <TableCell>
+                      <BrandBadge
+                        brand={brands.find(
+                          item => Number(item.id) === Number(base.brandId)
+                        )}
+                      />
+                    </TableCell>
                     <TableCell>
                       {domainNameById[base.knowledgeDomainId] || "—"}
                     </TableCell>

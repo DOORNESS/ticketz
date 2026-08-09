@@ -432,13 +432,6 @@ const ListTicketsService = async ({
     };
   }
 
-  if (Array.isArray(whatsappIds) && whatsappIds.length > 0) {
-    whereCondition = {
-      ...whereCondition,
-      whatsappId: { [Op.in]: whatsappIds }
-    };
-  }
-
   // Escopo de marca. `resolveBrandFilterForQuery` cruza o que a UI pediu com
   // o que o usuário pode ver, então um atendente restrito nunca amplia o
   // próprio alcance mandando brandIds na querystring.
@@ -449,6 +442,36 @@ const ListTicketsService = async ({
     whereCondition = {
       ...whereCondition,
       brandId: { [Op.in]: effectiveBrandIds }
+    };
+  }
+
+  if (Array.isArray(whatsappIds) && whatsappIds.length > 0) {
+    // A conexão precisa pertencer à marca em escopo.
+    //
+    // Os dois filtros eram independentes: pedir marca Fortmax junto de uma
+    // conexão da Nível montava `brandId IN (2) AND whatsappId IN (3)`, que
+    // não vaza nada mas devolve lista vazia sem explicar por quê — e deixava
+    // a combinação incoerente existir na URL. Aqui ela deixa de existir: a
+    // conexão de outra marca é descartada do filtro, não silenciosamente
+    // cruzada. Se sobrar nenhuma, `Op.in: []` não traz nada, que é o
+    // resultado correto para "conexão que não é desta marca".
+    let scopedWhatsappIds = whatsappIds.map(Number);
+
+    if (effectiveBrandIds !== null) {
+      const owned = await Whatsapp.findAll({
+        where: {
+          companyId,
+          id: { [Op.in]: scopedWhatsappIds },
+          brandId: { [Op.in]: effectiveBrandIds }
+        },
+        attributes: ["id"]
+      });
+      scopedWhatsappIds = owned.map(item => Number(item.id));
+    }
+
+    whereCondition = {
+      ...whereCondition,
+      whatsappId: { [Op.in]: scopedWhatsappIds }
     };
   }
 

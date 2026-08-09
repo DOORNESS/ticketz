@@ -34,11 +34,47 @@ const useStyles = makeStyles(theme => ({
 const TicketsWhatsappFilter = ({
   whatsapps = [],
   selectedWhatsappIds = [],
+  // Estava sendo passada pelo pai e nunca declarada aqui — a marca chegava e
+  // era descartada em silêncio. Foi exatamente por isso que a tela permitia
+  // "Marca: Nível" com "WhatsApp: WebG3".
+  selectedBrandIds = [],
   onChange
 }) => {
   const classes = useStyles();
 
-  if (!whatsapps.length) {
+  /**
+   * A marca manda: só entram as conexões DELA.
+   *
+   * Antes esta lista mostrava todas as conexões da empresa mesmo com uma marca
+   * escolhida, e dava para ficar em "Marca: Nível + WhatsApp: WebG3" — um
+   * estado que não corresponde a atendimento nenhum. A marca é o contexto; a
+   * conexão é um recorte dentro dele.
+   */
+  const brandScoped = React.useMemo(() => {
+    if (!selectedBrandIds.length) {
+      return whatsapps;
+    }
+    return whatsapps.filter(item =>
+      selectedBrandIds.includes(Number(item.brandId))
+    );
+  }, [whatsapps, selectedBrandIds]);
+
+  /**
+   * Trocar de marca não pode deixar para trás uma conexão da marca anterior:
+   * ela sumiria da lista e continuaria filtrando por baixo, invisível.
+   */
+  React.useEffect(() => {
+    if (!selectedWhatsappIds.length) {
+      return;
+    }
+    const allowed = brandScoped.map(item => Number(item.id));
+    const pruned = selectedWhatsappIds.filter(id => allowed.includes(id));
+    if (pruned.length !== selectedWhatsappIds.length) {
+      onChange(pruned);
+    }
+  }, [brandScoped, selectedWhatsappIds, onChange]);
+
+  if (!brandScoped.length) {
     return null;
   }
 
@@ -70,7 +106,7 @@ const TicketsWhatsappFilter = ({
         className={`${classes.chip} ${allSelected ? classes.chipActive : ""}`}
         onClick={() => onChange([])}
       />
-      {whatsapps.map(whatsapp => {
+      {brandScoped.map(whatsapp => {
         const isActive = selectedWhatsappIds.includes(whatsapp.id);
         return (
           <Chip

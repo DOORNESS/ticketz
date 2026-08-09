@@ -31,6 +31,9 @@ import { DeleteOutline, Edit } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
+import BrandScopeSelect from "../../components/BrandScopeSelect";
+import BrandBadge from "../../components/BrandBadge";
+import useBrands from "../../hooks/useBrands";
 import api from "../../services/api";
 import toastError, { resolveErrorMessage } from "../../errors/toastError";
 import { toast } from "react-toastify";
@@ -153,6 +156,21 @@ const SectionBlock = ({ title, subtitle, children }) => {
 const AiAgents = () => {
   const classes = useAiPageStyles();
   const [agents, setAgents] = useState([]);
+  const { brands } = useBrands();
+  const [brandScopeId, setBrandScopeId] = useState(null);
+
+  /**
+   * Recorte por marca. Registros sem marca continuam visíveis em "Todas":
+   * são legado de antes do vínculo, e escondê-los faria sumir da tela coisa
+   * que ainda está em uso.
+   */
+  const visibleAgents = React.useMemo(() => {
+    if (!brandScopeId) {
+      return agents;
+    }
+    return agents.filter(item => Number(item.brandId) === Number(brandScopeId));
+  }, [agents, brandScopeId]);
+
   const [queues, setQueues] = useState([]);
   const [knowledgeBases, setKnowledgeBases] = useState([]);
   const [knowledgeDomains, setKnowledgeDomains] = useState([]);
@@ -596,6 +614,11 @@ const AiAgents = () => {
     <MainContainer>
       <MainHeader>
         <Title>IA — Agentes</Title>
+        <BrandScopeSelect
+          brands={brands}
+          value={brandScopeId}
+          onChange={setBrandScopeId}
+        />
         <Button
           variant="contained"
           color="primary"
@@ -624,6 +647,7 @@ const AiAgents = () => {
           <TableHead>
             <TableRow>
               <TableCell>Nome</TableCell>
+              <TableCell>Marca</TableCell>
               <TableCell>Tipo</TableCell>
               <TableCell>Especialidade</TableCell>
               <TableCell>Fila WhatsApp</TableCell>
@@ -634,9 +658,16 @@ const AiAgents = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {agents.map(agent => (
+            {visibleAgents.map(agent => (
               <TableRow key={agent.id}>
                 <TableCell>{agent.name}</TableCell>
+                <TableCell>
+                  <BrandBadge
+                    brand={brands.find(
+                      item => Number(item.id) === Number(agent.brandId)
+                    )}
+                  />
+                </TableCell>
                 <TableCell>{agent.role || "legacy"}</TableCell>
                 <TableCell>{agent.specialty || "—"}</TableCell>
                 <TableCell>

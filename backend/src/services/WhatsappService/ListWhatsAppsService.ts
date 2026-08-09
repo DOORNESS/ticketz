@@ -17,6 +17,10 @@ const ListWhatsAppsService = async ({
       "status",
       "qrcode",
       "isDefault",
+      // A tela precisa saber de qual marca é cada conexão para não oferecer
+      // uma conexão da Nível quando o contexto é Fortmax. Sem isto na
+      // projeção, o filtro por marca recebe `brandId: undefined` e não filtra.
+      "brandId",
       "updatedAt"
     ],
     where: {

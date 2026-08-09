@@ -26,6 +26,9 @@ import { DeleteOutline, Edit } from "@material-ui/icons";
 import QueueModal from "../../components/QueueModal";
 import ConfirmationModal from "../../components/ConfirmationModal";
 import { SocketContext } from "../../context/Socket/SocketContext";
+import BrandScopeSelect from "../../components/BrandScopeSelect";
+import BrandBadge from "../../components/BrandBadge";
+import useBrands from "../../hooks/useBrands";
 
 const useStyles = makeStyles(theme => ({
   mainPaper: {
@@ -93,6 +96,25 @@ const Queues = () => {
   const [queueModalOpen, setQueueModalOpen] = useState(false);
   const [selectedQueue, setSelectedQueue] = useState(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
+
+  // Contexto de marca da tela. `null` = todas as marcas que este usuário
+  // enxerga — a lista já chega filtrada pelo backend.
+  const { brands } = useBrands();
+  const [brandScopeId, setBrandScopeId] = useState(null);
+
+  /**
+   * A tabela mostra só as filas da marca em contexto. Filas sem marca
+   * continuam aparecendo em "Todas": são legado de antes do vínculo, e
+   * esconder faria sumir fila que ainda opera.
+   */
+  const visibleQueues = React.useMemo(() => {
+    if (!brandScopeId) {
+      return queues;
+    }
+    return queues.filter(
+      queue => Number(queue.brandId) === Number(brandScopeId)
+    );
+  }, [queues, brandScopeId]);
 
   const socketManager = useContext(SocketContext);
 
@@ -185,6 +207,11 @@ const Queues = () => {
       <MainHeader>
         <Title>{i18n.t("queues.title")}</Title>
         <MainHeaderButtonsWrapper>
+          <BrandScopeSelect
+            brands={brands}
+            value={brandScopeId}
+            onChange={setBrandScopeId}
+          />
           <Button
             variant="contained"
             color="primary"
@@ -202,6 +229,7 @@ const Queues = () => {
               <TableCell align="center">
                 {i18n.t("queues.table.name")}
               </TableCell>
+              <TableCell align="center">Marca</TableCell>
               <TableCell align="center">
                 {i18n.t("queues.table.color")}
               </TableCell>
@@ -215,10 +243,19 @@ const Queues = () => {
           </TableHead>
           <TableBody>
             <>
-              {queues.map(queue => (
+              {visibleQueues.map(queue => (
                 <TableRow key={queue.id}>
                   <TableCell align="center">{queue.id}</TableCell>
                   <TableCell align="center">{queue.name}</TableCell>
+                  <TableCell align="center">
+                    <div className={classes.customTableCell}>
+                      <BrandBadge
+                        brand={brands.find(
+                          item => Number(item.id) === Number(queue.brandId)
+                        )}
+                      />
+                    </div>
+                  </TableCell>
                   <TableCell align="center">
                     <div className={classes.customTableCell}>
                       <span

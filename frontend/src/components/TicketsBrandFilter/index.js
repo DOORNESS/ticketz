@@ -1,48 +1,28 @@
 import React from "react";
 import { makeStyles } from "@material-ui/core/styles";
-import Chip from "@material-ui/core/Chip";
-import Typography from "@material-ui/core/Typography";
+import BrandScopeSelect from "../BrandScopeSelect";
 
 const useStyles = makeStyles(theme => ({
   root: {
     display: "flex",
-    flexWrap: "wrap",
     alignItems: "center",
-    gap: theme.spacing(0.75),
     padding: theme.spacing(1, 1.5),
     borderBottom: `1px solid ${theme.palette.divider}`,
     backgroundColor: theme.palette.background.paper
-  },
-  label: {
-    fontSize: "0.75rem",
-    fontWeight: 600,
-    color: theme.palette.text.secondary,
-    marginRight: theme.spacing(0.5),
-    whiteSpace: "nowrap"
-  },
-  chip: {
-    height: 28,
-    fontSize: "0.75rem",
-    fontWeight: 500
-  },
-  chipActive: {
-    fontWeight: 700
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    marginLeft: 6,
-    marginRight: -2
   }
 }));
 
 /**
- * Seletor global de marca.
+ * Marca do atendimento — o contexto operacional da tela de tickets.
  *
- * "Todas" significa todas as marcas **que o usuário pode ver** — a lista já
- * vem filtrada pelo backend. Some quando há uma marca ou menos: um seletor
- * com uma opção só é ruído.
+ * Era rotulado "Empresa" e desenhado como chips de múltipla escolha. Duas
+ * coisas erradas ali: "Empresa" é a Company (o tenant, que continua sendo uma
+ * só), e marcar duas marcas ao mesmo tempo não descreve nenhum atendimento
+ * real. Virou seletor de escolha única — que também é o que sobrevive quando
+ * existirem vinte marcas em vez de duas.
+ *
+ * Mantém a lista de ids no contrato com o pai (`[]` = todas, `[id]` = uma)
+ * porque é o formato que a consulta já usa ponta a ponta.
  */
 const TicketsBrandFilter = ({
   brands = [],
@@ -55,52 +35,17 @@ const TicketsBrandFilter = ({
     return null;
   }
 
-  const toggleBrand = id => {
-    const numericId = Number(id);
-    if (selectedBrandIds.includes(numericId)) {
-      onChange(selectedBrandIds.filter(item => item !== numericId));
-      return;
-    }
-    onChange([...selectedBrandIds, numericId]);
-  };
-
-  const allSelected = selectedBrandIds.length === 0;
+  const selected = selectedBrandIds.length ? Number(selectedBrandIds[0]) : null;
 
   return (
     <div className={classes.root}>
-      <Typography component="span" className={classes.label}>
-        Empresa:
-      </Typography>
-      <Chip
-        size="small"
-        label="Todas"
-        clickable
-        color={allSelected ? "primary" : "default"}
-        variant={allSelected ? "default" : "outlined"}
-        className={`${classes.chip} ${allSelected ? classes.chipActive : ""}`}
-        onClick={() => onChange([])}
+      <BrandScopeSelect
+        brands={brands}
+        value={selected}
+        onChange={brandId => onChange(brandId === null ? [] : [brandId])}
+        label="Marca"
+        allLabel="Todas as marcas"
       />
-      {brands.map(brand => {
-        const isActive = selectedBrandIds.includes(brand.id);
-        return (
-          <Chip
-            key={brand.id}
-            size="small"
-            label={brand.shortLabel || brand.name}
-            clickable
-            color={isActive ? "primary" : "default"}
-            variant={isActive ? "default" : "outlined"}
-            className={`${classes.chip} ${isActive ? classes.chipActive : ""}`}
-            avatar={
-              <span
-                className={classes.dot}
-                style={{ backgroundColor: brand.primaryColor || "#9e9e9e" }}
-              />
-            }
-            onClick={() => toggleBrand(brand.id)}
-          />
-        );
-      })}
     </div>
   );
 };

@@ -18,6 +18,9 @@ import { Edit } from "@material-ui/icons";
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
+import BrandScopeSelect from "../../components/BrandScopeSelect";
+import BrandBadge from "../../components/BrandBadge";
+import useBrands from "../../hooks/useBrands";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { toast } from "react-toastify";
@@ -50,6 +53,18 @@ const specialtyOptions = [
 const AiKnowledgeDomains = () => {
   const classes = useAiPageStyles();
   const [domains, setDomains] = useState([]);
+
+  const { brands } = useBrands();
+  const [brandScopeId, setBrandScopeId] = useState(null);
+
+  const visibleDomains = React.useMemo(() => {
+    if (!brandScopeId) {
+      return domains;
+    }
+    return domains.filter(
+      item => Number(item.brandId) === Number(brandScopeId)
+    );
+  }, [domains, brandScopeId]);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(defaultForm);
   const [editingId, setEditingId] = useState(null);
@@ -115,6 +130,11 @@ const AiKnowledgeDomains = () => {
     <MainContainer>
       <MainHeader>
         <Title>IA — Domínios de Conhecimento</Title>
+        <BrandScopeSelect
+          brands={brands}
+          value={brandScopeId}
+          onChange={setBrandScopeId}
+        />
         <Button
           variant="contained"
           color="primary"
@@ -137,6 +157,7 @@ const AiKnowledgeDomains = () => {
             <TableHead>
               <TableRow>
                 <TableCell>Nome</TableCell>
+                <TableCell>Marca</TableCell>
                 <TableCell>Slug</TableCell>
                 <TableCell>Especialidade</TableCell>
                 <TableCell>Ordem</TableCell>
@@ -145,9 +166,16 @@ const AiKnowledgeDomains = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {domains.map(domain => (
+              {visibleDomains.map(domain => (
                 <TableRow key={domain.id}>
                   <TableCell>{domain.name}</TableCell>
+                  <TableCell>
+                    <BrandBadge
+                      brand={brands.find(
+                        item => Number(item.id) === Number(domain.brandId)
+                      )}
+                    />
+                  </TableCell>
                   <TableCell>{domain.slug}</TableCell>
                   <TableCell>
                     {specialtyLabel(domain.linkedSpecialty)}
