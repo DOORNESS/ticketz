@@ -24,6 +24,8 @@ import {
 import MainContainer from "../../components/MainContainer";
 import MainHeader from "../../components/MainHeader";
 import Title from "../../components/Title";
+import BrandBadge from "../../components/BrandBadge";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import api from "../../services/api";
 import toastError from "../../errors/toastError";
 import { i18n } from "../../translate/i18n";
@@ -62,6 +64,31 @@ const AiLearnings = () => {
   const [incorporateOpen, setIncorporateOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [knowledgeBases, setKnowledgeBases] = useState([]);
+
+  /**
+   * O aprendizado herda a marca da base em que foi anexado — mesma razão dos
+   * ativos: a base é quem carrega `brandId`, e duplicar o vínculo criaria duas
+   * fontes de verdade que podem divergir.
+   */
+  const { brands, brandScopeId } = useBrandScope();
+
+  const brandIdByBase = React.useMemo(() => {
+    const map = {};
+    knowledgeBases.forEach(base => {
+      map[base.id] = base.brandId;
+    });
+    return map;
+  }, [knowledgeBases]);
+
+  const visibleLearnings = React.useMemo(() => {
+    if (!brandScopeId) {
+      return learnings;
+    }
+    return learnings.filter(
+      item =>
+        Number(brandIdByBase[item.knowledgeBaseId]) === Number(brandScopeId)
+    );
+  }, [learnings, brandIdByBase, brandScopeId]);
   const [knowledgeBaseId, setKnowledgeBaseId] = useState("");
   const [editForm, setEditForm] = useState({
     title: "",
@@ -176,6 +203,7 @@ const AiLearnings = () => {
           <TableHead>
             <TableRow>
               <TableCell>{i18n.t("aiLearning.admin.columns.title")}</TableCell>
+              <TableCell>Marca</TableCell>
               <TableCell>
                 {i18n.t("aiLearning.admin.columns.customer")}
               </TableCell>
@@ -190,9 +218,18 @@ const AiLearnings = () => {
             </TableRow>
           </TableHead>
           <TableBody>
-            {learnings.map(learning => (
+            {visibleLearnings.map(learning => (
               <TableRow key={learning.id}>
                 <TableCell>{learning.suggestedTitle || "-"}</TableCell>
+                <TableCell>
+                  <BrandBadge
+                    brand={brands.find(
+                      item =>
+                        Number(item.id) ===
+                        Number(brandIdByBase[learning.knowledgeBaseId])
+                    )}
+                  />
+                </TableCell>
                 <TableCell>{learning.customerName || "-"}</TableCell>
                 <TableCell>{learning.queueName || "-"}</TableCell>
                 <TableCell>

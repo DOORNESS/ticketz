@@ -5,7 +5,10 @@ import { GetCompanySetting } from "../../helpers/CheckSettings";
 import User from "../../models/User";
 import TicketTraking from "../../models/TicketTraking";
 import sequelize from "../../database";
-import { getBrandAccessForUser } from "../BrandServices/BrandAccessService";
+import {
+  getBrandAccessForUser,
+  resolveBrandFilterForQuery
+} from "../BrandServices/BrandAccessService";
 import {
   listCounterSerie,
   TicketCounterSeries
@@ -149,14 +152,19 @@ export async function calculateTicketStatistics(
  * Mesma regra do restante do sistema: "Todas" é todas as **permitidas**.
  */
 export async function resolveDashboardBrandScope(
-  userId?: number | string
+  userId?: number | string,
+  requestedBrandIds?: number[]
 ): Promise<number[] | null> {
   if (!userId) {
     return null;
   }
 
   const access = await getBrandAccessForUser(userId);
-  return access.isUnrestricted ? null : access.visibleBrandIds || [];
+
+  // `resolveBrandFilterForQuery` cruza o que a tela pediu com o que o usuário
+  // pode ver. Um atendente restrito que mandar brandIds na querystring não
+  // amplia o próprio alcance — no máximo estreita.
+  return resolveBrandFilterForQuery(access, requestedBrandIds);
 }
 
 /**
@@ -371,9 +379,10 @@ export async function userReport(
 
 export async function statusSummaryService(
   companyId: number,
-  userId?: number | string
+  userId?: number | string,
+  requestedBrandIds?: number[]
 ) {
-  const brandIds = await resolveDashboardBrandScope(userId);
+  const brandIds = await resolveDashboardBrandScope(userId, requestedBrandIds);
 
   const [ticketsSummary, usersSummary] = await Promise.all([
     ticketsStatusSummary(companyId, brandIds),
@@ -389,7 +398,8 @@ export async function statusSummaryService(
 export async function ticketsStatisticsService(
   companyId: number,
   params: DashboardDateRange,
-  userId?: number | string
+  userId?: number | string,
+  requestedBrandIds?: number[]
 ): Promise<TicketsStatisticsData> {
   let start: Date;
   let end = new Date();
@@ -422,7 +432,7 @@ export async function ticketsStatisticsService(
       companyId,
       start,
       end,
-      await resolveDashboardBrandScope(userId)
+      await resolveDashboardBrandScope(userId, requestedBrandIds)
     )
   };
 }
@@ -430,7 +440,8 @@ export async function ticketsStatisticsService(
 export async function usersReportService(
   companyId: number,
   params: DashboardDateRange,
-  userId?: number | string
+  userId?: number | string,
+  requestedBrandIds?: number[]
 ): Promise<UserReportData> {
   let start: Date;
   let end = new Date();
@@ -450,7 +461,7 @@ export async function usersReportService(
       companyId,
       start,
       end,
-      await resolveDashboardBrandScope(userId)
+      await resolveDashboardBrandScope(userId, requestedBrandIds)
     )
   };
 }

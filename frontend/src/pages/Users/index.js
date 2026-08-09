@@ -22,6 +22,8 @@ import MainHeader from "../../components/MainHeader";
 import MainHeaderButtonsWrapper from "../../components/MainHeaderButtonsWrapper";
 import Title from "../../components/Title";
 
+import BrandBadge from "../../components/BrandBadge";
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import TableRowSkeleton from "../../components/TableRowSkeleton";
@@ -95,6 +97,23 @@ const Users = () => {
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [searchParam, setSearchParam] = useState("");
   const [users, dispatch] = useReducer(reducer, []);
+
+  // Marca em contexto: admin/super aparecem sempre, porque o acesso deles não
+  // é por marca — filtrá-los daria a impressão de que perderam permissão.
+  const { brandScopeId } = useBrandScope();
+  const visibleUsers = React.useMemo(() => {
+    if (!brandScopeId) {
+      return users;
+    }
+    return users.filter(item => {
+      if (item.profile === "admin" || item.super) {
+        return true;
+      }
+      return (item.brands || []).some(
+        brand => Number(brand.id) === Number(brandScopeId)
+      );
+    });
+  }, [users, brandScopeId]);
 
   const socketManager = useContext(SocketContext);
 
@@ -249,6 +268,7 @@ const Users = () => {
               <TableCell align="center">
                 {i18n.t("users.table.profile")}
               </TableCell>
+              <TableCell align="center">Marcas</TableCell>
               <TableCell align="center">
                 {i18n.t("users.table.actions")}
               </TableCell>
@@ -256,12 +276,32 @@ const Users = () => {
           </TableHead>
           <TableBody>
             <>
-              {users.map(user => (
+              {visibleUsers.map(user => (
                 <TableRow key={user.id}>
                   <TableCell align="center">{user.id}</TableCell>
                   <TableCell align="center">{user.name}</TableCell>
                   <TableCell align="center">{user.email}</TableCell>
                   <TableCell align="center">{user.profile}</TableCell>
+                  <TableCell align="center">
+                    {user.profile === "admin" || user.super ? (
+                      "Todas"
+                    ) : (user.brands || []).length ? (
+                      <span
+                        style={{
+                          display: "inline-flex",
+                          gap: 4,
+                          flexWrap: "wrap",
+                          justifyContent: "center"
+                        }}
+                      >
+                        {user.brands.map(brand => (
+                          <BrandBadge key={brand.id} brand={brand} />
+                        ))}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
                   <TableCell align="center">
                     <IconButton
                       size="small"

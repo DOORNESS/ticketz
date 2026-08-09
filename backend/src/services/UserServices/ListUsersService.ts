@@ -1,5 +1,6 @@
 import { Sequelize, Op } from "sequelize";
 import Queue from "../../models/Queue";
+import Brand from "../../models/Brand";
 import Company from "../../models/Company";
 import User from "../../models/User";
 
@@ -53,7 +54,15 @@ const ListUsersService = async ({
     order: [["createdAt", "DESC"]],
     include: [
       { model: Queue, as: "queues", attributes: ["id", "name", "color"] },
-      { model: Company, as: "company", attributes: ["id", "name"] }
+      { model: Company, as: "company", attributes: ["id", "name"] },
+      // A tela de usuários precisa mostrar quais marcas cada funcionário
+      // atende — é informação operacional, não decoração: sem ela não dá para
+      // conferir permissão sem abrir o cadastro um por um.
+      {
+        model: Brand,
+        attributes: ["id", "name", "shortLabel", "primaryColor"],
+        through: { attributes: ["canAttend"] }
+      }
     ]
   });
 

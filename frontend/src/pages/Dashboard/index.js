@@ -31,6 +31,7 @@ import { SmallPie } from "./SmallPie";
 import { TicketCountersChart } from "./TicketCountersChart";
 import { getTimezoneOffset } from "../../helpers/getTimezoneOffset.js";
 
+import { useBrandScope } from "../../context/BrandScope/BrandScopeContext";
 import api from "../../services/api.js";
 import { SocketContext } from "../../context/Socket/SocketContext.js";
 import { formatTimeInterval } from "../../helpers/formatTimeInterval.js";
@@ -268,9 +269,20 @@ const Dashboard = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Marca em contexto. O backend cruza com a permissão do usuário, então
+  // mandar isto nunca amplia alcance — no máximo estreita.
+  const { brandScopeIds } = useBrandScope();
+  const brandParams =
+    brandScopeIds.length > 0 ? { brandIds: brandScopeIds } : {};
+  // String estável para usar como dependência de efeito: o array muda de
+  // identidade a cada render e dispararia recarga infinita.
+  const brandScopeKey = brandScopeIds.join(",");
+
   useEffect(() => {
     fetchData();
-  }, [period]);
+    // `brandScopeKey` entra aqui para a tela recarregar ao trocar de marca —
+    // sem isso os números continuariam sendo os da marca anterior.
+  }, [period, brandScopeKey]);
 
   async function handleChangePeriod(value) {
     setPeriod(value);
@@ -278,7 +290,7 @@ const Dashboard = () => {
 
   async function updateStatus() {
     api
-      .get("/dashboard/status")
+      .get("/dashboard/status", { params: brandParams })
       .then(result => {
         const { data } = result;
 
@@ -375,7 +387,7 @@ const Dashboard = () => {
     }
 
     const ticketsRequest = api
-      .get("/dashboard/tickets", { params })
+      .get("/dashboard/tickets", { params: { ...params, ...brandParams } })
       .then(result => {
         if (result?.data) {
           setTicketsData(result.data);
@@ -387,7 +399,7 @@ const Dashboard = () => {
 
     setLoadingUsers(true);
     const usersRequest = api
-      .get("/dashboard/users", { params })
+      .get("/dashboard/users", { params: { ...params, ...brandParams } })
       .then(result => {
         if (result?.data) {
           setUsersData(result.data);
@@ -405,7 +417,7 @@ const Dashboard = () => {
 
   useEffect(() => {
     updateStatus();
-  }, []);
+  }, [brandScopeKey]);
 
   function renderFilters() {
     return (

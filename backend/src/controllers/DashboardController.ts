@@ -30,6 +30,21 @@ const emptyTicketsStatistics = {
   }
 };
 
+
+/**
+ * `brandIds` chega como `?brandIds[]=1` ou `?brandIds=1`. O valor e apenas um
+ * PEDIDO: quem decide o alcance real e `resolveBrandFilterForQuery`, que cruza
+ * com as marcas que o usuario pode ver.
+ */
+const parseBrandIds = (raw: unknown): number[] | undefined => {
+  if (raw === undefined || raw === null || raw === "") {
+    return undefined;
+  }
+  const list = Array.isArray(raw) ? raw : [raw];
+  const parsed = list.map(Number).filter(value => Number.isFinite(value));
+  return parsed.length ? parsed : undefined;
+};
+
 export const ticketsStatistic = async (
   req: Request,
   res: Response
@@ -42,7 +57,8 @@ export const ticketsStatistic = async (
     const result = await ticketsStatisticsService(
       companyId,
       params,
-      req.user.id
+      req.user.id,
+      parseBrandIds(req.query.brandIds)
     );
     logger.info(
       { companyId, route: "dashboard/tickets", ms: Date.now() - startedAt },
@@ -72,7 +88,12 @@ export const usersReport = async (
   const startedAt = Date.now();
 
   try {
-    const result = await usersReportService(companyId, params, req.user.id);
+    const result = await usersReportService(
+      companyId,
+      params,
+      req.user.id,
+      parseBrandIds(req.query.brandIds)
+    );
     logger.info(
       { companyId, route: "dashboard/users", ms: Date.now() - startedAt },
       "Dashboard users report"
@@ -104,7 +125,11 @@ export const statusSummary = async (
   const startedAt = Date.now();
 
   try {
-    const dashboardData = await statusSummaryService(companyId, req.user.id);
+    const dashboardData = await statusSummaryService(
+      companyId,
+      req.user.id,
+      parseBrandIds(req.query.brandIds)
+    );
     logger.info(
       { companyId, route: "dashboard/status", ms: Date.now() - startedAt },
       "Dashboard status summary"
