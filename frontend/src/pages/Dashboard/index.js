@@ -271,7 +271,7 @@ const Dashboard = () => {
 
   // Marca em contexto. O backend cruza com a permissão do usuário, então
   // mandar isto nunca amplia alcance — no máximo estreita.
-  const { brandScopeIds } = useBrandScope();
+  const { brandScopeIds, isReady } = useBrandScope();
   const brandParams =
     brandScopeIds.length > 0 ? { brandIds: brandScopeIds } : {};
   // String estável para usar como dependência de efeito: o array muda de
@@ -279,10 +279,15 @@ const Dashboard = () => {
   const brandScopeKey = brandScopeIds.join(",");
 
   useEffect(() => {
+    // Mesmo motivo do Replay/Logs: sem a marca definida, os números viriam
+    // somando as duas marcas e seriam corrigidos (ou não) numa segunda volta.
+    if (!isReady) {
+      return;
+    }
     fetchData();
     // `brandScopeKey` entra aqui para a tela recarregar ao trocar de marca —
     // sem isso os números continuariam sendo os da marca anterior.
-  }, [period, brandScopeKey]);
+  }, [period, brandScopeKey, isReady]);
 
   async function handleChangePeriod(value) {
     setPeriod(value);
@@ -416,8 +421,11 @@ const Dashboard = () => {
   }
 
   useEffect(() => {
+    if (!isReady) {
+      return;
+    }
     updateStatus();
-  }, [brandScopeKey]);
+  }, [brandScopeKey, isReady]);
 
   function renderFilters() {
     return (

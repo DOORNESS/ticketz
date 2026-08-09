@@ -59,13 +59,20 @@ const ReplaySection = ({ label, children }) => {
 const AiReplay = () => {
   // Marca em contexto. O backend cruza com a permissão do usuário,
   // então mandar isto nunca amplia alcance — no máximo estreita.
-  const { brandScopeIds } = useBrandScope();
+  const { brandScopeIds, isReady } = useBrandScope();
   const brandScopeKey = brandScopeIds.join(",");
 
   const classes = useStyles();
   const [replays, setReplays] = useState([]);
 
   useEffect(() => {
+    // Não busca antes de saber a marca: buscar sem filtro e corrigir
+    // depois abre uma corrida em que a resposta sem filtro pode chegar
+    // por último e sobrescrever a filtrada.
+    if (!isReady) {
+      return;
+    }
+
     const load = async () => {
       try {
         const { data } = await api.get("/ai/replay", {
@@ -77,7 +84,7 @@ const AiReplay = () => {
       }
     };
     load();
-  }, [brandScopeKey]);
+  }, [brandScopeKey, isReady]);
 
   return (
     <MainContainer>
