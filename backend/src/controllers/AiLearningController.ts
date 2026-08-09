@@ -21,7 +21,7 @@ import User from "../models/User";
 import Ticket from "../models/Ticket";
 import { assertCanViewTicketBrand } from "../services/BrandServices/BrandAccessService";
 import {
-  resolveTicketIdsForBrandScope,
+  buildBrandTicketFilter,
   parseRequestedBrandIds
 } from "../services/BrandServices/BrandTicketScopeService";
 
@@ -243,7 +243,7 @@ export const replayIndex = async (
   const result = await listAiReplayLogs({
     companyId,
     ticketId: ticketId ? Number(ticketId) : undefined,
-    scopedTicketIds: await resolveTicketIdsForBrandScope(
+    brandTicketFilter: await buildBrandTicketFilter(
       companyId,
       req.user.id,
       parseRequestedBrandIds(req.query.brandIds)

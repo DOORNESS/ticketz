@@ -1,5 +1,4 @@
-import { Op } from "sequelize";
-import Ticket from "../../models/Ticket";
+import { Op, literal } from "sequelize";
 import {
   getBrandAccessForUser,
   resolveBrandFilterForQuery
@@ -9,17 +8,21 @@ import {
  * Escopo de marca para registros que se ligam a um TICKET, não a uma marca.
  *
  * `AiConversationLogs` e `AiReplayLogs` não têm `brandId` — e não deveriam
- * ter: eles pertencem a um atendimento, e o atendimento já carrega a marca.
+ * ter: pertencem a um atendimento, e o atendimento já carrega a marca.
  * Duplicar o vínculo criaria duas fontes de verdade que podem divergir (um log
  * marcado "Nível" pendurado num ticket Fortmax).
  *
- * Devolve `null` quando não há restrição — o chamador não filtra nada.
+ * O filtro é uma SUBCONSULTA, não uma lista de ids. A primeira versão deste
+ * service carregava todos os tickets da marca para montar um `IN (...)`: com
+ * os dois tickets de hoje funciona, com cem mil vira uma query gigante e uma
+ * varredura inútil só para descobrir de quem é cada log. O banco resolve isso
+ * com um índice; trazer os ids para o Node não.
  */
-export const resolveTicketIdsForBrandScope = async (
+export const buildBrandTicketFilter = async (
   companyId: number,
   userId: number | string,
   requestedBrandIds?: number[]
-): Promise<number[] | null> => {
+): Promise<{ [Op.in]: ReturnType<typeof literal> } | null> => {
   const access = await getBrandAccessForUser(userId);
   const brandIds = resolveBrandFilterForQuery(access, requestedBrandIds);
 
@@ -27,12 +30,24 @@ export const resolveTicketIdsForBrandScope = async (
     return null;
   }
 
-  const tickets = await Ticket.findAll({
-    where: { companyId, brandId: { [Op.in]: brandIds } },
-    attributes: ["id"]
-  });
+  const schema = process.env.DB_SCHEMA || "ticketz";
 
-  return tickets.map(ticket => Number(ticket.id));
+  // `brandIds` vem de `resolveBrandFilterForQuery`, que devolve inteiros
+  // vindos do banco — nunca texto da querystring. Ainda assim passam por
+  // `Number` aqui: literal não parametriza, e a garantia tem que ser local.
+  const safeIds = brandIds.map(Number).filter(Number.isFinite);
+
+  // Lista vazia = usuário sem marca permitida. `IN (NULL)` não casa com nada,
+  // que é o resultado correto — e evita SQL inválido com `IN ()`.
+  const inList = safeIds.length ? safeIds.join(",") : "NULL";
+
+  return {
+    [Op.in]: literal(
+      `(SELECT "id" FROM "${schema}"."Tickets" ` +
+        `WHERE "companyId" = ${Number(companyId)} ` +
+        `AND "brandId" IN (${inList}))`
+    )
+  };
 };
 
 /**
@@ -40,9 +55,7 @@ export const resolveTicketIdsForBrandScope = async (
  * quem decide o alcance é `resolveBrandFilterForQuery`, cruzando com o que o
  * usuário pode ver.
  */
-export const parseRequestedBrandIds = (
-  raw: unknown
-): number[] | undefined => {
+export const parseRequestedBrandIds = (raw: unknown): number[] | undefined => {
   if (raw === undefined || raw === null || raw === "") {
     return undefined;
   }

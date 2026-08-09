@@ -3,7 +3,7 @@ import { Request, Response } from "express";
 import AiConversationLog from "../models/AiConversationLog";
 import { safeAiQuery } from "../helpers/safeAiQuery";
 import {
-  resolveTicketIdsForBrandScope,
+  buildBrandTicketFilter,
   parseRequestedBrandIds
 } from "../services/BrandServices/BrandTicketScopeService";
 
@@ -20,7 +20,7 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 
   const where: {
     companyId: number;
-    ticketId?: number | { [Op.in]: number[] };
+    ticketId?: number | object;
   } = { companyId };
   if (ticketId) {
     where.ticketId = Number(ticketId);
@@ -28,13 +28,13 @@ export const index = async (req: Request, res: Response): Promise<Response> => {
 
   // O log pertence ao atendimento, e o atendimento é quem carrega a marca.
   // Sem este recorte a tela mostrava conversa da Nível com Fortmax escolhida.
-  const scopedTicketIds = await resolveTicketIdsForBrandScope(
+  const brandTicketFilter = await buildBrandTicketFilter(
     companyId,
     req.user.id,
     parseRequestedBrandIds(req.query.brandIds)
   );
-  if (scopedTicketIds !== null && !ticketId) {
-    where.ticketId = { [Op.in]: scopedTicketIds };
+  if (brandTicketFilter && !ticketId) {
+    where.ticketId = brandTicketFilter;
   }
 
   const pageNum = Math.max(Number(page), 1);

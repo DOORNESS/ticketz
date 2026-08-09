@@ -50,23 +50,23 @@ export const persistAiReplayLog = async (
 export const listAiReplayLogs = async ({
   companyId,
   ticketId,
-  scopedTicketIds,
+  brandTicketFilter,
   limit = 50,
   offset = 0
 }: {
   companyId: number;
   ticketId?: number;
-  /** `null` = sem restrição de marca; lista = só estes tickets. */
-  scopedTicketIds?: number[] | null;
+  /** `null` = sem restrição de marca; senão, subconsulta dos tickets da marca. */
+  brandTicketFilter?: object | null;
   limit?: number;
   offset?: number;
 }): Promise<{ rows: AiReplayLog[]; count: number }> => {
   const where: Record<string, unknown> = { companyId };
   if (ticketId) {
     where.ticketId = ticketId;
-  } else if (scopedTicketIds !== null && scopedTicketIds !== undefined) {
+  } else if (brandTicketFilter) {
     // O replay pertence ao atendimento, e o atendimento carrega a marca.
-    where.ticketId = { [Op.in]: scopedTicketIds };
+    where.ticketId = brandTicketFilter;
   }
 
   const { rows, count } = await AiReplayLog.findAndCountAll({
