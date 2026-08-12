@@ -6,6 +6,28 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.6] — 2026-08-12
+
+### Adicionado — sino de notificações passa a ser dispensável
+
+O ícone de chat no cabeçalho repetia conversas que já apareciam na lista ao lado e não tinha como ser zerado. Agora tem duas saídas, e ambas persistem:
+
+- **Abrir a conversa dispensa a notificação dela.** A rota passou a ser lida com `useLocation` em vez de `history.location`: o objeto de history é mutável e lê-lo no render não assina a mudança de rota, então o sino não re-renderizava ao abrir o ticket.
+- **Botão × em cada item** dispensa sem abrir. `stopPropagation` no clique, para não colidir com abrir a conversa.
+- Novo `helpers/notificationDismissals.js`: `localStorage` por usuário, `ticketId → updatedAt` da dispensa, podado em 200 entradas. Sem persistir, o refetch seguinte (`unreadMessages > 0`) traria tudo de volta e o botão seria enfeite.
+- A comparação de `updatedAt` separa **refetch do mesmo estado** (segue dispensado) de **mensagem nova** (volta a notificar). Eventos de socket de mensagem e handoff chamam `undismiss` explicitamente, porque o payload de `appMessage` nem sempre traz `updatedAt` fresco.
+- Chave `notifications.dismiss` nos 8 idiomas.
+
+### Decidido — o sino continua multi-marca
+
+O seletor do cabeçalho escopa a lista de tickets, **não** o alerta. Quem supervisiona as duas operações precisa saber que chegou mensagem na outra enquanto trabalha nesta; escopar aqui faria o operador perder mensagem sem sinal de que ela existe. Comentário no código e no manual travam a decisão. O recorte de autorização (`resolveBrandFilterForQuery`) continua valendo.
+
+Testes: `frontend/src/helpers/__tests__/notificationDismissals.spec.js` (8 casos). Suíte frontend 44/44.
+
+Manual §8: nova subseção **Sino de notificações**.
+
+---
+
 ## [1.7.5] — 2026-08-12
 
 ### Corrigido — lista de tickets ignorava o seletor global de marca

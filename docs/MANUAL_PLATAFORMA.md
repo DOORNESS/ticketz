@@ -480,6 +480,23 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Backend: `whatsappIds` em `GET /tickets` filtra tickets pela conexão que recebeu a mensagem
 - Combinável com filtro de filas existente
 
+### Sino de notificações (`components/NotificationsPopOver`)
+
+Ícone de chat no cabeçalho, com badge, favicon e título da aba refletindo a mesma contagem. Alimentado por `useTickets({ notClosed, withUnreadMessages })` mais os eventos `-ticket`, `-appMessage`, `-handoff` e `-contact`.
+
+**É deliberadamente multi-marca.** O seletor do cabeçalho escopa a lista de tickets, **não** o alerta: quem supervisiona as duas operações precisa saber que chegou mensagem na outra enquanto trabalha nesta. Passar `brandIds` aqui faria o operador perder mensagem sem nenhum sinal de que ela existe. O recorte que continua valendo é o de autorização — `resolveBrandFilterForQuery` limita às marcas que o usuário pode ver.
+
+Como o sino repete conversas que já estão na lista ao lado, ele só se justifica se der para zerá-lo. Duas saídas:
+
+| Ação | Efeito |
+|------|--------|
+| Abrir a conversa | Dispensa a notificação daquele ticket |
+| Botão **×** no item | Dispensa sem abrir |
+
+A dispensa é registrada em `helpers/notificationDismissals.js` (`localStorage`, por usuário, `ticketId → updatedAt` da dispensa, podado em 200 entradas). Sem esse registro o botão seria enfeite: o refetch seguinte busca por `unreadMessages > 0` e traria tudo de volta. A comparação de `updatedAt` separa **refetch do mesmo estado** (continua dispensado) de **mensagem nova** (volta a notificar); eventos de socket de mensagem e de handoff chamam `undismiss` explicitamente, porque o payload de `appMessage` nem sempre traz `updatedAt` fresco.
+
+A rota é lida com `useLocation`, não `history.location`: o objeto de history é mutável e lê-lo no render não assina a mudança de rota — sem isso, abrir a conversa não re-renderiza o sino e a notificação do ticket aberto não sai.
+
 ### Auditoria §8
 
 | Tabelas | `Tickets`, `Messages`, `TicketNotes`, `TicketTags`, `TicketTrakings` |

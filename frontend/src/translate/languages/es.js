@@ -544,7 +544,8 @@ const messages = {
         }
       },
       notifications: {
-        noTickets: "Ninguna notificación."
+        noTickets: "Ninguna notificación.",
+        dismiss: "Descartar notificación"
       },
       quickMessages: {
         title: "Respuestas Rápidas",

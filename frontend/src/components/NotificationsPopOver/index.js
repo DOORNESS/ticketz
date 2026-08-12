@@ -1,7 +1,13 @@
-import React, { useState, useRef, useEffect, useContext } from "react";
+import React, {
+  useState,
+  useRef,
+  useEffect,
+  useContext,
+  useCallback
+} from "react";
 import { useTheme } from "@material-ui/core/styles";
 
-import { useHistory } from "react-router-dom";
+import { useHistory, useLocation } from "react-router-dom";
 import { format } from "date-fns";
 import useSound from "use-sound";
 
@@ -13,6 +19,7 @@ import ListItemText from "@material-ui/core/ListItemText";
 import { makeStyles } from "@material-ui/core/styles";
 import Badge from "@material-ui/core/Badge";
 import ChatIcon from "@material-ui/icons/Chat";
+import CloseIcon from "@material-ui/icons/Close";
 
 import TicketListItem from "../TicketListItem";
 import { i18n } from "../../translate/i18n";
@@ -24,13 +31,24 @@ import Favicon from "react-favicon";
 import useSettings from "../../hooks/useSettings";
 import brandTokens from "../../theme/brandTokens";
 import { getHandoffReasonLabel } from "../../helpers/aiTicketStatus";
+import {
+  isTicketDismissed,
+  readDismissals,
+  withDismissedTicket,
+  withoutDismissedTicket,
+  writeDismissals
+} from "../../helpers/notificationDismissals";
 
 const MAX_NOTIFICATIONS = 40;
 
-const dedupeNotifications = (items, isViewingTicket) => {
+const dedupeNotifications = (items, isViewingTicket, dismissed = {}) => {
   const seen = new Map();
   for (const ticket of items) {
-    if (!ticket?.id || isViewingTicket(ticket)) {
+    if (
+      !ticket?.id ||
+      isViewingTicket(ticket) ||
+      isTicketDismissed(dismissed, ticket)
+    ) {
       continue;
     }
     seen.set(ticket.id, ticket);
@@ -48,6 +66,20 @@ const useStyles = makeStyles(theme => ({
   },
   noShadow: {
     boxShadow: "none !important"
+  },
+  notificationRow: {
+    position: "relative"
+  },
+  dismissButton: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    zIndex: 1,
+    padding: 4,
+    color: theme.palette.text.secondary,
+    "&:hover": {
+      color: theme.palette.text.primary
+    }
   }
 }));
 
@@ -57,7 +89,13 @@ const NotificationsPopOver = props => {
 
   const history = useHistory();
   const { user } = useContext(AuthContext);
-  const routeTicketId = history.location.pathname.split("/")[2] || "";
+  /**
+   * `useLocation` e não `history.location`: o objeto de history é mutável e
+   * lê-lo no render não assina a mudança de rota. Abrir a conversa precisa
+   * re-renderizar aqui, senão a notificação do ticket aberto nunca sai.
+   */
+  const location = useLocation();
+  const routeTicketId = location.pathname.split("/")[2] || "";
   const ticketIdRef = useRef(routeTicketId);
   const anchorEl = useRef();
   const [isOpen, setIsOpen] = useState(false);
@@ -71,6 +109,24 @@ const NotificationsPopOver = props => {
 
   const [, setDesktopNotifications] = useState([]);
 
+  const [dismissed, setDismissed] = useState(() => readDismissals(user?.id));
+  const dismissedRef = useRef(dismissed);
+  dismissedRef.current = dismissed;
+
+  useEffect(() => {
+    setDismissed(readDismissals(user?.id));
+  }, [user?.id]);
+
+  /**
+   * Sem `brandIds`: o sino é deliberadamente **multi-marca**.
+   *
+   * O seletor do cabeçalho escopa a lista de tickets, não o alerta — quem
+   * supervisiona as duas operações precisa saber que chegou mensagem na outra
+   * enquanto trabalha nesta. Escopar aqui faria o operador perder mensagem sem
+   * nenhum sinal de que ela existe. O recorte que continua valendo é o de
+   * autorização: `resolveBrandFilterForQuery` limita às marcas que o usuário
+   * pode ver.
+   */
   const { tickets, refetch: refetchTickets } = useTickets({
     notClosed: "true",
     withUnreadMessages: "true",
@@ -95,6 +151,44 @@ const NotificationsPopOver = props => {
       (ticket.uuid && ticket.uuid === current)
     );
   };
+
+  /**
+   * Dispensar = tirar do sino e lembrar disso. Sem o registro, o próximo
+   * refetch (`unreadMessages > 0`) traria a conversa de volta e o "x" seria
+   * enfeite.
+   */
+  const dismissNotification = useCallback(
+    ticket => {
+      if (!ticket?.id) {
+        return;
+      }
+      // A gravação fica fora do updater de estado: em StrictMode o updater
+      // roda duas vezes e escrever no storage ali seria efeito colateral.
+      const next = writeDismissals(
+        user?.id,
+        withDismissedTicket(dismissedRef.current, ticket)
+      );
+      dismissedRef.current = next;
+      setDismissed(next);
+      setNotifications(prev => prev.filter(item => item.id !== ticket.id));
+    },
+    [user?.id]
+  );
+
+  /** Mensagem nova apaga a dispensa: o "x" vale para o que estava na tela. */
+  const undismissNotification = useCallback(
+    ticketId => {
+      const current = dismissedRef.current;
+      const cleared = withoutDismissedTicket(current, ticketId);
+      if (cleared === current) {
+        return;
+      }
+      const next = writeDismissals(user?.id, cleared);
+      dismissedRef.current = next;
+      setDismissed(next);
+    },
+    [user?.id]
+  );
 
   function clearTicket(ticketId) {
     setNotifications(prevState => {
@@ -142,24 +236,40 @@ const NotificationsPopOver = props => {
   }, [play]);
 
   useEffect(() => {
-    setNotifications(dedupeNotifications(tickets, isViewingTicket));
-  }, [tickets, routeTicketId]);
+    setNotifications(
+      dedupeNotifications(tickets, isViewingTicket, dismissedRef.current)
+    );
+  }, [tickets, routeTicketId, dismissed]);
 
+  const notificationsRef = useRef(notifications);
+  notificationsRef.current = notifications;
+
+  /**
+   * Abrir a conversa zera a notificação dela — era o pedido central: o sino
+   * repete o que já está na lista ao lado, então não pode sobreviver à leitura.
+   */
   useEffect(() => {
     ticketIdRef.current = routeTicketId;
-    if (routeTicketId) {
-      setNotifications(prevState =>
-        dedupeNotifications(
-          prevState.filter(
-            t =>
-              String(t.id) !== String(routeTicketId) &&
-              (!t.uuid || t.uuid !== routeTicketId)
-          ),
-          isViewingTicket
-        )
-      );
+
+    if (!routeTicketId) {
+      return;
     }
-  }, [routeTicketId]);
+
+    const opened = notificationsRef.current.find(
+      t =>
+        String(t.id) === String(routeTicketId) ||
+        (t.uuid && t.uuid === routeTicketId)
+    );
+
+    if (opened) {
+      dismissNotification(opened);
+      return;
+    }
+
+    setNotifications(prevState =>
+      dedupeNotifications(prevState, isViewingTicket, dismissedRef.current)
+    );
+  }, [routeTicketId, dismissNotification]);
 
   useEffect(() => {
     setQueueIds(safeQueues.map(q => q.id));
@@ -195,7 +305,8 @@ const NotificationsPopOver = props => {
             }
             return dedupeNotifications(
               prevState.filter(t => t.id !== data.ticket.id),
-              isViewingTicket
+              isViewingTicket,
+              dismissedRef.current
             );
           }
 
@@ -209,7 +320,11 @@ const NotificationsPopOver = props => {
             return prevState;
           }
 
-          return dedupeNotifications(next, isViewingTicket);
+          return dedupeNotifications(
+            next,
+            isViewingTicket,
+            dismissedRef.current
+          );
         });
       }
     };
@@ -234,6 +349,11 @@ const NotificationsPopOver = props => {
           return;
         }
 
+        // Mensagem nova reabre a notificação mesmo que o ticket tenha sido
+        // dispensado antes — o "x" fecha o que estava ali, não silencia a
+        // conversa para sempre.
+        undismissNotification(data.ticket.id);
+
         setNotifications(prevState => {
           const ticketIndex = prevState.findIndex(t => t.id === data.ticket.id);
           let next;
@@ -243,7 +363,11 @@ const NotificationsPopOver = props => {
           } else {
             next = [data.ticket, ...prevState];
           }
-          return dedupeNotifications(next, isViewingTicket);
+          return dedupeNotifications(
+            next,
+            isViewingTicket,
+            withoutDismissedTicket(dismissedRef.current, data.ticket.id)
+          );
         });
 
         const shouldNotNotificate =
@@ -277,6 +401,9 @@ const NotificationsPopOver = props => {
         return;
       }
 
+      // Handoff é alerta novo: passa por cima de dispensa anterior.
+      undismissNotification(ticket.id);
+
       setNotifications(prevState => {
         const ticketIndex = prevState.findIndex(t => t.id === ticket.id);
         let next;
@@ -286,7 +413,11 @@ const NotificationsPopOver = props => {
         } else {
           next = [ticket, ...prevState];
         }
-        return dedupeNotifications(next, isViewingTicket);
+        return dedupeNotifications(
+          next,
+          isViewingTicket,
+          withoutDismissedTicket(dismissedRef.current, ticket.id)
+        );
       });
 
       const reasonLabel =
@@ -348,7 +479,8 @@ const NotificationsPopOver = props => {
     queueIds,
     soundGroupNotifications,
     socketManager,
-    refetchTickets
+    refetchTickets,
+    undismissNotification
   ]);
 
   const handleNotifications = data => {
@@ -507,12 +639,29 @@ const NotificationsPopOver = props => {
             </ListItem>
           ) : (
             notifications.map(ticket => (
-              <NotificationTicket key={ticket.id}>
-                <TicketListItem
-                  ticket={ticket}
-                  groupActionButtons={!showTabGroups}
-                />
-              </NotificationTicket>
+              <div key={ticket.id} className={classes.notificationRow}>
+                <IconButton
+                  size="small"
+                  className={classes.dismissButton}
+                  aria-label={i18n.t("notifications.dismiss")}
+                  title={i18n.t("notifications.dismiss")}
+                  onClick={event => {
+                    // O clique não pode subir para o item: dispensar é o
+                    // oposto de abrir a conversa.
+                    event.stopPropagation();
+                    event.preventDefault();
+                    dismissNotification(ticket);
+                  }}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+                <NotificationTicket>
+                  <TicketListItem
+                    ticket={ticket}
+                    groupActionButtons={!showTabGroups}
+                  />
+                </NotificationTicket>
+              </div>
             ))
           )}
         </List>

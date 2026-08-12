@@ -480,7 +480,8 @@ const messages = {
         }
       },
       notifications: {
-        noTickets: "Keine Benachrichtigungen."
+        noTickets: "Keine Benachrichtigungen.",
+        dismiss: "Benachrichtigung ausblenden"
       },
       quickMessages: {
         title: "Schnellantworten",

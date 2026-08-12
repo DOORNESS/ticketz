@@ -11,6 +11,7 @@
 | Estrutura pastas | [§36 — Frontend](MANUAL_PLATAFORMA.md#36-estrutura-de-pastas--frontend) |
 | i18n | [§19 — Internacionalização](MANUAL_PLATAFORMA.md#19-internacionalização-i18n) |
 | Escopo de marca na lista de tickets | [§Brand — Escopo de marca na lista de tickets](MANUAL_PLATAFORMA.md#escopo-de-marca-na-lista-de-tickets) |
+| Sino de notificações (dispensa, multi-marca) | [§8 — Sino de notificações](MANUAL_PLATAFORMA.md#sino-de-notificações-componentsnotificationspopover) |
 
 ## Stack
 
@@ -28,6 +29,8 @@
 | `context/Tickets/TicketsContext.js` | Ticket ativo, abas, refresh e reconciliação de mensagens otimistas |
 | `context/BrandScope/BrandScopeContext.js` | Marca selecionada no cabeçalho — vale para o sistema inteiro |
 | `hooks/useTickets/index.js` | Busca de `/tickets` (inclui `brandIds`) + cache de sessão |
+| `components/NotificationsPopOver/index.js` | Sino do cabeçalho — multi-marca por decisão, dispensável |
+| `helpers/notificationDismissals.js` | Registro de notificações dispensadas (`localStorage` por usuário) |
 | `pages/Ai*` | Módulo IA (11 páginas: agentes, bases, domínios, assets, playground, etc.) |
 | `translate/i18n.js` | i18n (fallback `pt`) |
 

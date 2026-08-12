@@ -478,7 +478,8 @@ const messages = {
         }
       },
       notifications: {
-        noTickets: "Aucune notification."
+        noTickets: "Aucune notification.",
+        dismiss: "Ignorer la notification"
       },
       quickMessages: {
         title: "Réponses Rapides",

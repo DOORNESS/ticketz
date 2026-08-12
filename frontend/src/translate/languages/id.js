@@ -494,7 +494,8 @@ const messages = {
         }
       },
       notifications: {
-        noTickets: "Tidak ada notifikasi."
+        noTickets: "Tidak ada notifikasi.",
+        dismiss: "Tutup notifikasi"
       },
       quickMessages: {
         title: "Respon Cepat",

@@ -568,7 +568,8 @@ const messages = {
         }
       },
       notifications: {
-        noTickets: "No notifications."
+        noTickets: "No notifications.",
+        dismiss: "Dismiss notification"
       },
       quickMessages: {
         title: "Quick Responses",
