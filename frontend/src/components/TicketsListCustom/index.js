@@ -20,7 +20,11 @@ import { TicketsContext } from "../../context/Tickets/TicketsContext";
 import { SocketContext } from "../../context/Socket/SocketContext";
 import toastError from "../../errors/toastError";
 import { isApiWarmupError } from "../../helpers/apiWarmup";
-import { shouldShowTicketInList } from "../../helpers/ticketListVisibility";
+import {
+  shouldShowTicketInList,
+  ticketMatchesSelectedBrands,
+  ticketMatchesSelectedWhatsapps
+} from "../../helpers/ticketListVisibility";
 
 const useStyles = makeStyles(theme => ({
   ticketsListWrapper: {
@@ -284,6 +288,7 @@ const TicketsListCustom = props => {
     listMode,
     selectedQueueIds,
     selectedWhatsappIds,
+    selectedBrandIds,
     profile,
     showAll,
     user?.id,
@@ -304,6 +309,7 @@ const TicketsListCustom = props => {
           listMode,
           selectedQueueIds,
           selectedWhatsappIds,
+          selectedBrandIds,
           profile,
           showAll,
           userId: user?.id,
@@ -444,7 +450,13 @@ const TicketsListCustom = props => {
           });
         } else if (
           listMode === "ai" &&
-          (previewTicket.aiAgentId || previewTicket.aiStartedAt)
+          (previewTicket.aiAgentId || previewTicket.aiStartedAt) &&
+          // Este ramo existe para a aba IA não perder ticket que o filtro
+          // completo recusa por estado transitório. Ele NÃO pode ignorar a
+          // marca: sem esta checagem uma mensagem da Nível reinseria o ticket
+          // na lista com Fortmax selecionada.
+          ticketMatchesSelectedBrands(previewTicket, selectedBrandIds) &&
+          ticketMatchesSelectedWhatsapps(previewTicket, selectedWhatsappIds)
         ) {
           dispatch({
             type: "UPDATE_TICKET",
@@ -664,6 +676,7 @@ const TicketsListCustom = props => {
     supervision,
     selectedQueueIds,
     selectedWhatsappIds,
+    selectedBrandIds,
     profile,
     showAll,
     user?.id,

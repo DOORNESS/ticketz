@@ -191,6 +191,21 @@ A troca é por configuração, não deploy, e reversível na mesma velocidade. A
 
 **Administração:** Administração → Marcas (`pages/Brands`) cria e edita marcas; o cadastro do funcionário (`UserModal` → `UserBrandsSelect`) atribui as marcas.
 
+### Escopo de marca na lista de tickets
+
+O seletor global do cabeçalho grava em `BrandScopeContext`; `TicketsManagerTabs` lê `brandScopeIds` e repassa `selectedBrandIds` para cada `TicketsListCustom`. A partir daí o escopo precisa atravessar **quatro** caminhos independentes — a lista se enche por todos eles, e qualquer um que ignore a marca reabre o vazamento:
+
+| Caminho | Onde o escopo entra |
+|---------|---------------------|
+| Busca inicial e paginação | `useTickets` → `brandIds` na querystring de `GET /tickets` → `resolveBrandFilterForQuery` |
+| Cache de sessão | `buildTicketsCacheKey` inclui `brandIds` — sem isso, trocar de marca reaproveita a lista da anterior |
+| Eventos de socket (`-ticket`, `-appMessage`) | `shouldUpdateTicket` chama `shouldShowTicketInList` com `selectedBrandIds` |
+| Polling da aba IA (4s) e `wsRefreshRequired` | mesmo filtro, com `selectedBrandIds` nas dependências do efeito |
+
+A aba IA tem um ramo extra que insere ticket com `aiAgentId`/`aiStartedAt` quando o filtro completo o recusa por estado transitório. Esse ramo confere marca e conexão antes de inserir: ele existe para não perder ticket da marca em escopo, não para trazer o de outra.
+
+O filtro do cliente é espelho, não autorização — quem barra de verdade é `ListTicketsService` com o `brandId IN (...)` resolvido no backend.
+
 ### Marcas em operação
 
 | Marca | Recursos próprios |

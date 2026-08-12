@@ -6,6 +6,24 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.5] — 2026-08-12
+
+### Corrigido — lista de tickets ignorava o seletor global de marca
+
+Com **Fortmax / WebG3** selecionado no cabeçalho, a lista continuava mostrando conversas da Nível. O escopo de marca chegava até `TicketsListCustom`, mas se perdia nos quatro caminhos que enchem a lista:
+
+- **`useTickets` descartava `brandIds`.** O componente mandava o parâmetro, o hook não o desestruturava — ele sumia antes do `api.get("/tickets")`. O backend recebia a consulta sem filtro e devolvia todas as marcas; `resolveBrandFilterForQuery` não tinha o que restringir.
+- **`buildTicketsCacheKey` não incluía `brandIds`.** Duas marcas compartilhavam a mesma entrada de `sessionStorage`: trocar de marca reexibia a lista da anterior, e a entrada sobrevivia ao reload.
+- **`shouldUpdateTicket` não passava `selectedBrandIds`.** Todo evento de socket (`-ticket`, `-appMessage`) reinseria ticket de outra marca depois da lista já ter sido podada — o caminho que produzia a tela do relato.
+- **Ramo de resgate da aba IA inseria sem checar marca.** Existe para não perder ticket cujo estado transitório o filtro completo recusa; passou a conferir marca e conexão antes de inserir.
+- **Dependências faltando** de `selectedBrandIds` no efeito de filtragem e no polling de 4s da aba IA: trocar de marca não reavaliava a lista em memória.
+
+Testes: `frontend/src/hooks/useTickets/__tests__/brandIds.spec.js` — verificado que os dois casos falham sem a correção.
+
+Manual §Brand: nova subseção **Escopo de marca na lista de tickets** com a tabela dos quatro caminhos.
+
+---
+
 ## [1.7.4] — 2026-08-08
 
 ### Decidido — FortControl permanece dentro de Fortmax/WebG3

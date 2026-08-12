@@ -10,6 +10,7 @@
 | Permissões UI | [§4 — Perfis](MANUAL_PLATAFORMA.md#4-perfis-de-usuário-e-permissões) |
 | Estrutura pastas | [§36 — Frontend](MANUAL_PLATAFORMA.md#36-estrutura-de-pastas--frontend) |
 | i18n | [§19 — Internacionalização](MANUAL_PLATAFORMA.md#19-internacionalização-i18n) |
+| Escopo de marca na lista de tickets | [§Brand — Escopo de marca na lista de tickets](MANUAL_PLATAFORMA.md#escopo-de-marca-na-lista-de-tickets) |
 
 ## Stack
 
@@ -25,6 +26,8 @@
 | `rules.js` | Permissões `<Can>` |
 | `context/Socket/SocketContext.js` | WebSocket |
 | `context/Tickets/TicketsContext.js` | Ticket ativo, abas, refresh e reconciliação de mensagens otimistas |
+| `context/BrandScope/BrandScopeContext.js` | Marca selecionada no cabeçalho — vale para o sistema inteiro |
+| `hooks/useTickets/index.js` | Busca de `/tickets` (inclui `brandIds`) + cache de sessão |
 | `pages/Ai*` | Módulo IA (11 páginas: agentes, bases, domínios, assets, playground, etc.) |
 | `translate/i18n.js` | i18n (fallback `pt`) |
 
