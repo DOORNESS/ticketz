@@ -33,7 +33,18 @@ A busca do agente em `WireSupportLinesService` mantém `"nivelton"` de propósit
 
 O menu com protocolo e opções numeradas vem de `verifyQueue` (`wbotMessageListener.ts`), não do agente, e só aparece quando a conexão tem mais de uma fila. Com uma fila só, a IA responde direto.
 
-Testes: `NivelAssistantPolicy.spec.ts` (14 casos). Suíte backend **461/461** em 72 suítes; `tsc --noEmit` limpo.
+### Adicionado — auditoria detecta saudação que anuncia a fila errada
+
+Escolher "03 - Recuperar Conta" e ler "Você foi direcionado ao Suporte Empresa" parece bug de roteamento e não é: `verifyQueue` indexa o mesmo array que exibiu, então o ticket vai para a fila certa e só o texto mente. Como cada saudação é escrita à mão, copiar a de uma fila para outra passava despercebido por todas as checagens existentes.
+
+`QueueGreetingConsistency.detectQueueGreetingMismatches` compara o núcleo do nome da fila (sem o prefixo `01 - `) com a própria saudação; `AuditSupportLinesService` passa a emitir `queue_greeting_announces_other_queue` como **warn**. Nome curto demais não entra no critério e citar outra fila de passagem não conta, para não gerar alarme falso.
+
+Testes: `NivelAssistantPolicy.spec.ts` (14 casos) e `QueueGreetingConsistency.spec.ts` (7 casos). Suíte backend **468/468** em 73 suítes; `tsc --noEmit` limpo.
+
+### Organização
+
+- Os artefatos locais que sujavam a árvore entraram no `.gitignore` em vez de serem apagados: `backend/scripts/{check-user,set-user-password,reset-test-environment}.js` são saída compilada de fontes `.ts` já versionadas (o `package.json` roda os `.ts`), `frontend/public/config-dev.json` é config de desenvolvimento e `/package-lock.json` é resíduo de ferramenta num repositório que não tem `package.json` na raiz por design.
+- Commits de 18/07 que existiam apenas numa worktree temporária (`2afa07d`, `1e60c89`) ganharam o branch `archive/pre-main-2026-07-18`. Não foram integrados — o conteúdo já está na main em versão mais nova — mas deixaram de ser órfãos e não se perdem mais.
 
 Manual §8: novas subseções **Política de atendimento da Nível** e **Menu numerado de filas**.
 

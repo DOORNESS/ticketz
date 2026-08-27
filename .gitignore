@@ -17,3 +17,21 @@ deploy-cache/
 api-worker/node_modules/
 
 .DS_Store
+
+# Artefatos locais que sujavam a arvore sem carregar trabalho.
+#
+# Os tres .js abaixo sao saida compilada de fontes .ts que JA estao
+# versionadas em backend/scripts/ (check-user.ts, set-user-password.ts,
+# reset-test-environment.ts) — e o package.json roda os .ts via ts-node-dev,
+# nunca estes. Nao foram apagados: apenas param de aparecer como pendencia.
+backend/scripts/check-user.js
+backend/scripts/set-user-password.js
+backend/scripts/reset-test-environment.js
+
+# Config de desenvolvimento local (aponta para localhost). O config.json de
+# runtime e gerado a partir do ambiente no start do container.
+frontend/public/config-dev.json
+
+# O repositorio nao tem package.json na raiz por design: backend/ e frontend/
+# sao pacotes independentes. Um lock na raiz e residuo de ferramenta.
+/package-lock.json

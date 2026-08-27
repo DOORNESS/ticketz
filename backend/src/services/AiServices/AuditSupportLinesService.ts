@@ -12,6 +12,7 @@ import {
   findWhatsappByBrand,
   normalizeSupportLineName
 } from "./WireSupportLinesService";
+import { detectQueueGreetingMismatches } from "./QueueGreetingConsistency";
 
 export type SupportLineBrand = "fortmax" | "nivel";
 
@@ -186,6 +187,25 @@ const auditBrandLine = async (
       message: `Fila "${queue.name}" pertence à outra marca`
     });
   }
+
+  // Saudação copiada de outra fila faz o cliente escolher "Recuperar Conta" e
+  // ler "Você foi direcionado ao Suporte Empresa". O ticket vai para a fila
+  // certa — só o texto mente —, então o sintoma parece bug de roteamento e não
+  // aparece em nenhuma outra checagem. É `warn`: o atendimento funciona.
+  detectQueueGreetingMismatches(
+    queues.map(item => ({
+      id: item.id,
+      name: item.name,
+      greetingMessage: item.greetingMessage
+    }))
+  ).forEach(mismatch => {
+    issues.push({
+      severity: "warn",
+      line,
+      code: "queue_greeting_announces_other_queue",
+      message: `Fila "${mismatch.queueName}" tem saudação anunciando "${mismatch.announcedQueueName}". Corrija o texto em Administração → Filas.`
+    });
+  });
 
   const secondaryQueues = queues.filter(
     linkedQueue => linkedQueue.id !== queue?.id
