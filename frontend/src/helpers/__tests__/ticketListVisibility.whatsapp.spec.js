@@ -5,18 +5,12 @@ import {
 
 describe("ticketMatchesSelectedWhatsapps", () => {
   it("returns all tickets when no whatsapp filter is selected", () => {
-    expect(
-      ticketMatchesSelectedWhatsapps({ whatsappId: 3 }, [])
-    ).toBe(true);
+    expect(ticketMatchesSelectedWhatsapps({ whatsappId: 3 }, [])).toBe(true);
   });
 
   it("filters tickets by whatsapp line", () => {
-    expect(
-      ticketMatchesSelectedWhatsapps({ whatsappId: 3 }, [3])
-    ).toBe(true);
-    expect(
-      ticketMatchesSelectedWhatsapps({ whatsappId: 3 }, [5])
-    ).toBe(false);
+    expect(ticketMatchesSelectedWhatsapps({ whatsappId: 3 }, [3])).toBe(true);
+    expect(ticketMatchesSelectedWhatsapps({ whatsappId: 3 }, [5])).toBe(false);
   });
 });
 

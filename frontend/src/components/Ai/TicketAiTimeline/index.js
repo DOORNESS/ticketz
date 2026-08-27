@@ -64,7 +64,9 @@ const TicketAiTimeline = ({ ticketId }) => {
 
       try {
         setLoading(true);
-        const { data } = await api.get(`/tickets/${ticketId}/ai/tool-executions`);
+        const { data } = await api.get(
+          `/tickets/${ticketId}/ai/tool-executions`
+        );
         setLogs(Array.isArray(data) ? data : []);
       } catch (err) {
         if (err?.response?.status !== 403) {

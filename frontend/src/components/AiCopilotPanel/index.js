@@ -14,9 +14,7 @@ import api from "../../services/api";
 import { i18n } from "../../translate/i18n";
 import toastError from "../../errors/toastError";
 import { SocketContext } from "../../context/Socket/SocketContext";
-import {
-  formatConfidencePercent
-} from "../../helpers/aiTicketStatus";
+import { formatConfidencePercent } from "../../helpers/aiTicketStatus";
 import {
   isAiSupervisionTicket,
   isTicketObservationMode
