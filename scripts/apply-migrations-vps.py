@@ -39,22 +39,45 @@ if not PASSWORD:
     )
 ROOT = os.environ.get("DEPLOY_ROOT", r"C:\ticketz")
 
+# `npm notice` sai em stderr. Com `2>&1` o PowerShell transforma cada linha de
+# stderr de um comando NATIVO em ErrorRecord e, sob ErrorActionPreference='Stop',
+# isso vira erro terminante: o deploy de 27/08 morreu na PRIMEIRA linha, no
+# `db:migrate:status`, antes de qualquer migration rodar, só porque o npm
+# resolveu anunciar uma versão nova.
+#
+# O sinal real de sucesso de um comando nativo é `$LASTEXITCODE`, não a presença
+# de stderr. Por isso o `Stop` continua valendo para cmdlets (um `Set-Location`
+# que falhe ainda aborta), mas é suspenso ao redor de cada chamada ao npx.
 MIGRATE_PS = rf"""
 $ErrorActionPreference = 'Stop'
 Set-Location '{ROOT}\backend'
 
+$env:NPM_CONFIG_UPDATE_NOTIFIER = 'false'
+$env:NO_UPDATE_NOTIFIER = '1'
+
+function Invoke-Sequelize {{
+  param([string[]] $SequelizeArgs)
+  $previous = $ErrorActionPreference
+  $ErrorActionPreference = 'Continue'
+  try {{
+    & npx sequelize @SequelizeArgs 2>&1 | ForEach-Object {{ "$_" }}
+  }} finally {{
+    $ErrorActionPreference = $previous
+  }}
+}}
+
 Write-Output '=== migrations pendentes antes ==='
-npx sequelize db:migrate:status 2>&1 | Select-String '^down' | ForEach-Object {{ $_.Line }}
+Invoke-Sequelize @('db:migrate:status') | Select-String '^down' | ForEach-Object {{ $_.Line }}
 
 Write-Output '=== aplicando ==='
-npx sequelize db:migrate 2>&1 | ForEach-Object {{ $_ }}
+Invoke-Sequelize @('db:migrate')
 if ($LASTEXITCODE -ne 0) {{
-  Write-Error "db:migrate falhou com codigo $LASTEXITCODE"
+  Write-Output "db:migrate falhou com codigo $LASTEXITCODE"
   exit 1
 }}
 
 Write-Output '=== pendentes depois (deve ser vazio) ==='
-npx sequelize db:migrate:status 2>&1 | Select-String '^down' | ForEach-Object {{ $_.Line }}
+Invoke-Sequelize @('db:migrate:status') | Select-String '^down' | ForEach-Object {{ $_.Line }}
 exit 0
 """
 

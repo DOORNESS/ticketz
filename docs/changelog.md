@@ -41,6 +41,14 @@ Escolher "03 - Recuperar Conta" e ler "Você foi direcionado ao Suporte Empresa"
 
 Testes: `NivelAssistantPolicy.spec.ts` (14 casos) e `QueueGreetingConsistency.spec.ts` (7 casos). Suíte backend **468/468** em 73 suítes; `tsc --noEmit` limpo.
 
+### Corrigido — `npm notice` derrubava a etapa de migrations do deploy
+
+O run `33089086641` falhou em "Aplicar migrations no banco de produção" **sem nenhuma migration pendente e sem nenhuma migration no commit**. Causa: `npm notice` é escrito em **stderr**; com `2>&1`, o PowerShell converte cada linha de stderr de comando **nativo** em `ErrorRecord`, e sob `$ErrorActionPreference='Stop'` isso vira erro terminante. O script morria na **primeira** linha (`db:migrate:status`), antes de aplicar coisa alguma, só porque o npm resolveu anunciar uma versão nova.
+
+`scripts/apply-migrations-vps.py` passa a suspender o `Stop` ao redor de cada chamada ao `npx` (`Invoke-Sequelize`) e a decidir sucesso por `$LASTEXITCODE`, que é o sinal real de um comando nativo. O `Stop` continua valendo para cmdlets — um `Set-Location` que falhe ainda aborta. `NPM_CONFIG_UPDATE_NOTIFIER=false` e `NO_UPDATE_NOTIFIER=1` silenciam o aviso na origem.
+
+Efeito colateral do run que falhou: o ZIP já havia sido expandido na VPS (etapa 9 concluiu) mas o restart foi pulado, então produção ficou com o `dist/` novo em disco e o processo antigo em memória até o run seguinte.
+
 ### Organização
 
 - Os artefatos locais que sujavam a árvore entraram no `.gitignore` em vez de serem apagados: `backend/scripts/{check-user,set-user-password,reset-test-environment}.js` são saída compilada de fontes `.ts` já versionadas (o `package.json` roda os `.ts`), `frontend/public/config-dev.json` é config de desenvolvimento e `/package-lock.json` é resíduo de ferramenta num repositório que não tem `package.json` na raiz por design.

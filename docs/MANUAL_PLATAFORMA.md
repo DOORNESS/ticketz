@@ -989,6 +989,10 @@ CI: `.github/workflows/build-docker.yml` → GHCR multi-arch.
 
 **VPS Contabo (Fortmax):** `.github/workflows/deploy-prod.yml` → `scripts/deploy-vps-backend.py` (WinRM, **1 ZIP**). Lock exclusivo em `C:\ticketz\deploy-cache\.deploy.lock`; env `DEPLOY_LOCK_MAX_AGE_SEC` (padrão 2400), `DEPLOY_LOCK_WAIT_SEC` (CI: 1800), `DEPLOY_FORCE_LOCK=1` para forçar.
 
+**Migrations na VPS (`scripts/apply-migrations-vps.py`) — stderr de comando nativo não é erro.** O PowerShell converte cada linha de stderr de um comando **nativo** em `ErrorRecord` quando há `2>&1`; sob `$ErrorActionPreference='Stop'` isso vira erro terminante. Um simples `npm notice` já derrubou a etapa antes de qualquer migration rodar. Por isso o `Stop` é suspenso ao redor de cada chamada ao `npx` (`Invoke-Sequelize`) e o sucesso é decidido por `$LASTEXITCODE`, que é o sinal real; o `Stop` continua valendo para cmdlets. Quem editar este script não deve reintroduzir `npx ... 2>&1` sob `Stop`.
+
+A etapa roda **depois** do ZIP e **antes** do restart. Se ela falhar, o `dist/` novo já está em disco e o processo continua o antigo — produção fica meio implantada até o run seguinte.
+
 ### Auditoria §20
 
 | **Verificado** | 6 compose files na raiz |
