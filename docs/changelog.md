@@ -49,6 +49,23 @@ O run `33089086641` falhou em "Aplicar migrations no banco de produção" **sem 
 
 Efeito colateral do run que falhou: o ZIP já havia sido expandido na VPS (etapa 9 concluiu) mas o restart foi pulado, então produção ficou com o `dist/` novo em disco e o processo antigo em memória até o run seguinte.
 
+### Adicionado — os 11 requisitos viraram teste executável
+
+`NivelRequisitos.spec.ts` amarra cada item pedido a asserções, usando como fixture o agente **como está gravado em produção** (prompt legado com o nome antigo) — assim o teste prova o comportamento real, não o ideal. Um `describe` por item, com o sintoma que o originou:
+
+| Item | O que o teste trava |
+|---|---|
+| 1 | `"Ok"`/`"Obrigado"` não dispara auto-apresentação; a frase exata do print 1 não sobrevive ao saneamento |
+| 2 | aviso do print 3 reconhecido; resposta manda **enviar novamente** e não recuperar senha |
+| 3 | fila 03 anunciando a fila 02 é detectada |
+| 4, 8 | identidade sem nome mesmo com prompt legado; sementes limpas; marca "Nível" intacta |
+| 5, 6, 7 | contato sai em `own_business` e `promoter`; **não sai** em mais nenhum caso |
+| 9 | regras proíbem marketing/redes sociais/boca a boca e descrever telas fora da base |
+| 10 | os dois modelos presentes e proibição de trocá-los |
+| — | regressão: handoff humano segue no WhatsApp da marca; Fortmax não contaminada |
+
+Suíte backend: **489/489** em 74 suítes.
+
 ### Alterado — workflow de produção passa a ser o canal oficial `Publicar Produção`
 
 A governança do Zheus publica exclusivamente via `gh workflow run "Publicar Produção" -f confirmar=PRODUCAO`. O workflow chamava-se `Deploy Ticketz — Produção`, então o disparo oficial falhava com *"could not find any workflows named Publicar Produção"* — a publicação só acontecia por push, fora do canal auditado.
