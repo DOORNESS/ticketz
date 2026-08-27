@@ -20,8 +20,10 @@ import { buildDefaultOperationalRules } from "../services/AiServices/AiPromptBui
 import { buildConversationAttemptState } from "../services/AiServices/ConversationAttemptStateService";
 import { buildContextualRetrievalQuery } from "../services/AiServices/ContextualRetrievalQuery";
 
+// Sem nome próprio, igual ao NIVEL_PROMPT real. Avaliar com a persona antiga
+// mediria um agente que não existe mais.
 const BASE_PROMPT =
-  "Você é o Nivelton, assistente virtual da Nível Cashback (programa de cashback do Grupo Fortmax).";
+  "Você é o assistente virtual da Nível Cashback (programa de cashback do Grupo Fortmax). Você não tem nome próprio.";
 
 const RECOVERY_DOC = [
   "Recuperação de senha — procedimento oficial.",
@@ -110,7 +112,10 @@ const SCENARIOS: Scenario[] = [
 ];
 
 const buildMessages = (scenario: Scenario) => {
-  const agent = { name: "Nivelton", basePrompt: BASE_PROMPT } as never;
+  const agent = {
+    name: "Assistente Nível Cashback",
+    basePrompt: BASE_PROMPT
+  } as never;
   const attemptState = buildConversationAttemptState(
     scenario.history,
     scenario.userText

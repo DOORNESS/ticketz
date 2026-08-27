@@ -49,6 +49,15 @@ O run `33089086641` falhou em "Aplicar migrations no banco de produção" **sem 
 
 Efeito colateral do run que falhou: o ZIP já havia sido expandido na VPS (etapa 9 concluiu) mas o restart foi pulado, então produção ficou com o `dist/` novo em disco e o processo antigo em memória até o run seguinte.
 
+### Organização — varredura final do nome antigo
+
+- `backend/src/scripts/evalAiReplies.ts` ainda semeava `"Você é o Nivelton…"`: a avaliação media um agente que não existe mais. Alinhado ao `NIVEL_PROMPT` real.
+- Manual corrigido em 4 pontos que ainda descreviam o estado antigo (§Brand tabela de marcas, §8 wiring e persona, §29 identidade). Nenhuma ocorrência de "Nivelton" resta no manual.
+- `docs/changelog.md` **não** foi reescrito: entradas antigas são registro histórico do que era verdade na época.
+- `BrandIsolation.spec.ts` mantém `"Nivelton"` de propósito — usa o nome real do registro de produção para provar que o agente vem do vínculo com a marca, não da fila.
+- Versão do manual no cabeçalho corrigida de **1.7.0** para **1.7.8**, que estava defasada há oito entradas.
+- §41 registra `stripAssistantProperName` como dívida transitória: pode sair depois que o agente e a marca forem atualizados no painel de produção.
+
 ### Organização
 
 - Os artefatos locais que sujavam a árvore entraram no `.gitignore` em vez de serem apagados: `backend/scripts/{check-user,set-user-password,reset-test-environment}.js` são saída compilada de fontes `.ts` já versionadas (o `package.json` roda os `.ts`), `frontend/public/config-dev.json` é config de desenvolvimento e `/package-lock.json` é resíduo de ferramenta num repositório que não tem `package.json` na raiz por design.

@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.7.0 — auditada contra o código
+**Versão:** 1.7.8 — auditada contra o código
 **Data:** agosto/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -210,7 +210,7 @@ O filtro do cliente é espelho, não autorização — quem barra de verdade é 
 
 | Marca | Recursos próprios |
 |-------|-------------------|
-| `nivel` — Nível Cashback | conexão, fila, agente (Nivelton), domínio, bases, tickets, usuários |
+| `nivel` — Nível Cashback | conexão, fila, agente (sem nome próprio — ver §8), domínio, bases, tickets, usuários |
 | `fortmax` — Fortmax / WebG3 | conexão, fila, agente (Webin), domínio, bases (inclui FortControl), tickets, usuários |
 
 **FortControl não é marca.** É produto da suíte Fortmax (PCP, estoque, financeiro): varrendo o código, ele aparece apenas como assunto dentro do conhecimento Fortmax, nunca com conexão, fila, agente ou base próprios. Por isso `fortcontrol` está no **vocabulário** da marca Fortmax e `legacyMatchBrandSlugByName` resolve qualquer conexão que o cite para `fortmax`. Criar uma marca vazia "para deixar preparado" só produziria uma linha inútil no painel.
@@ -502,7 +502,7 @@ O menu com protocolo e opções numeradas (`1️⃣ - 01 - Suporte Consumidor N�
 
 ### IA multi-marca (Fortmax vs Nível Cashback)
 - Cadeia obrigatória: **WhatsApp** → **fila** (`WhatsappQueues`) → **agente** (`AiAgentQueues`) → **bases** (`AiAgentKnowledgeBases`) → **domínio CMS** (`KnowledgeDomain`)
-- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔filas Fortmax↔agente Fortmax e WhatsApp Nível↔filas Consumidor/Empresa/Recuperação↔Nivelton; cada fila Nível recebe a base correspondente e o agente acumula somente bases do domínio Nível Cashback. **Fortmax e Nível são ligados de forma independente**; filas departamentais já ligadas à conexão são preservadas e vínculos cruzados de agentes são removidos. O wiring não cria, altera nem exclui bases de respostas supervisionadas; **Respostas anexas — Nível** (`respostas-anexas-nivel`) ou **Respostas anexas — Fortmax** (`respostas-anexas-fortmax`) só é criada quando o primeiro ensinamento da marca é confirmado, caso ainda não exista
+- Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔filas Fortmax↔agente Fortmax e WhatsApp Nível↔filas Consumidor/Empresa/Recuperação↔agente Nível; cada fila Nível recebe a base correspondente e o agente acumula somente bases do domínio Nível Cashback. **Fortmax e Nível são ligados de forma independente**; filas departamentais já ligadas à conexão são preservadas e vínculos cruzados de agentes são removidos. O wiring não cria, altera nem exclui bases de respostas supervisionadas; **Respostas anexas — Nível** (`respostas-anexas-nivel`) ou **Respostas anexas — Fortmax** (`respostas-anexas-fortmax`) só é criada quando o primeiro ensinamento da marca é confirmado, caso ainda não exista
 - Auditoria: `AuditSupportLinesService.auditSupportLinesForCompany(companyId)` — valida todas as filas ligadas à conexão, exige exatamente um agente compatível por fila, rejeita vínculo cruzado Nível×Fortmax e contabiliza fontes prontas tanto no legado quanto no CMS publicado; ambas as marcas aceitam múltiplas filas próprias; `GET /ai/audit-support-lines` (master); `npm run audit:support-lines`
 - `POST /ai/wire-support-lines` executa wire + auditoria + reengajamento de tickets presos
 - Executado no **startup** (`bootstrapAiPlatform`, aguarda wiring antes do first-responder; env `WIRE_SUPPORT_LINES=0` desliga) e via **`POST /ai/wire-support-lines`** (admin)
@@ -512,7 +512,7 @@ O menu com protocolo e opções numeradas (`1️⃣ - 01 - Suporte Consumidor N�
 - Manual ops: `COMPANY_ID=1 npm run wire:support-lines`
 - `EnsureAiFirstResponderService` **não** liga Webin automaticamente em nenhuma fila cujo nome identifique Nível, Fortmax ou WebG3; os vínculos dessas marcas são administrados explicitamente
 - `resolveQueueIdForTicket`: conexões com várias filas IA não exibem menu. O roteamento técnico escolhe silenciosamente uma fila com agente ativo (Consumidor na Nível; Suporte na Fortmax), desliga `ticket.chatbot` e preserva todas as bases vinculadas ao agente/domínio para a resposta. Com IA ativa, `startQueue` não envia `Queue.greetingMessage` legado (ex.: “Você foi direcionado…”), alinhado ao bypass de fora do expediente
-- Identidade, saudação, fallback informativo e regras operacionais são resolvidos por `AgentPersonaService` a partir do agente ativo (Nivelton ≠ Webin); texto do cliente nunca determina a marca. Na Nível, recuperação segue os links oficiais da base e casos sem procedimento seguro apontam para `https://nivelvelo.com/chamado`. Na Fortmax, ausência de procedimento usa Thiago (suporte) ou Cristiane (gerência/financeiro), sem inventar portal
+- Identidade, saudação, fallback informativo e regras operacionais são resolvidos por `AgentPersonaService` a partir do agente ativo (assistente da Nível ≠ Webin); texto do cliente nunca determina a marca. Na Nível, recuperação segue os links oficiais da base e casos sem procedimento seguro apontam para `https://nivelvelo.com/chamado`. Na Fortmax, ausência de procedimento usa Thiago (suporte) ou Cristiane (gerência/financeiro), sem inventar portal
 
 ### Filtro por linha WhatsApp (lista de tickets)
 - Barra de chips abaixo das abas Abertas/Resolvidos: **Todos**, **Web G3**, **Nível**, etc. (nome da conexão em Administração → Conexões)
@@ -1315,7 +1315,7 @@ Componentes em `backend/src/services/AiServices/Triage/`:
 - Mensagens genéricas (`Estou com problema`, `Não consigo entrar`) **não** geram handoff imediato.
 - Perguntas **informativas/comerciais** (`quero saber`, `como funciona`, `saber mais`, `como pode ajudar minha empresa`) **não** disparam investigação de suporte — `HandoffPolicyService` retorna `action=none` e `sendInvestigationResponse` devolve `false` para o fluxo seguir para o LLM/RAG (evita silêncio após identidade ou FAQ).
 - Conversas **meta** (nome do assistente, `Qual seu nome`, `Será Webin`, agradecimentos curtos, aguardar horário comercial) também não disparam investigação de suporte — `isMetaConversationIntent` / `shouldSkipSupportInvestigation`.
-- Identidade do assistente vem do `basePrompt` do agente (`buildAgentIdentityReply`) — Nivelton (Nível) ≠ Webin (Fortmax); resposta de identidade sempre chama `finalizeAiResponse` e libera `aiProcessingState`. `detectAgentIdentityQuestion` não intercepta FAQs sobre produto/programa (`qual o nome do…`, `quero saber mais do Nível`).
+- Identidade do assistente vem do `basePrompt` do agente (`buildAgentIdentityReply`) — Webin na Fortmax; **na Nível o prompt é ignorado e a identidade é sempre "assistente virtual da Nível Cashback", sem nome próprio** (ver §8); resposta de identidade sempre chama `finalizeAiResponse` e libera `aiProcessingState`. `detectAgentIdentityQuestion` não intercepta FAQs sobre produto/programa (`qual o nome do…`, `quero saber mais do Nível`).
 - Se o LLM falhar ou retornar baixa confiança e a triagem não tratar o caso, o cliente recebe fallback (`AI_CUSTOMER_FALLBACK` / `TRANSIENT_ERROR_FALLBACK`) — nunca silêncio.
 - Se a triagem detectaria repetir a mesma pergunta de investigação, devolve `false` para o fluxo seguir ao LLM.
 - Após resposta substantiva da IA (≥120 caracteres, fora de templates de investigação), `sendInvestigationResponse` não envia nova pergunta de triagem no mesmo turno — evita mensagem duplicada fora de contexto.
@@ -1683,6 +1683,7 @@ frontend/src/
 10. **Campanhas** ocultas por flag manual no localStorage
 11. **Transcriber legado** (`helpers/transcriber.ts`) coexistindo com pipeline IA
 12. **Gemini/Anthropic** declarados mas não implementados
+13. **`stripAssistantProperName` é transitório** — sanea o nome próprio na saída porque o `basePrompt` e o `identityReply` gravados em produção ainda dizem "Nivelton", e `resolveSeededBasePrompt` não sobrescreve prompt já editado. Depois que o agente e a marca forem atualizados no painel, o saneador vira redundante e pode sair; até lá é a única garantia de que o nome não escapa
 
 ---
 
