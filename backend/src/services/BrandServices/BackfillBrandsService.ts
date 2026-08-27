@@ -64,7 +64,13 @@ const SEEDS: BrandSeed[] = [
     escalationUrl: "https://nivelvelo.com/chamado",
     informationalFallback:
       "Não encontrei uma orientação segura para esse caso nos materiais disponíveis. Para que a equipe analise sua solicitação sem eu arriscar uma informação incorreta, abra um chamado em https://nivelvelo.com/chamado e descreva o que aconteceu.",
-    supportContacts: [],
+    supportContacts: [
+      {
+        name: "Suporte",
+        role: "atendimento humano",
+        whatsapp: "17 99165-8811"
+      }
+    ],
     vocabulary: ["nivel", "nível", "cashback", "fidelização", "fidelizacao"],
     // Os padroes casam pelo NOME DA MARCA, nao por "Suporte X": em producao
     // as filas se chamam "01 - Suporte Consumidor Nivel", "03 - Recuperar

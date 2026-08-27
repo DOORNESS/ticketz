@@ -1,4 +1,5 @@
 import Brand, { BrandSupportContact } from "../../models/Brand";
+import { buildNivelHumanSupportReply } from "../AiServices/AgentPersonaService";
 
 /**
  * Persona e textos da marca, a partir dos DADOS da Brand.
@@ -70,15 +71,19 @@ export const buildBrandExternalSupportReply = (
     return null;
   }
 
-  if (brand.escalationUrl?.trim()) {
-    return `Para continuar com uma pessoa da equipe, abra um chamado em ${brand.escalationUrl.trim()}. Descreva o que aconteceu e anexe os comprovantes necessários diretamente no formulário.`;
-  }
-
   const contacts = (brand.supportContacts || []).filter(item => item?.name);
   if (contacts.length) {
-    return `Para continuar com uma pessoa da equipe: ${contacts
+    return `Entendi. Para falar com um atendente humano: ${contacts
       .map(formatContact)
       .join(". ")}.`;
+  }
+
+  if (brand.slug === "nivel") {
+    return buildNivelHumanSupportReply();
+  }
+
+  if (brand.escalationUrl?.trim()) {
+    return `Para continuar com uma pessoa da equipe, abra um chamado em ${brand.escalationUrl.trim()}. Descreva o que aconteceu e anexe os comprovantes necessários diretamente no formulário.`;
   }
 
   return null;

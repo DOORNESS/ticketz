@@ -1280,7 +1280,8 @@ Componentes em `backend/src/services/AiServices/Triage/`:
 - Pedidos curtos de ajuda (`Pode ajudar?`, `teste`, `cadê vc`) recebem resposta imediata (`isShortHelpRequest` — fast path sem LLM).
 - **Reengajamento deferido:** 8s após mensagem inbound, se não houver resposta outbound, limpa lock Redis stale e reenfileira (`AiDeferredReengageService`).
 - Lock Redis órfão (>90s em `processing`) é liberado automaticamente na fila (`AiInboundQueueService`).
-- Handoff automático (tool `request_human_handoff`, baixa confiança, sem base) exige **mínimo 2 rodadas de investigação** e caso `caseReadyForHandoff`; pedido explícito de humano ou assunto sensível continuam liberados.
+- Pedido explícito de humano ou assunto sensível continuam liberados.
+- **Nível Cashback:** pedido explícito de atendimento humano (`quero falar com humano`, `falar com atendente`, etc.) responde com WhatsApp **17 99165-8811** (`resolveExternalSupportReplyForBrand` / `buildNivelHumanSupportReply`) — não encaminha para `nivelvelo.com/chamado`.
 - Após handoff (`aiHandoff=true`, `status=pending`, sem `userId`), o ticket aparece na aba **Aguardando** — inclusive handoff operacional fora do horário.
 - Em horário comercial, handoff humano usa modo **definitivo** (`aiPaused=true`).
 - **Horário por fila (`scheduleType=queue`):** se `Queue.schedules` estiver vazio (`{}` ou `[]`), `VerifyCurrentSchedule` trata como **sempre aberto** — evita erro SQL e permite que a IA responda após a saudação inicial.

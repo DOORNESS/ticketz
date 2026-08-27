@@ -18,6 +18,8 @@ import { detectAgentBrand } from "./AgentPersonaService";
 export { buildAgentIdentityReply } from "./AgentPersonaService";
 
 const HANDOFF_KEYWORDS = [
+  "falar com humano",
+  "quero falar com humano",
   "quero atendente",
   "quero um atendente",
   "chamar atendente",

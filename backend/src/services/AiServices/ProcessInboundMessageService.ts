@@ -70,7 +70,7 @@ import { logAiTicketTimelineEvent } from "./Triage/AiTicketTimelineService";
 import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
 import { responseMimicsHumanHandoff } from "./Triage/detectImpliedHandoffMessage";
 import {
-  resolveAgentExternalSupportReply,
+  resolveExternalSupportReplyForBrand,
   resolveAgentInformationalFallback,
   resolveOperationalRulesForBrand
 } from "./AgentPersonaService";
@@ -662,9 +662,14 @@ const ProcessInboundMessageService = async ({
     }
 
     const requestedHumanSupport = detectHumanHandoffRequest(userText);
+    const ticketBrandForHandoff = await getBrandForTicket(ticket);
     const externalSupportReply =
       !forceHandoff && requestedHumanSupport
-        ? resolveAgentExternalSupportReply(agent, userText)
+        ? resolveExternalSupportReplyForBrand(
+            ticketBrandForHandoff,
+            agent,
+            userText
+          )
         : null;
 
     if (externalSupportReply) {

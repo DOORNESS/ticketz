@@ -37,7 +37,7 @@ export const prepareCustomerFacingAiText = (
   const contacts = agent?.brand?.supportContacts;
   const allowSupportPhone = contacts
     ? contacts.some(contact => contact?.whatsapp)
-    : brand === "fortmax";
+    : brand === "fortmax" || brand === "nivel";
 
   let sanitized = sanitizeAiOutboundText(text, { allowSupportPhone }).trim();
 

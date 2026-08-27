@@ -6,6 +6,15 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.7] — 2026-08-21
+
+### Corrigido — handoff humano Nível Cashback
+
+- Quando o cliente pede atendimento humano (`quero falar com humano`, etc.), a resposta passa a informar o WhatsApp **17 99165-8811** em vez de encaminhar para `nivelvelo.com/chamado`.
+- Marca Nível: contato de suporte humano cadastrado no backfill de marcas; regras operacionais e `prepareCustomerFacingAiText` permitem divulgar o número nesse contexto.
+
+---
+
 ## [1.7.6] — 2026-08-12
 
 ### Adicionado — sino de notificações passa a ser dispensável

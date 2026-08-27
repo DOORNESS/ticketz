@@ -74,6 +74,12 @@ const reportLegacyAgentBrand = (
  */
 export type AgentBrand = string;
 
+/** WhatsApp oficial para handoff humano da Nível Cashback. */
+export const NIVEL_HUMAN_SUPPORT_WHATSAPP = "17 99165-8811";
+
+export const buildNivelHumanSupportReply = (): string =>
+  `Entendi. Para falar com um atendente humano, entre em contato pelo WhatsApp ${NIVEL_HUMAN_SUPPORT_WHATSAPP}.`;
+
 type AgentPersonaHint = Pick<AiAgent, "name" | "basePrompt"> & {
   brand?: { slug?: string | null } | null;
 };
@@ -216,7 +222,7 @@ export const resolveAgentExternalSupportReply = (
 ): string | null => {
   const brand = detectAgentBrand(agent);
   if (brand === "nivel") {
-    return "Para continuar com uma pessoa da equipe, abra um chamado em https://nivelvelo.com/chamado. Descreva o que aconteceu e anexe os comprovantes necessários diretamente no formulário.";
+    return buildNivelHumanSupportReply();
   }
 
   if (brand === "fortmax") {
@@ -237,8 +243,8 @@ Quando o contexto for Nível Cashback, "Nível" é o nome da empresa/produto, nu
 Perguntas como "o que é o Nível?" ou "como funciona o Nível?" referem-se ao produto Nível Cashback.
 Em qualquer conversa sobre esquecer, trocar, redefinir ou recuperar senha/conta, use exclusivamente o procedimento e os links oficiais do material "Recuperar conta e senha". Envie o link de recuperação relevante uma única vez e explique as opções disponíveis na própria página.
 Nunca use uma URL terminada em "/chamado" para senha, recuperação de conta ou problema de acesso; siga os links específicos recuperados da base.
-Nunca informe telefone ou WhatsApp. Conduza o procedimento somente com as orientações e links presentes no contexto.
-Quando a base indicar formulário ou chamado externo, nunca afirme que transferiu o atendimento dentro do WhatsApp.
+Quando o cliente pedir atendimento humano, falar com uma pessoa ou transferência para atendente, informe exclusivamente o WhatsApp ${NIVEL_HUMAN_SUPPORT_WHATSAPP}. Não encaminhe para https://nivelvelo.com/chamado nesses casos.
+Quando a base indicar formulário ou chamado externo para outros assuntos (não pedido de humano), nunca afirme que transferiu o atendimento dentro do WhatsApp.
 Se os materiais recuperados não trouxerem um procedimento seguro para concluir o caso, encaminhe naturalmente para https://nivelvelo.com/chamado. Não sugira demonstração, agendamento ou contato futuro sem fornecer o procedimento real disponível.
 `.trim();
   }

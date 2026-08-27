@@ -51,7 +51,7 @@ describe("Agent brand isolation", () => {
   it("keeps operational rules brand-specific and uses official recovery flows", () => {
     expect(buildAgentOperationalRules(nivel)).toMatch(/Nível Cashback/i);
     expect(buildAgentOperationalRules(nivel)).toMatch(/links oficiais/i);
-    expect(buildAgentOperationalRules(nivel)).not.toMatch(/99165/i);
+    expect(buildAgentOperationalRules(nivel)).toMatch(/99165/i);
     expect(buildAgentOperationalRules(fortmax)).toMatch(/Fortmax/i);
     expect(buildAgentOperationalRules(fortmax)).toMatch(/98833|99605/i);
     expect(buildAgentOperationalRules(fortmax)).not.toMatch(/99165|Nivelton/i);
@@ -60,11 +60,9 @@ describe("Agent brand isolation", () => {
   });
 
   it("uses each brand external support protocol", () => {
-    expect(resolveAgentExternalSupportReply(nivel)).toMatch(
-      /nivelvelo\.com\/chamado/i
-    );
+    expect(resolveAgentExternalSupportReply(nivel)).toMatch(/99165/i);
     expect(resolveAgentExternalSupportReply(nivel)).not.toMatch(
-      /transfer|99165/i
+      /nivelvelo\.com\/chamado/i
     );
     expect(
       resolveAgentExternalSupportReply(fortmax, "segunda via boleto")

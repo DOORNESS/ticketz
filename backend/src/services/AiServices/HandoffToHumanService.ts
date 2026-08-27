@@ -29,6 +29,10 @@ import {
 } from "./Triage/CaseCompletenessEngine";
 import { isTriageV2EnabledForCompany } from "./Triage/AiTriageFeatureFlag";
 import { detectHumanHandoffRequest } from "./AiHelpers";
+import {
+  detectAgentBrand,
+  buildNivelHumanSupportReply
+} from "./AgentPersonaService";
 
 type HandoffParams = {
   ticket: Ticket;
@@ -166,6 +170,9 @@ const HandoffToHumanService = async ({
 
   const handoffMessage =
     handoffMessageOverride?.trim() ||
+    (explicitHumanRequest && detectAgentBrand(agent) === "nivel"
+      ? buildNivelHumanSupportReply()
+      : null) ||
     (effectiveMode === "operational" && !scheduleContext.inBusinessHours
       ? "Não consegui concluir esta solução com segurança. Nosso suporte humano atende de segunda a sexta-feira, das 08h às 17h. Seu atendimento já ficou registrado e será analisado no próximo período disponível. Enquanto isso, posso continuar coletando informações ou ajudar em outras dúvidas."
       : agent.handoffMessage?.trim() ||
