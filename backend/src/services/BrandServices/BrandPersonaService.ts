@@ -1,5 +1,6 @@
 import Brand, { BrandSupportContact } from "../../models/Brand";
 import { buildNivelHumanSupportReply } from "../AiServices/AgentPersonaService";
+import { buildNivelIdentityReply } from "../AiServices/NivelAssistantPolicy";
 
 /**
  * Persona e textos da marca, a partir dos DADOS da Brand.
@@ -11,11 +12,25 @@ import { buildNivelHumanSupportReply } from "../AiServices/AgentPersonaService";
  * Criar uma marca nova não exige tocar neste arquivo — é essa a diferença.
  */
 
-export const buildBrandIdentityReply = (brand?: Brand | null): string | null =>
-  brand?.identityReply?.trim() ||
-  (brand?.identityName?.trim()
-    ? `Me chamo ${brand.identityName.trim()}.`
-    : null);
+/**
+ * A Nível não usa nome de pessoa. O registro em produção ainda guarda o texto
+ * antigo, e a semente só corrige instalação nova — por isso a regra vale aqui,
+ * na leitura, e não só no cadastro.
+ */
+export const buildBrandIdentityReply = (
+  brand?: Brand | null
+): string | null => {
+  if (brand?.slug === "nivel") {
+    return buildNivelIdentityReply();
+  }
+
+  return (
+    brand?.identityReply?.trim() ||
+    (brand?.identityName?.trim()
+      ? `Me chamo ${brand.identityName.trim()}.`
+      : null)
+  );
+};
 
 const formatContact = (contact: BrandSupportContact): string => {
   const role = contact.role ? ` (${contact.role})` : "";

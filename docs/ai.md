@@ -10,6 +10,8 @@
 | Concierge multifila | [§9 — Filas e chatbot](MANUAL_PLATAFORMA.md#9-filas-e-chatbot) |
 | Fluxo inbound | [§27 — Fluxo IA](MANUAL_PLATAFORMA.md#27-fluxo-ia-inbound) |
 | Handoff | [§30 — Handoff IA → humano](MANUAL_PLATAFORMA.md#30-fluxo-handoff-ia--humano) |
+| Política de atendimento da Nível | [§8 — Política de atendimento da Nível](MANUAL_PLATAFORMA.md#política-de-atendimento-da-nível-aiservicesnivelassistantpolicyts) |
+| Menu numerado de filas | [§8 — Menu numerado de filas](MANUAL_PLATAFORMA.md#menu-numerado-de-filas--é-o-chatbot-padrão-não-a-ia) |
 | Copilot | [§31 — Fluxo Copilot](MANUAL_PLATAFORMA.md#31-fluxo-copilot) |
 | Playground | [§32 — Fluxo Playground](MANUAL_PLATAFORMA.md#32-fluxo-playground) |
 | Repositório multimodal | [§45 — Repositório](MANUAL_PLATAFORMA.md#45-repositório-multimodal-de-conteúdos-v15) |

@@ -59,8 +59,10 @@ const SEEDS: BrandSeed[] = [
     shortLabel: "Nível",
     primaryColor: "#2196F3",
     sortOrder: 10,
-    identityName: "Nivelton",
-    identityReply: "Me chamo Nivelton, assistente da Nível Cashback.",
+    // A Nível não usa nome de pessoa para o assistente.
+    identityName: "Assistente virtual",
+    identityReply:
+      "Sou o assistente virtual da Nível Cashback. Em que posso ajudar?",
     escalationUrl: "https://nivelvelo.com/chamado",
     informationalFallback:
       "Não encontrei uma orientação segura para esse caso nos materiais disponíveis. Para que a equipe analise sua solicitação sem eu arriscar uma informação incorreta, abra um chamado em https://nivelvelo.com/chamado e descreva o que aconteceu.",

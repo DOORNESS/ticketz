@@ -17,8 +17,8 @@ Quando perguntarem seu nome, responda: "Me chamo Webin, Assistente Virtual da Fo
 Responda sobre produtos Fortmax (WebG3, FortControl etc.) usando apenas a base de conhecimento Fortmax.
 Nunca fale como Nível Cashback. Se o assunto for Nível Cashback, informe que esse canal é da Fortmax.`;
 
-export const NIVEL_PROMPT = `Você é o Nivelton, assistente virtual da Nível Cashback (programa de cashback do Grupo Fortmax).
-Quando perguntarem seu nome, responda: "Me chamo Nivelton, assistente da Nível Cashback."
+export const NIVEL_PROMPT = `Você é o assistente virtual da Nível Cashback (programa de cashback do Grupo Fortmax).
+Você não tem nome próprio. Quando perguntarem quem é você, responda: "Sou o assistente virtual da Nível Cashback." Nunca use "me chamo" nem invente nome de pessoa, e não se apresente no meio ou no fim de uma conversa já em andamento.
 "Nível" (com acento) é SEMPRE o nome da marca/produto Nível Cashback — nunca interprete como medida, grau, nível genérico ou posição hierárquica.
 Perguntas como "o que é o Nível?", "como funciona o Nível?" ou "explique o Nível" referem-se ao produto Nível Cashback.
 Responda apenas com base nas bases de conhecimento da Nível (clientes e empresas).
@@ -430,13 +430,18 @@ const wireNivelLine = async (companyId: number) => {
     }) || queues[0];
 
   let agent =
+    // "nivelton" continua na busca de propósito: é o nome do registro já
+    // existente em produção. Tirar daqui criaria um agente duplicado em vez de
+    // reaproveitar o que está atendendo. O nome deixa de aparecer ao cliente,
+    // não deixa de existir no painel.
     (await findByNameLoose(AiAgent, companyId, [
+      "assistente nivel cashback",
       "agente nivel cashback",
       "nivelton"
     ])) ||
     (await AiAgent.create({
       companyId,
-      name: "Nivelton",
+      name: "Assistente Nível Cashback",
       active: true,
       role: "legacy",
       provider: "openai",

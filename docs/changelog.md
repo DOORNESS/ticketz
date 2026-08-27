@@ -6,6 +6,39 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.8] — 2026-08-27
+
+### Alterado — o assistente da Nível deixa de ter nome próprio
+
+Passa a se apresentar como **assistente virtual da Nível Cashback**. O agente continua com nome no painel; o que muda é o que chega ao cliente. Aplicado em três camadas porque uma só não resolveria: semente do prompt e da marca (instalação nova), `buildAgentIdentityReply`/`buildBrandIdentityReply` (produção já tem o texto antigo gravado e `resolveSeededBasePrompt` não sobrescreve prompt editado) e `stripAssistantProperName` na saída (se o modelo emitir o nome mesmo assim, ele não sai). A marca "Nível" nunca é tocada pelo saneador.
+
+A busca do agente em `WireSupportLinesService` mantém `"nivelton"` de propósito: é o nome do registro que já atende em produção, e tirá-lo criaria um agente duplicado em vez de reaproveitar o existente.
+
+### Adicionado — e-mail de cadastro não confirmado
+
+`detectUnconfirmedEmailBlock` reconhece o aviso *"E-mail ainda não confirmado"* (digitado ou vindo do OCR do print) e responde mandando tocar em **enviar novamente** na própria tela de login. Antes o assistente mandava recuperar senha, que não resolve: a conta não está sem senha, está sem confirmação.
+
+### Adicionado — qualificação antes de liberar o contato executivo
+
+`classifyNivelInterest` separa consumidor final, empresa própria e divulgador (executivo/representante/franqueado). O contato **Fernando Tarin — 17 99165-8811** só sai nos dois últimos casos e só quando o próprio cliente comprovou qual é o dele; "quero saber mais" vira pergunta, nunca telefone. Divulgação vence "tenho empresa" — "tenho uma barbearia e quero trazer a Nível para minha cidade" é representação, não credenciamento.
+
+### Alterado — regras operacionais da Nível
+
+- Proibido conselho genérico de marketing, redes sociais, e-mail marketing, parcerias ou boca a boca que não esteja nos materiais recuperados.
+- Proibido descrever telas, botões e fluxos do aplicativo que não estejam na base.
+- Fixada a diferença entre **estabelecimento físico** (credenciado pela equipe, saldo próprio, cashback direto e imediato, valor já do cliente) e **grandes marcas / lojas online** (parceria comercial, cashback sujeito a confirmação e prazo).
+- Proibido se apresentar no meio ou no fim de conversa em andamento, ou em resposta a "ok"/"obrigado".
+
+### Documentado — menu numerado de filas é o chatbot padrão
+
+O menu com protocolo e opções numeradas vem de `verifyQueue` (`wbotMessageListener.ts`), não do agente, e só aparece quando a conexão tem mais de uma fila. Com uma fila só, a IA responde direto.
+
+Testes: `NivelAssistantPolicy.spec.ts` (14 casos). Suíte backend **461/461** em 72 suítes; `tsc --noEmit` limpo.
+
+Manual §8: novas subseções **Política de atendimento da Nível** e **Menu numerado de filas**.
+
+---
+
 ## [1.7.7] — 2026-08-21
 
 ### Corrigido — handoff humano Nível Cashback

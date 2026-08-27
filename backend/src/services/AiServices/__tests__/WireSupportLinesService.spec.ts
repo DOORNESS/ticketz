@@ -17,9 +17,11 @@ describe("WireSupportLinesService helpers", () => {
   });
 
   it("findByNameLoose returns the first matching pattern", async () => {
-    mockFindOne
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: 7, name: "Suporte Nível", update: jest.fn() });
+    mockFindOne.mockResolvedValueOnce(null).mockResolvedValueOnce({
+      id: 7,
+      name: "Suporte Nível",
+      update: jest.fn()
+    });
 
     const match = await findByNameLoose(
       { findOne: mockFindOne, create: jest.fn() },
@@ -33,7 +35,11 @@ describe("WireSupportLinesService helpers", () => {
 
   it("keeps Fortmax and Nivel prompts distinct", () => {
     expect(FORTMAX_PROMPT).toContain("Webin");
-    expect(NIVEL_PROMPT).toContain("Nivelton");
+    // A Nível não tem mais nome de pessoa: a semente do prompt manda o
+    // assistente se apresentar sem nome nenhum.
+    expect(NIVEL_PROMPT).not.toContain("Nivelton");
+    expect(NIVEL_PROMPT).toMatch(/assistente virtual da Nível Cashback/i);
+    expect(NIVEL_PROMPT).toMatch(/não tem nome próprio/i);
     expect(FORTMAX_PROMPT).not.toContain("Nivelton");
     expect(NIVEL_PROMPT).not.toMatch(/Você é o Webin/i);
   });

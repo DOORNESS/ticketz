@@ -461,6 +461,41 @@ CRUD + **`POST /tickets/:ticketId/reopen`** (reabertura manual de ticket fechado
 - Apaga tickets, mensagens, logs IA e **todos os contatos** da empresa — próximo WhatsApp entra como cliente novo
 - **Um clique:** sem confirmação modal; limpa a UI via socket `wipe` + redirect `/tickets`
 
+### Política de atendimento da Nível (`AiServices/NivelAssistantPolicy.ts`)
+
+Três decisões que estavam entregues ao modelo e passaram a ser código, porque o modelo errava cada uma delas de forma reincidente.
+
+**1. O assistente não tem nome próprio.** Ele se apresenta como **assistente virtual da Nível Cashback**. O agente continua tendo nome no painel (`AiAgent.name`) — o que mudou é o que chega ao cliente. A regra é aplicada em três pontos, e os três são necessários:
+
+| Ponto | Por quê |
+|---|---|
+| `WireSupportLinesService.NIVEL_PROMPT` e semente da marca | corrige instalação nova |
+| `buildAgentIdentityReply` / `buildBrandIdentityReply` | o `basePrompt` e o `identityReply` gravados em produção ainda dizem o nome antigo, e `resolveSeededBasePrompt` **não** sobrescreve prompt já editado |
+| `stripAssistantProperName` em `prepareCustomerFacingAiText` | última barreira: se o modelo emitir o nome mesmo assim, ele não sai |
+
+A marca "Nível" nunca é tocada pelo saneador — o que sai é o nome de pessoa. A busca do agente em `WireSupportLinesService` mantém `"nivelton"` de propósito: é o nome do registro que já atende em produção, e removê-lo criaria um agente duplicado.
+
+**2. E-mail de cadastro não confirmado.** A tela de login mostra *"E-mail ainda não confirmado. Verifique sua caixa de entrada. **enviar novamente**"*. O assistente mandava recuperar senha, que não resolve — a conta não está sem senha, está sem confirmação. `detectUnconfirmedEmailBlock` reconhece o aviso (digitado ou vindo do OCR do print) e responde mandando tocar em **enviar novamente**, conferir spam e voltar.
+
+**3. Contato executivo só depois de qualificar.** `classifyNivelInterest` separa três intenções:
+
+| Intenção | Resposta |
+|---|---|
+| `consumer` — consumidor final | segue o atendimento normal, **sem** contato |
+| `own_business` — tem estabelecimento e quer credenciá-lo | libera o contato executivo |
+| `promoter` — quer divulgar a Nível (executivo, representante, franqueado) | libera o contato executivo |
+| `unknown` — "quero saber mais" sem dizer para quê | **pergunta** qual dos três é o caso |
+
+Contato liberado: **Fernando Tarin — representante executivo — WhatsApp 17 99165-8811** (o mesmo número do suporte humano da marca). Divulgação vence "tenho empresa": "tenho uma barbearia e quero trazer a Nível para minha cidade" é representação, não credenciamento. `unknown` nunca vira telefone — vira pergunta.
+
+Regras operacionais da marca também proíbem **conselho genérico de marketing, redes sociais, e-mail marketing ou boca a boca** que não esteja nos materiais recuperados, e fixam a diferença entre **estabelecimento físico** (credenciado pela equipe, saldo próprio, cashback creditado direto e na hora, valor já do cliente) e **grandes marcas / lojas online** (parceria comercial, cashback sujeito a confirmação de compra e prazo de pagamento). Trocar um modelo pelo outro é erro de fato, não de estilo.
+
+Os ganchos ficam em `ProcessInboundMessageService`, antes da chamada ao modelo, no mesmo ponto onde já vivia o protocolo de suporte externo da marca.
+
+### Menu numerado de filas — é o chatbot padrão, não a IA
+
+O menu com protocolo e opções numeradas (`1️⃣ - 01 - Suporte Consumidor Nível`…) vem de `verifyQueue` em `wbotMessageListener.ts`, não do agente. Ele aparece **quando a conexão tem mais de uma fila**: com uma fila só, `verifyQueue` entrega direto ao agente ativo e nenhum menu é enviado. O cabeçalho é o `greetingMessage` da **conexão**; os ícones numerados dependem do Setting `showNumericIcons=enabled` com ≤10 filas; a segunda mensagem ("Você foi direcionado ao …") é o `greetingMessage` da **fila escolhida**. Nada disso é configurado em código — muda em Administração → Conexões e → Filas.
+
 ### IA multi-marca (Fortmax vs Nível Cashback)
 - Cadeia obrigatória: **WhatsApp** → **fila** (`WhatsappQueues`) → **agente** (`AiAgentQueues`) → **bases** (`AiAgentKnowledgeBases`) → **domínio CMS** (`KnowledgeDomain`)
 - Serviço idempotente: `WireSupportLinesService.wireSupportLinesForCompany(companyId)` — liga Web G3↔filas Fortmax↔agente Fortmax e WhatsApp Nível↔filas Consumidor/Empresa/Recuperação↔Nivelton; cada fila Nível recebe a base correspondente e o agente acumula somente bases do domínio Nível Cashback. **Fortmax e Nível são ligados de forma independente**; filas departamentais já ligadas à conexão são preservadas e vínculos cruzados de agentes são removidos. O wiring não cria, altera nem exclui bases de respostas supervisionadas; **Respostas anexas — Nível** (`respostas-anexas-nivel`) ou **Respostas anexas — Fortmax** (`respostas-anexas-fortmax`) só é criada quando o primeiro ensinamento da marca é confirmado, caso ainda não exista

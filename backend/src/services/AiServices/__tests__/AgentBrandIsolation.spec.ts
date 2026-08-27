@@ -21,7 +21,12 @@ describe("Agent brand isolation", () => {
   };
 
   it("builds the identity reply from the active agent", () => {
-    expect(buildAgentIdentityReply(nivel)).toMatch(/Nivelton.*Nível Cashback/i);
+    // A Nível deixou de ter nome de pessoa: mesmo com o prompt legado ainda
+    // dizendo "Nivelton", a identidade que chega ao cliente é a genérica.
+    expect(buildAgentIdentityReply(nivel)).toMatch(
+      /assistente virtual da Nível Cashback/i
+    );
+    expect(buildAgentIdentityReply(nivel)).not.toMatch(/nivelton/i);
     expect(buildAgentIdentityReply(fortmax)).toMatch(/Webin.*Fortmax/i);
   });
 

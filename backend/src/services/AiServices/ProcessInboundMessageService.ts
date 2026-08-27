@@ -70,10 +70,16 @@ import { logAiTicketTimelineEvent } from "./Triage/AiTicketTimelineService";
 import { prepareCustomerFacingAiText } from "./prepareCustomerFacingAiText";
 import { responseMimicsHumanHandoff } from "./Triage/detectImpliedHandoffMessage";
 import {
+  detectAgentBrand,
   resolveExternalSupportReplyForBrand,
   resolveAgentInformationalFallback,
   resolveOperationalRulesForBrand
 } from "./AgentPersonaService";
+import {
+  buildUnconfirmedEmailReply,
+  detectUnconfirmedEmailBlock,
+  resolveNivelInterestReply
+} from "./NivelAssistantPolicy";
 import { getRagMinimumSimilarity } from "./RagConfig";
 import { buildContextualRetrievalQuery } from "./ContextualRetrievalQuery";
 import { buildConversationAttemptState } from "./ConversationAttemptStateService";
@@ -661,8 +667,46 @@ const ProcessInboundMessageService = async ({
       return;
     }
 
-    const requestedHumanSupport = detectHumanHandoffRequest(userText);
     const ticketBrandForHandoff = await getBrandForTicket(ticket);
+
+    // Dois casos da Nível em que o modelo errava sozinho e que agora decidem
+    // antes dele: e-mail de cadastro não confirmado (a saída é "enviar
+    // novamente", não recuperar senha) e interesse comercial (o contato do
+    // representante só sai depois que o cliente disse a que veio).
+    if (detectAgentBrand(agent) === "nivel") {
+      const nivelDirectReply = detectUnconfirmedEmailBlock(userText)
+        ? {
+            reason: "nivel_unconfirmed_email",
+            body: buildUnconfirmedEmailReply()
+          }
+        : (() => {
+            const { interest, reply } = resolveNivelInterestReply(
+              userText,
+              conversationText
+            );
+            return reply
+              ? { reason: `nivel_interest_${interest}`, body: reply }
+              : null;
+          })();
+
+      if (nivelDirectReply) {
+        await sendAiWhatsAppReply({ ticket, body: nivelDirectReply.body });
+        await persistAiDecisionLog({
+          companyId,
+          ticketId: ticket.id,
+          messageId: primaryMessageId,
+          action: "respond",
+          reason: nivelDirectReply.reason,
+          userMessage: maskSensitiveLog(userText),
+          aiResponse: nivelDirectReply.body
+        });
+        markCustomerReply();
+        await finalizeAiResponse(ticket, primaryMessageId);
+        return;
+      }
+    }
+
+    const requestedHumanSupport = detectHumanHandoffRequest(userText);
     const externalSupportReply =
       !forceHandoff && requestedHumanSupport
         ? resolveExternalSupportReplyForBrand(

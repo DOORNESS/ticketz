@@ -4,6 +4,7 @@ import {
   resolveAgentInformationalFallback
 } from "./AgentPersonaService";
 import { sanitizeAiOutboundText } from "./sanitizeAiOutboundText";
+import { stripAssistantProperName } from "./NivelAssistantPolicy";
 
 const UNSUPPORTED_PROCEDURE_PATTERN =
   /n[aã]o (?:tenho|encontrei|possuo|consigo).{0,50}(?:link|procedimento|informa[cç][aã]o|agend)|n[aã]o (?:é|e) poss[ií]vel.{0,30}agend/i;
@@ -40,6 +41,13 @@ export const prepareCustomerFacingAiText = (
     : brand === "fortmax" || brand === "nivel";
 
   let sanitized = sanitizeAiOutboundText(text, { allowSupportPhone }).trim();
+
+  // Nome próprio do assistente não chega ao cliente na Nível. O prompt gravado
+  // em produção ainda diz o nome, então a regra tem que valer na saída — não
+  // adianta só trocar a semente da marca.
+  if (brand === "nivel") {
+    sanitized = stripAssistantProperName(sanitized, agent?.name);
+  }
 
   if (
     (mentionsInboundImage(userText) || mentionsInboundImage(text)) &&

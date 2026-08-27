@@ -34,11 +34,24 @@ describe("AiHelpers identity", () => {
   it("returns identity from agent basePrompt", () => {
     expect(
       buildAgentIdentityReply({
-        name: "Nivelton",
+        name: "Webin",
         basePrompt:
-          'Você é o Nivelton. Quando perguntarem seu nome, responda: "Me chamo Nivelton, assistente da Nível Cashback."'
+          'Você é o Webin. Quando perguntarem seu nome, responda: "Me chamo Webin, assistente da Fortmax."'
       })
-    ).toBe("Me chamo Nivelton, assistente da Nível Cashback.");
+    ).toBe("Me chamo Webin, assistente da Fortmax.");
+  });
+
+  it("na Nível o nome do prompt legado não chega ao cliente", () => {
+    // O prompt gravado em produção ainda diz "Nivelton". A identidade que sai
+    // é a genérica: o nome continua no painel, não na conversa.
+    const reply = buildAgentIdentityReply({
+      name: "Nivelton",
+      basePrompt:
+        'Você é o Nivelton. Quando perguntarem seu nome, responda: "Me chamo Nivelton, assistente da Nível Cashback."'
+    });
+
+    expect(reply).toMatch(/assistente virtual da Nível Cashback/i);
+    expect(reply).not.toMatch(/nivelton/i);
   });
 
   it("routes Nível silently to consumer support by default", () => {
