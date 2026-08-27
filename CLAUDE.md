@@ -162,7 +162,7 @@ Everything hangs off `Company`. `Ticket` has `status` ∈ `pending|open|closed`,
 
 ## CI
 
-- `.github/workflows/deploy-prod.yml` — **this is the production pipeline.** Push to `main` (paths `backend/**`, `frontend/**`, `api-worker/**`, `functions/**`, `scripts/**`) or `workflow_dispatch`. Builds the backend, ensures Cloudflare DNS, then deploys to the Contabo VPS with `DEPLOY_MODE=patch`, `SKIP_WHATSAPP_RESET=1`. Generates `gitinfo` from git metadata.
+- `.github/workflows/deploy-prod.yml` — **this is the production pipeline.** Its workflow `name:` is **`Publicar Produção`**, which is a contract with the Zheus governance tooling (`gh workflow run "Publicar Produção" -f confirmar=PRODUCAO`) — do not rename it. The `confirmar` input is a real gate: on `workflow_dispatch` the job fails immediately unless it equals `PRODUCAO`; pushes to `main` carry no inputs and skip the gate. Push to `main` (paths `backend/**`, `frontend/**`, `api-worker/**`, `functions/**`, `scripts/**`) or `workflow_dispatch`. Builds the backend, ensures Cloudflare DNS, then deploys to the Contabo VPS with `DEPLOY_MODE=patch`, `SKIP_WHATSAPP_RESET=1`. Generates `gitinfo` from git metadata.
 - `.github/workflows/build-docker.yml` — multi-arch (`amd64`/`arm64`) images on push to `fix/**`, `dev`, `test-**`, and `v*.*.*` tags. **Not triggered by `main`.** Publishes to `ghcr.io/<owner-lowercased>/ticketz-{backend,frontend}` — the namespace is derived from `github.repository_owner`, never hardcoded, because `GITHUB_TOKEN` only has `packages: write` on its own owner (hardcoding upstream's `ticketz-oss` made every push from this fork fail with `permission_denied`).
 
 Production on the VPS runs the compiled `dist/` natively under NSSM (Windows), not the Docker images.

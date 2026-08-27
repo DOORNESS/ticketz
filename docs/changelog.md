@@ -49,6 +49,14 @@ O run `33089086641` falhou em "Aplicar migrations no banco de produção" **sem 
 
 Efeito colateral do run que falhou: o ZIP já havia sido expandido na VPS (etapa 9 concluiu) mas o restart foi pulado, então produção ficou com o `dist/` novo em disco e o processo antigo em memória até o run seguinte.
 
+### Alterado — workflow de produção passa a ser o canal oficial `Publicar Produção`
+
+A governança do Zheus publica exclusivamente via `gh workflow run "Publicar Produção" -f confirmar=PRODUCAO`. O workflow chamava-se `Deploy Ticketz — Produção`, então o disparo oficial falhava com *"could not find any workflows named Publicar Produção"* — a publicação só acontecia por push, fora do canal auditado.
+
+`name:` passou a ser **`Publicar Produção`** e o `workflow_dispatch` ganhou o input `confirmar`. A trava vale de verdade: em disparo manual, o job falha no primeiro passo se o valor não for `PRODUCAO` — aceitar o input e ignorá-lo transformaria a confirmação em enfeite e deixaria um disparo acidental ir direto para produção. Push na `main` não carrega inputs e não passa pela trava, então o gatilho por caminho continua igual.
+
+Nenhum gatilho, job ou etapa foi alterado além disso; o arquivo e o ID do workflow são os mesmos.
+
 ### Organização — varredura final do nome antigo
 
 - `backend/src/scripts/evalAiReplies.ts` ainda semeava `"Você é o Nivelton…"`: a avaliação media um agente que não existe mais. Alinhado ao `NIVEL_PROMPT` real.

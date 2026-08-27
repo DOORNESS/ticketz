@@ -1,4 +1,7 @@
-name: Deploy Ticketz — Produção
+# O nome é o contrato com a governança do Zheus: ela publica exclusivamente
+# via `gh workflow run "Publicar Produção" -f confirmar=PRODUCAO`. Renomear
+# este workflow quebra o canal oficial de publicação.
+name: Publicar Produção
 
 # Um job único: publica API e/ou SPA conforme paths-filter (sem card SPA vazio).
 on:
@@ -12,6 +15,11 @@ on:
       - "scripts/**"
       - ".github/workflows/deploy-prod.yml"
   workflow_dispatch:
+    inputs:
+      confirmar:
+        description: 'Digite PRODUCAO para confirmar a publicação em produção'
+        required: true
+        default: ""
 
 concurrency:
   group: ticketz-prod
@@ -32,6 +40,18 @@ jobs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
     steps:
+      # A trava de confirmação é do padrão de publicação do Zheus e vale de
+      # verdade: aceitar o input e ignorá-lo transformaria a confirmação em
+      # enfeite, e um disparo manual acidental iria direto para produção.
+      # Só se aplica a workflow_dispatch — push na main não carrega inputs.
+      - name: Confirmar publicação em produção
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ inputs.confirmar }}" != "PRODUCAO" ]; then
+            echo "::error::Confirmação ausente ou incorreta. Informe confirmar=PRODUCAO para publicar em produção."
+            exit 1
+          fi
+          echo "Confirmação aceita: publicando em produção."
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
         id: filter
