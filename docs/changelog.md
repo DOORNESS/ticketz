@@ -6,6 +6,34 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.7.9] — 2026-09-01
+
+### Corrigido (URGENTE) — IA repetia a mesma frase ao cliente a cada 2 minutos
+
+No ticket #152 o cliente mandou "Ajuda" e recebeu *"Ainda não encontrei uma resposta completa na base…"* dez vezes seguidas, de 2 em 2 minutos, por meia hora.
+
+Causa: o **guarda de resposta obrigatória** (`mandatory_reply_guard`, no `finally` de `ProcessInboundMessageService`) rodava com `skipDedupe: true` — com o anti-repetição **desligado**. O guarda existe para o cliente não ficar em silêncio naquele turno, mas sem dedupe ele reenviava o mesmo texto a cada reprocessamento. E um ticket travado é reprocessado a cada expiração do lock da fila: `AI_QUEUE_LOCK_TTL_SEC`, padrão **120s** — exatamente o intervalo observado nos prints.
+
+- `skipDedupe: true` removido do guarda; no lugar, janela longa (`AI_MANDATORY_GUARD_DEDUPE_TTL_SEC`, padrão 1h).
+- `buildFallbackDedupeKey` passa a escopar por **mensagem**: `messageId` quando existe, senão hash do texto do cliente. Antes a chave caía só no `reason`, constante por ticket — uma pergunta genuinamente nova ficaria sem resposta durante toda a janela.
+- Supressão por dedupe passa a ser logada, para o silêncio ser diagnosticável.
+
+A garantia continua de pé: o cliente recebe o guarda uma vez por pergunta. O que acabou foi repetir a mesma resposta para a mesma pergunta.
+
+### Adicionado — áudio transcrito é apagado do storage, texto preservado
+
+A transcrição já é gravada em `Message.body` **antes** do upload e duplicada em `MessageMediaFile.transcriptionText`; o histórico não depende do arquivo. `TranscribedAudioPurgePolicy` decide e `purgeTranscribedAudio` executa.
+
+Quatro condições, todas obrigatórias: só **áudio**, só **inbound**, só com **transcrição utilizável** e nunca `retentionExempt` (protege o que foi anexado à base). Carência opcional em `AI_PURGE_TRANSCRIBED_AUDIO_GRACE_MIN` (padrão 0 = apaga assim que transcreve); sem data confiável, fail-closed preserva.
+
+Trava dupla `AI_PURGE_TRANSCRIBED_AUDIO` + Setting `aiPurgeTranscribedAudio`, ambos default OFF. O registro do `MessageMediaFile` **não** é removido: vira `deleted` com `deletedAt`, preservando tamanho e transcrição. Falha de storage não propaga — vira `delete_failed` para retentativa.
+
+**Custo assumido:** acaba a re-transcrição manual, a conferência de uma transcrição duvidosa e a nuance do áudio. Irreversível por desenho.
+
+Testes: `FallbackDedupeLoop.spec.ts` (5) e `TranscribedAudioPurgePolicy.spec.ts` (13). Suíte backend **507/507** em 76 suítes; `tsc --noEmit` limpo.
+
+---
+
 ## [1.7.8] — 2026-08-27
 
 ### Alterado — o assistente da Nível deixa de ter nome próprio

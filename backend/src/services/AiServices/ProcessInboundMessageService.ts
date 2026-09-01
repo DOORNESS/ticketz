@@ -132,6 +132,64 @@ const resolveEffectiveMaxTokens = (
 const AUDIO_USER_FALLBACK =
   "Não consegui compreender este áudio. Poderia reenviá-lo ou escrever sua mensagem?";
 
+/** Janela padrão do anti-repetição de fallback. */
+const FALLBACK_DEDUPE_TTL_SEC = 180;
+
+/**
+ * O guarda de resposta obrigatória precisa de janela LONGA.
+ *
+ * Ele dispara quando o turno terminou sem resposta, e um ticket travado é
+ * reprocessado a cada expiração do lock da fila (`AI_QUEUE_LOCK_TTL_SEC`,
+ * padrão 120s). Com janela curta — ou, como estava, com o anti-repetição
+ * desligado — cada retentativa reenviava o mesmo texto ao cliente. Foi assim
+ * que o ticket #152 recebeu a mesma frase de 2 em 2 minutos por meia hora.
+ *
+ * A chave é por MENSAGEM, então uma pergunta nova do cliente continua tendo
+ * direito ao guarda; o que a janela bloqueia é repetir a mesma resposta para a
+ * mesma pergunta.
+ */
+const MANDATORY_GUARD_DEDUPE_TTL_SEC = (): number => {
+  const parsed = Number(
+    process.env.AI_MANDATORY_GUARD_DEDUPE_TTL_SEC || "3600"
+  );
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 3600;
+};
+
+/**
+ * Escopo do anti-repetição.
+ *
+ * `messageId` é o ideal — identifica o turno. Sem ele, o texto do cliente
+ * entra no lugar (hash curto): sem isso a chave cairia só no `reason`, que é
+ * constante por ticket, e uma pergunta genuinamente nova ficaria sem resposta.
+ */
+export const buildFallbackDedupeKey = ({
+  ticketId,
+  messageId,
+  reason,
+  userText
+}: {
+  ticketId: number;
+  messageId?: string;
+  reason: string;
+  userText?: string;
+}): string => {
+  if (messageId) {
+    return `ai:fallback:sent:${ticketId}:${messageId}`;
+  }
+
+  const normalized = (userText || "").trim().toLowerCase();
+  if (normalized) {
+    const digest = crypto
+      .createHash("sha1")
+      .update(normalized)
+      .digest("hex")
+      .slice(0, 16);
+    return `ai:fallback:sent:${ticketId}:${reason}:${digest}`;
+  }
+
+  return `ai:fallback:sent:${ticketId}:${reason}`;
+};
+
 export const sendAiCustomerFallback = async ({
   ticket,
   companyId,
@@ -140,7 +198,8 @@ export const sendAiCustomerFallback = async ({
   userText,
   body = AI_CUSTOMER_FALLBACK,
   markSent,
-  skipDedupe = false
+  skipDedupe = false,
+  dedupeTtlSeconds = FALLBACK_DEDUPE_TTL_SEC
 }: {
   ticket: Ticket;
   companyId: number;
@@ -150,14 +209,30 @@ export const sendAiCustomerFallback = async ({
   body?: string;
   markSent?: () => void;
   skipDedupe?: boolean;
+  dedupeTtlSeconds?: number;
 }): Promise<void> => {
   if (!skipDedupe) {
     try {
       const { getAiInboundQueue } = await import("./AiInboundQueueService");
       const redis = getAiInboundQueue().client;
-      const dedupeKey = `ai:fallback:sent:${ticket.id}:${messageId || reason}`;
-      const acquired = await redis.set(dedupeKey, "1", "EX", 180, "NX");
+      const dedupeKey = buildFallbackDedupeKey({
+        ticketId: ticket.id,
+        messageId,
+        reason,
+        userText
+      });
+      const acquired = await redis.set(
+        dedupeKey,
+        "1",
+        "EX",
+        dedupeTtlSeconds,
+        "NX"
+      );
       if (acquired !== "OK") {
+        logger.info(
+          { ticketId: ticket.id, reason, dedupeKey },
+          "AI fallback suppressed by dedupe — customer already received it"
+        );
         return;
       }
     } catch (dedupeError) {
@@ -1299,7 +1374,14 @@ const ProcessInboundMessageService = async ({
           body: isInformationalIntent(userText)
             ? resolveAgentInformationalFallback(agent, userText)
             : AI_CUSTOMER_FALLBACK,
-          skipDedupe: true,
+          // NUNCA volte a `skipDedupe: true` aqui. O guarda existe para o
+          // cliente não ficar sem resposta NAQUELE turno — não para reenviar a
+          // mesma frase a cada retentativa. Com o anti-repetição desligado,
+          // um ticket travado reenviava o mesmo texto a cada expiração do lock
+          // da fila (120s), e foi exatamente o que o cliente recebeu por meia
+          // hora seguida. A janela longa mantém a garantia de resposta e mata
+          // a repetição.
+          dedupeTtlSeconds: MANDATORY_GUARD_DEDUPE_TTL_SEC(),
           markSent: markCustomerReply
         });
       } catch (guardError) {

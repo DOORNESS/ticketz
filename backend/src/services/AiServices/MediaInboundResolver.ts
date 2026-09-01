@@ -14,6 +14,7 @@ import AiAgent from "../../models/AiAgent";
 import Ticket from "../../models/Ticket";
 import { InboundMessageItem } from "./ProcessInboundMessageService";
 import { readMediaBuffer } from "../../helpers/mediaStorage";
+import { purgeTranscribedAudio } from "./media/UnifiedMediaPersistenceService";
 
 const isVisualMediaType = (mediaType?: string): boolean => {
   const normalized = (mediaType || "").toLowerCase();
@@ -227,10 +228,7 @@ export const resolveInboundMessageText = async ({
   }
 
   if (existingMedia?.visionSummary && isVisualMediaType(message.mediaType)) {
-    return formatInboundImageContext(
-      messageText,
-      existingMedia.visionSummary
-    );
+    return formatInboundImageContext(messageText, existingMedia.visionSummary);
   }
 
   if (isVisualMediaType(message.mediaType) && message.messageId) {
@@ -300,10 +298,21 @@ export const resolveInboundMessageText = async ({
 
     messageText = audioResult.text;
 
-    if (!existingMedia) {
-      try {
+    // `mediaFileId` só é preenchido quando a transcrição FOI GRAVADA. É essa a
+    // condição que autoriza apagar o áudio adiante — texto em memória não vale.
+    let mediaFileId: number | null = null;
+
+    try {
+      if (existingMedia) {
+        // Registro já existia sem transcrição: gravar aqui fecha a lacuna que
+        // deixava `transcriptionText` vazio para sempre nesse caminho.
+        if (!existingMedia.transcriptionText?.trim()) {
+          await existingMedia.update({ transcriptionText: messageText });
+        }
+        mediaFileId = existingMedia.id;
+      } else {
         const uploadMeta = resolveExistingUpload(message.mediaUrl);
-        await persistMediaFile({
+        const persisted = await persistMediaFile({
           companyId,
           ticket,
           message,
@@ -311,12 +320,32 @@ export const resolveInboundMessageText = async ({
           mediaType: "audio",
           extras: { transcriptionText: messageText }
         });
-      } catch (error) {
-        logger.warn(
-          { error, messageId: message.messageId },
-          "Audio metadata persistence failed"
-        );
+        mediaFileId = persisted?.id ?? null;
       }
+    } catch (error) {
+      logger.warn(
+        { error, messageId: message.messageId },
+        "Audio metadata persistence failed"
+      );
+      // Sem persistência comprovada, não há purga: o áudio segue sendo o único
+      // registro do que o cliente disse.
+      mediaFileId = null;
+    }
+
+    if (mediaFileId) {
+      // `purgeTranscribedAudio` relê o registro do banco e reavalia todas as
+      // condições (áudio, inbound, transcrição gravada, não isento, flags).
+      // A prova de persistência é dele, não deste ponto — por isso a chamada é
+      // segura mesmo se algo acima tiver falhado parcialmente.
+      //
+      // Não propaga: áudio parado no bucket é custo; derrubar o atendimento
+      // por causa disso seria muito pior.
+      await purgeTranscribedAudio(mediaFileId).catch(error =>
+        logger.warn(
+          { error, mediaFileId, messageId: message.messageId },
+          "Transcribed audio purge failed; message flow preserved"
+        )
+      );
     }
 
     return messageText;

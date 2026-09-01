@@ -5,6 +5,12 @@ import Ticket from "../../../models/Ticket";
 import StorageService from "../../StorageService/StorageService";
 import { getMediaRetentionDays } from "../../StorageService/storageEnv";
 import { logger } from "../../../utils/logger";
+import { GetCompanySetting } from "../../../helpers/CheckSettings";
+import {
+  decideAudioPurge,
+  getAudioPurgeGraceMinutes,
+  isAudioPurgeEnabled
+} from "./TranscribedAudioPurgePolicy";
 
 export type PersistMediaInput = {
   companyId: number;
@@ -95,6 +101,83 @@ export const persistUnifiedMediaFile = async (
       "Unified media persistence failed"
     );
     return null;
+  }
+};
+
+/**
+ * Apaga do storage o áudio já transcrito, preservando texto e rastro.
+ *
+ * O registro do `MessageMediaFile` NÃO é removido: vira `deleted` com
+ * `deletedAt`. Fica a prova de que existiu um áudio, o tamanho que ocupava e a
+ * transcrição. O que sai é só o objeto que pesa no bucket.
+ *
+ * Falha de storage não propaga: o áudio continuar lá é um problema de custo,
+ * enquanto derrubar o recebimento da mensagem é um problema de atendimento.
+ */
+export const purgeTranscribedAudio = async (
+  mediaFileId: number
+): Promise<boolean> => {
+  const media = await MessageMediaFile.findByPk(mediaFileId);
+  if (!media) {
+    return false;
+  }
+
+  const decision = decideAudioPurge(
+    {
+      mediaType: media.mediaType,
+      direction: media.direction,
+      transcriptionText: media.transcriptionText,
+      retentionExempt: media.retentionExempt,
+      storageKey: media.storageKey,
+      createdAt: media.get("createdAt") as Date
+    },
+    {
+      enabled: isAudioPurgeEnabled(
+        await GetCompanySetting(
+          media.companyId,
+          "aiPurgeTranscribedAudio",
+          null
+        )
+      ),
+      graceMinutes: getAudioPurgeGraceMinutes()
+    }
+  );
+
+  if (!decision.purge) {
+    return false;
+  }
+
+  try {
+    await StorageService.delete(media.storageKey, media.companyId);
+    await media.update({
+      status: "deleted",
+      deletedAt: new Date(),
+      publicUrl: null
+    } as never);
+
+    logger.info(
+      {
+        mediaFileId,
+        ticketId: media.ticketId,
+        sizeBytes: media.sizeBytes
+      },
+      "Transcribed audio purged from storage; transcript preserved"
+    );
+    return true;
+  } catch (error) {
+    await media
+      .update({
+        status: "delete_failed",
+        lastDeleteError: error instanceof Error ? error.message : String(error),
+        deleteAttempts: (media.deleteAttempts || 0) + 1
+      } as never)
+      .catch(() => undefined);
+
+    logger.warn(
+      { error, mediaFileId },
+      "Failed to purge transcribed audio; object kept for retry"
+    );
+    return false;
   }
 };
 
