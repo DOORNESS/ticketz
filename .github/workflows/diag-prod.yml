@@ -1,0 +1,141 @@
+name: Diagnostico Producao (somente leitura)
+
+# Sonda de diagnostico. Nao altera nada em producao: le o log do backend e
+# consulta o log de decisoes da IA para descobrir por que a IA parou de
+# responder. Disparo manual apenas.
+on:
+  workflow_dispatch:
+    inputs:
+      linhas:
+        description: "Linhas do log do backend"
+        required: false
+        default: "400"
+
+jobs:
+  diagnostico:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install --quiet pywinrm psycopg2-binary
+
+      - name: Env efetivo do backend em producao (chaves mascaradas)
+        continue-on-error: true
+        env:
+          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP || '31.220.103.226' }}
+          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+        run: |
+          python3 - <<'PY'
+          import os, re, winrm
+          s = winrm.Session(f"https://{os.environ['CONTABO_HOST']}:5986/wsman",
+                            auth=("administrator", os.environ["CONTABO_PASSWORD"]),
+                            transport="basic", server_cert_validation="ignore",
+                            operation_timeout_sec=120, read_timeout_sec=150)
+          ps = r"""
+          $ErrorActionPreference='Continue'
+          Get-Content 'C:\ticketz\backend\.env' -EA SilentlyContinue |
+            Where-Object { $_ -match '^(AI_|OPENAI|RAG_|DB_MAX|DB_MIN|NODE_ENV)' }
+          Write-Output '=== PROCESSO NODE ==='
+          Get-Process node -EA SilentlyContinue | Select-Object Id,StartTime,WorkingSet | Format-List
+          """
+          r = s.run_ps(ps)
+          out = (r.std_out or b"").decode("utf-8", "replace")
+          for line in out.splitlines():
+              # mascara valores sensiveis, mantem o nome e o tamanho da variavel
+              m = re.match(r'^(OPENAI_API_KEY|.*_SECRET|.*_KEY|.*PASS.*)=(.*)$', line)
+              if m:
+                  print(f"{m.group(1)}=<{len(m.group(2))} chars>")
+              else:
+                  print(line)
+          PY
+
+      - name: Log do backend — erros de IA
+        continue-on-error: true
+        env:
+          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP || '31.220.103.226' }}
+          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+          DEPLOY_ROOT: 'C:\ticketz'
+        run: python3 scripts/tail-prod-log.py ${{ inputs.linhas }} 2>&1 | tail -400
+
+      - name: Log do backend — filtrado por falha de provedor
+        continue-on-error: true
+        env:
+          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP || '31.220.103.226' }}
+          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+          DEPLOY_ROOT: 'C:\ticketz'
+        run: |
+          for p in "AI processing failed" "quota" "429" "Informational direct" "Vector knowledge search failed" "suppressed by dedupe" "mandatory_reply_guard" "timed out"; do
+            echo "########## PADRAO: $p ##########"
+            python3 scripts/tail-prod-log.py 4000 "$p" 2>&1 | tail -40
+          done
+
+      - name: Log de decisoes da IA no banco de producao
+        continue-on-error: true
+        env:
+          PGPASSWORD_RAW: ${{ secrets.PROD_DB_PASS }}
+        run: |
+          python3 - <<'PY'
+          import os, psycopg2
+          pwd = os.environ.get("PGPASSWORD_RAW") or "y$QXZram5@w2JKE"
+          conn = psycopg2.connect(
+              host="aws-1-sa-east-1.pooler.supabase.com", port=5432,
+              user="postgres.tcwtpkadwrsbdvehsmfy", password=pwd,
+              dbname="postgres", sslmode="require", connect_timeout=20,
+              options="-c search_path=ticketz")
+          cur = conn.cursor()
+
+          def show(titulo, sql):
+              print("\n########## " + titulo + " ##########")
+              try:
+                  cur.execute(sql)
+                  cols = [d[0] for d in cur.description]
+                  print(" | ".join(cols))
+                  for row in cur.fetchall():
+                      print(" | ".join("" if v is None else str(v)[:220] for v in row))
+              except Exception as e:
+                  conn.rollback()
+                  print("ERRO:", e)
+
+          show("Razoes de decisao da IA nas ultimas 6h", """
+            SELECT error AS reason, count(*) AS total, max("createdAt") AS ultimo
+            FROM "AiConversationLogs"
+            WHERE "createdAt" > now() - interval '6 hours'
+            GROUP BY 1 ORDER BY 2 DESC LIMIT 40
+          """)
+
+          show("Agentes ativos: modelo, marca, bases vinculadas", """
+            SELECT a.id, a.name, a."brandId", a."textModel", a.provider, a.active,
+                   count(k."knowledgeBaseId") AS bases
+            FROM "AiAgents" a
+            LEFT JOIN "AiAgentKnowledgeBases" k ON k."aiAgentId" = a.id
+            GROUP BY 1,2,3,4,5,6 ORDER BY a.id
+          """)
+
+          show("Bases de conhecimento: chunks prontos", """
+            SELECT kb.id, kb.name, kb."brandId", kb.active,
+                   count(kc.id) AS chunks,
+                   count(kc.embedding) AS com_embedding
+            FROM "KnowledgeBases" kb
+            LEFT JOIN "KnowledgeChunks" kc ON kc."knowledgeBaseId" = kb.id
+            GROUP BY 1,2,3,4 ORDER BY kb.id
+          """)
+
+          show("Ultimas 40 decisoes do ticket mais ativo", """
+            SELECT "ticketId", action, error AS reason, "createdAt"
+            FROM "AiConversationLogs"
+            WHERE "ticketId" = (
+              SELECT "ticketId" FROM "AiConversationLogs"
+              WHERE "createdAt" > now() - interval '12 hours'
+              GROUP BY "ticketId" ORDER BY count(*) DESC LIMIT 1
+            )
+            ORDER BY "createdAt" DESC LIMIT 40
+          """)
+
+          cur.close(); conn.close()
+          PY

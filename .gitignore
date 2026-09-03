@@ -35,3 +35,6 @@ frontend/public/config-dev.json
 # O repositorio nao tem package.json na raiz por design: backend/ e frontend/
 # sao pacotes independentes. Um lock na raiz e residuo de ferramenta.
 /package-lock.json
+
+# Credenciais locais de publicacao (token do GitHub e senha da VPS)
+GITHUB.env.local
