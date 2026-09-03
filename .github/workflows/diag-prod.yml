@@ -105,6 +105,10 @@ jobs:
           w("2. LOG DO BACKEND — LINHAS DE FALHA DA IA")
           w("=" * 70)
           ALVOS = [
+              "transcri",
+              "Transcription",
+              "whisper",
+              "audio",
               "AI processing failed",
               "Informational direct",
               "Vector knowledge search failed",
@@ -179,6 +183,20 @@ jobs:
                   except Exception as e:
                       conn.rollback()
                       w("ERRO: " + str(e).strip().splitlines()[0][:300])
+
+              show("Razoes de decisao da IA — ULTIMAS 2 HORAS (pos-deploy)", """
+                SELECT error AS motivo, count(*) AS total,
+                       min("createdAt") AS primeiro, max("createdAt") AS ultimo
+                FROM "AiConversationLogs"
+                WHERE "createdAt" > now() - interval '2 hours'
+                GROUP BY 1 ORDER BY 2 DESC LIMIT 40""")
+
+              show("Ultimos 25 eventos de IA (sem texto de cliente)", """
+                SELECT "ticketId", direction, model, error AS motivo,
+                       "transferredToHuman", "createdAt"
+                FROM "AiConversationLogs"
+                WHERE "createdAt" > now() - interval '3 hours'
+                ORDER BY "createdAt" DESC LIMIT 25""")
 
               show("Razoes de decisao da IA — ultimas 24h", """
                 SELECT error AS motivo, count(*) AS total, max("createdAt") AS ultimo
