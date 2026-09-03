@@ -74,9 +74,10 @@ jobs:
           w("=" * 70)
           try:
               import winrm
+              s = None
               s = winrm.Session(
                   f"https://{os.environ['CONTABO_HOST']}:5986/wsman",
-                  auth=("administrator", os.environ["CONTABO_PASSWORD"]),
+                  auth=("administrator", (os.environ.get("CONTABO_PASSWORD") or "").strip()),
                   transport="basic", server_cert_validation="ignore",
                   operation_timeout_sec=180, read_timeout_sec=220)
 
@@ -92,7 +93,11 @@ jobs:
               for line in texto.splitlines():
                   w(env_line(line.rstrip()))
           except Exception:
-              w("FALHA ao ler env: " + traceback.format_exc(limit=1).strip().splitlines()[-1])
+              pw = (os.environ.get("CONTABO_PASSWORD") or "")
+              w(f"FALHA ao ler env (senha recebida: {len(pw)} chars, "
+                f"{len(pw.strip())} apos strip): "
+                + traceback.format_exc(limit=1).strip().splitlines()[-1])
+              s = None
 
           # ---------- 2. log do backend ----------
           w()
@@ -115,6 +120,8 @@ jobs:
               "model",
           ]
           try:
+              if s is None:
+                  raise RuntimeError("sem sessao WinRM")
               linhas = os.environ.get("LINHAS", "3000")
               ps = f"""
               $ErrorActionPreference='Continue'
@@ -201,15 +208,28 @@ jobs:
                 WHERE "createdAt" > now() - interval '12 hours'
                 GROUP BY 1 ORDER BY 1 DESC""")
 
-              show("Ticket mais reprocessado — acoes e motivos", """
-                SELECT action, error AS motivo, count(*) AS total,
+              show("Colunas de AiConversationLogs", """
+                SELECT column_name, data_type FROM information_schema.columns
+                WHERE table_schema='ticketz' AND table_name='AiConversationLogs'
+                ORDER BY ordinal_position""")
+
+              show("Ticket mais reprocessado — motivos", """
+                SELECT error AS motivo, count(*) AS total,
                        min("createdAt") AS primeiro, max("createdAt") AS ultimo
                 FROM "AiConversationLogs"
                 WHERE "ticketId" = (
                   SELECT "ticketId" FROM "AiConversationLogs"
                   WHERE "createdAt" > now() - interval '24 hours'
                   GROUP BY "ticketId" ORDER BY count(*) DESC LIMIT 1)
-                GROUP BY 1,2 ORDER BY 3 DESC LIMIT 30""")
+                GROUP BY 1 ORDER BY 2 DESC LIMIT 30""")
+
+              show("Amostra bruta do ticket em loop (colunas nao textuais)", """
+                SELECT * FROM "AiConversationLogs"
+                WHERE "ticketId" = (
+                  SELECT "ticketId" FROM "AiConversationLogs"
+                  WHERE "createdAt" > now() - interval '24 hours'
+                  GROUP BY "ticketId" ORDER BY count(*) DESC LIMIT 1)
+                ORDER BY "createdAt" DESC LIMIT 8""")
 
               show("Chave de IA configurada por empresa (so presenca)", """
                 SELECT "companyId", key,
