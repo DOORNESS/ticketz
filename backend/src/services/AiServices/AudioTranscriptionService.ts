@@ -6,6 +6,7 @@ import { GetCompanySetting } from "../../helpers/CheckSettings";
 import { convertAudioToOggOpus } from "../../helpers/mediaConversion";
 import { streamToBuffer } from "../../helpers/mediaStorage";
 import { logger } from "../../utils/logger";
+import { isPermanentAiError } from "./isTransientAiError";
 
 const SUPPORTED_EXTENSIONS = new Set([
   "flac",
@@ -107,6 +108,12 @@ const cleanupTempFile = (tempFilePath?: string | null): void => {
   }
 };
 
+/**
+ * Marca a falha em que o áudio está perfeito e quem recusou foi o provedor.
+ * Quem chama usa isso para não culpar o cliente pela própria fatura.
+ */
+export const PROVIDER_UNAVAILABLE_REASON = "provider_unavailable";
+
 export const transcribeAudioBuffer = async ({
   companyId,
   audioBuffer,
@@ -159,7 +166,7 @@ export const transcribeAudioBuffer = async ({
       text: "",
       success: false,
       attempts: 0,
-      errorReason: "missing_openai_api_key",
+      errorReason: PROVIDER_UNAVAILABLE_REASON,
       bufferSize: audioBuffer.length,
       mimeType,
       filename,
@@ -254,12 +261,15 @@ export const transcribeAudioBuffer = async ({
             ? error.message
             : String(error || "unknown_error");
 
+        const permanent = isPermanentAiError(error);
+
         logger.error(
           {
             attempt,
             ticketId,
             messageId,
             error: lastError,
+            permanent,
             bufferSize: audioBuffer.length,
             mimeType,
             filename,
@@ -268,6 +278,24 @@ export const transcribeAudioBuffer = async ({
           },
           "AudioTranscription: attempt failed"
         );
+
+        if (permanent) {
+          // Cota estourada, chave recusada ou modelo inexistente não melhoram
+          // na segunda tentativa nem no outro modelo. Insistir só queima
+          // tempo do cliente esperando por uma resposta que não vem.
+          cleanupTempFile(tempFilePath);
+          return {
+            text: "",
+            success: false,
+            attempts: attempt,
+            errorReason: PROVIDER_UNAVAILABLE_REASON,
+            bufferSize: audioBuffer.length,
+            mimeType,
+            filename,
+            model: modelName,
+            provider
+          };
+        }
 
         if (attempt < maxAttempts) {
           await sleep(400 * attempt);

@@ -10,6 +10,7 @@ import {
 import { extractTextFromBuffer } from "./DocumentParser";
 import { logger } from "../../utils/logger";
 import { resolveInboundAudioText } from "./AudioInboundResolver";
+import { PROVIDER_UNAVAILABLE_REASON } from "./AudioTranscriptionService";
 import AiAgent from "../../models/AiAgent";
 import Ticket from "../../models/Ticket";
 import { InboundMessageItem } from "./ProcessInboundMessageService";
@@ -293,6 +294,13 @@ export const resolveInboundMessageText = async ({
     });
 
     if (!audioResult.success) {
+      // Distinguir "o áudio saiu ruim" de "o provedor recusou a chamada".
+      // Dizer ao cliente que não entendemos o áudio dele quando o problema é
+      // nosso empurra a culpa para quem não tem nada a ver com isso — e faz
+      // ele regravar de graça, várias vezes, sem nunca funcionar.
+      if (audioResult.errorReason === PROVIDER_UNAVAILABLE_REASON) {
+        return "__AUDIO_TRANSCRIPTION_UNAVAILABLE__";
+      }
       return "__AUDIO_TRANSCRIPTION_FAILED__";
     }
 

@@ -681,6 +681,46 @@ const ProcessInboundMessageService = async ({
       messages
     });
 
+    // O áudio chegou inteiro e o provedor é que recusou a chamada. Culpar a
+    // gravação do cliente é falso e cruel: ele regrava, regrava, e nunca
+    // funciona. O certo é chamar uma pessoa.
+    if (userText === "__AUDIO_TRANSCRIPTION_UNAVAILABLE__") {
+      logger.error(
+        { ticketId: ticket.id, companyId, messageId: primaryMessageId },
+        "Audio transcription unavailable (provider refused) — handing the ticket to a human"
+      );
+
+      if (triageV2Enabled) {
+        await logAiTicketTimelineEvent({
+          companyId,
+          ticketId: ticket.id,
+          eventType: "transcription_failed",
+          stage: "media",
+          operation: "audio_transcription_provider_unavailable",
+          messageId: primaryMessageId
+        });
+      }
+
+      await HandoffToHumanService({
+        ticket,
+        agent,
+        userMessage: "[Áudio recebido]",
+        messageId: primaryMessageId,
+        handoffReason: AI_HANDOFF_REASONS.provider_error,
+        reason: "audio_transcription_provider_unavailable"
+      });
+      markCustomerReply();
+
+      await persistAiDecisionLog({
+        companyId,
+        ticketId: ticket.id,
+        messageId: primaryMessageId,
+        action: "handoff",
+        reason: "audio_transcription_provider_unavailable"
+      });
+      return;
+    }
+
     if (!userText || userText === "__AUDIO_TRANSCRIPTION_FAILED__") {
       await sendAiWhatsAppReply({
         ticket,

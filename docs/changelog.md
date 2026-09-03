@@ -6,6 +6,44 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.8.1] — 2026-09-03
+
+### Corrigido — "não consegui compreender este áudio" quando o áudio estava perfeito
+
+Um cliente mandou um áudio de 3 segundos às 16:18 e leu *"Não consegui compreender este áudio. Poderia reenviá-lo ou escrever sua mensagem?"*. O log de produção mostra que o pipeline de áudio funcionou inteiro:
+
+```
+16:18:16  AudioPipeline:buffer_loaded
+16:18:16  AudioPipeline:mime_detected   mimeType: "audio/ogg; codecs=opus"
+16:18:18  AudioPipeline:transcribe_start
+16:18:18  AudioTranscription: start     model: "whisper-1"
+16:18:19  AudioTranscription: attempt failed
+```
+
+A falha foi o mesmo `429 insufficient_quota` — a conta da OpenAI sem saldo recusa a transcrição como recusa tudo o mais.
+
+Pedir para o cliente regravar nesse cenário é empurrar para ele a culpa de uma fatura nossa. Ele regrava, regrava, e nunca funciona, porque o problema nunca esteve no microfone dele.
+
+- `PROVIDER_UNAVAILABLE_REASON` distingue "o áudio saiu ruim" de "o provedor recusou a chamada". Chave ausente e erro permanente usam esse motivo.
+- A transcrição **desiste na hora** diante de erro permanente, em vez de gastar as tentativas restantes e ainda repetir tudo no segundo modelo. Antes eram até 6 chamadas contra uma conta que já tinha dito não, com o cliente esperando.
+- `MediaInboundResolver` devolve `__AUDIO_TRANSCRIPTION_UNAVAILABLE__` nesse caso, separado do `__AUDIO_TRANSCRIPTION_FAILED__` de sempre.
+- `ProcessInboundMessageService` **abre handoff humano** com `provider_error` em vez de mandar a frase pedindo o reenvio. O pedido de reenviar continua existindo — mas só para áudio genuinamente ruim, que é para o que ele serve.
+
+### Confirmado em produção — o loop morreu
+
+Primeira medição depois do deploy de [1.8.0], nos tickets 155 e 156:
+
+| Evento | Antes (ticket #153) | Depois |
+|---|---|---|
+| `processing_buffered_messages` | 2.374 em 5h | **1 por ticket** |
+| Mensagem repetida ao cliente | 13 em 5h | **0** |
+
+Dois eventos por ticket e o fluxo encerra. O reprocessamento infinito não existe mais.
+
+Testes: `AudioProviderUnavailable.spec.ts` (6 casos).
+
+---
+
 ## [1.8.0] — 2026-09-03
 
 ### Corrigido (CRÍTICO) — a IA parou de responder e repetia a mesma frase de hora em hora
