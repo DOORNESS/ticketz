@@ -136,7 +136,15 @@ export const tryInformationalDirectReply = async ({
         ? "Há conteúdo na base deste canal. Explique o produto com o que souber do material, sem inventar preços ou regras."
         : "A base deste canal ainda está limitada. Explique de forma geral e cordial o que puder; peça mais detalhes se necessário.");
 
-    if (!hasRealKnowledgeContext(contextBlock)) {
+    // Sem trecho recuperado, mas COM material publicado na base, ainda vale
+    // perguntar ao modelo: ele tem o histórico da conversa e as regras da
+    // marca, e responder "não encontrei orientação segura" sem sequer tentar
+    // era o caminho mais curto para o cliente ouvir a mesma frase para
+    // sempre. Só quando a base está de fato vazia é que a frase da marca é a
+    // resposta honesta.
+    const hasContext = hasRealKnowledgeContext(contextBlock);
+
+    if (!hasContext && !hasReadyDocuments) {
       const brandFallback = resolveBrandFallback(agent, userText);
       return {
         replied: true,
@@ -162,11 +170,16 @@ export const tryInformationalDirectReply = async ({
                 agent.basePrompt?.trim() ||
                   "Você é o assistente virtual deste canal de atendimento.",
                 "Responda em português, de forma clara e conversacional.",
-                "Use o material da base de conhecimento abaixo.",
-                "Não invente políticas, valores ou procedimentos que não estejam no material.",
+                hasContext
+                  ? "Use o material da base de conhecimento abaixo."
+                  : "Nenhum trecho da base foi recuperado para esta pergunta. Responda com o que já está claro na conversa, seja direto e útil, e faça no máximo uma pergunta objetiva para localizar o assunto na base.",
+                "Não invente políticas, valores, contatos ou procedimentos que não estejam no material.",
+                "Nunca responda apenas que não encontrou: ou resolve, ou pergunta algo objetivo, ou encaminha para uma pessoa.",
                 buildDefaultOperationalRules(agent),
                 attemptState.promptBlock,
-                `Material da base:\n${contextBlock.slice(0, 12000)}`
+                hasContext
+                  ? `Material da base:\n${contextBlock.slice(0, 12000)}`
+                  : ""
               ]
                 .filter(Boolean)
                 .join("\n\n")

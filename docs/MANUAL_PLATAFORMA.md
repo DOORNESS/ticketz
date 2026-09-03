@@ -1,6 +1,6 @@
 # Manual Oficial da Plataforma Ticketz
 
-**Versão:** 1.7.8 — auditada contra o código
+**Versão:** 1.8.0 — auditada contra o código
 **Data:** agosto/2026  
 **Status:** documentação oficial — mantida por rule permanente  
 **Repositório:** `ticketz/` (backend + frontend independentes)  
@@ -746,7 +746,7 @@ Quando um humano identifica bug sistêmico, pode solicitar conserto por e-mail s
 ### Auditoria §11
 
 | Controllers | `AiAgentController`, `KnowledgeBaseController`, `KnowledgeDocumentController`, `AiPlaygroundController`, `AiDiagnosticsController`, `TicketAiController`, `ContactAiMemoryController`, `AiToolController`, etc. |
-| **Divergências corrigidas** | `AI_QUEUE_DEBOUNCE_MS` padrão **0** (não 2000). Variável `AI_REENGAGEMENT_ENABLED` **não existe** no código. Groq é **provider ID**, não env `GROQ_*`. |
+| **Divergências corrigidas** | `AI_QUEUE_DEBOUNCE_MS` efetivo **1200** (o `0` dos `.env` é descartado por `parsePositiveInt`). Variável `AI_REENGAGEMENT_ENABLED` **não existe** no código. Groq é **provider ID**, não env `GROQ_*`. |
 
 ---
 
@@ -1606,13 +1606,19 @@ frontend/src/
 | `AI_ORCHESTRATOR_PROVIDER` | `openai` | idem |
 | `AI_PROVIDER_MAX_RETRIES` | `1` | `OpenAIProvider.ts` |
 | `AI_PROVIDER_TIMEOUT_MS` | `45000` | idem |
-| `AI_RAG_MIN_SIMILARITY` | `0.25` | `RagConfig.ts` — filtro efetivo antes do prompt |
+| `AI_RAG_MIN_SIMILARITY` | `0.25` | `RagConfig.ts` — aplicado **antes** do rerank; o segundo filtro em `mapChunks` usa `× 0.75` para não elevar o piso real |
+| `AI_AUTO_FULL_CORPUS_CHUNK_LIMIT` | `32` | `KnowledgeContextService.ts` — base até este tamanho vai inteira ao contexto, sem busca |
+| `AI_TICKET_MAX_CONSECUTIVE_FAILURES` | `3` | `AiTicketFailureBreaker.ts` — falhas seguidas antes de descartar o buffer e escalar |
+| `AI_TICKET_FAILURE_STREAK_TTL_SEC` | `3600` | idem |
+| `AI_MAX_CONSECUTIVE_FALLBACKS` | `2` | `AiFallbackStreakService.ts` — fallbacks seguidos antes de virar handoff |
+| `AI_FALLBACK_STREAK_TTL_SEC` | `21600` | idem |
+| `AI_MANDATORY_GUARD_DEDUPE_TTL_SEC` | `3600` | `ProcessInboundMessageService.ts` — janela do guarda de resposta obrigatória |
 | `AI_RAG_NEIGHBOR_WINDOW` | `1` (0–2) | `RagConfig.ts` — vizinhos por âncora |
-| `AI_QUEUE_DEBOUNCE_MS` | **`0`** | `AiInboundQueueService.ts` |
+| `AI_QUEUE_DEBOUNCE_MS` | **`1200`** | `AiInboundQueueService.ts` — `parsePositiveInt` rejeita `0`, então o `0` dos `.env` cai no padrão e o caminho "immediate" **não roda em produção** |
 | `AI_QUEUE_MAX_ATTEMPTS` | `3` | idem |
 | `AI_QUEUE_BACKOFF_MS` | `3000` | idem |
 | `AI_QUEUE_LOCK_RETRY_MS` | **`100`** | `AiInboundQueueService.ts` |
-| `AI_QUEUE_LOCK_TTL_SEC` | `300` | idem |
+| `AI_QUEUE_LOCK_TTL_SEC` | `120` | idem |
 | `AI_QUEUE_CONCURRENCY` | `5` | idem |
 | `AI_QUEUE_CONGESTION_THRESHOLD` | `50` | `AiQueueMetricsService.ts` |
 | `AI_PROACTIVE_FOLLOWUP_ENABLED` | true (unless `"false"`) | `AiProactiveFollowUpService.ts` |
@@ -1777,7 +1783,7 @@ frontend/src/
 
 ### Inconsistências encontradas (16)
 
-1. `AI_QUEUE_DEBOUNCE_MS` documentado como 2000; código usa **0**
+1. `AI_QUEUE_DEBOUNCE_MS`: os `.env` trazem `0`, mas `parsePositiveInt` rejeita `0` e o valor efetivo é **1200**
 2. `AI_REENGAGEMENT_ENABLED` listada mas **inexistente**
 3. Gateways "Mercado Pago" — código tem **Efi + Owen**
 4. Prioridade roteamento IA/chatbot **invertida** na doc anterior

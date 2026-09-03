@@ -23,6 +23,16 @@ import {
 const MAX_CONTEXT_CHARS = RAG_MAX_CONTEXT_CHARS;
 const MAX_CHUNK_SNIPPET = RAG_CHUNK_SIZE;
 const FULL_CORPUS_DOC_LIMIT = 24;
+
+/**
+ * Até este tamanho, a base inteira vai para o contexto em vez de passar pela
+ * busca vetorial. 32 trechos de 1800 caracteres cabem folgadamente no limite
+ * de contexto e eliminam a classe inteira de "está na base mas o RAG não
+ * achou".
+ */
+const AUTO_FULL_CORPUS_CHUNK_LIMIT = Number(
+  process.env.AI_AUTO_FULL_CORPUS_CHUNK_LIMIT || 32
+);
 const MIN_BASE_DESCRIPTION_CHARS = 120;
 const MAX_DESCRIPTION_SECTIONS = 16;
 
@@ -44,9 +54,21 @@ export type KnowledgeContextResult = {
   reingestedDocuments: number;
 };
 
+/**
+ * O piso de similaridade já foi aplicado em `postProcessRetrievedChunks`,
+ * ANTES do rerank. Reaplicá-lo aqui, sobre o score que o rerank reduz em 25%,
+ * elevava o piso real de 0.25 para 0.333 sem ninguém pedir — e trecho
+ * relevante em português costuma ficar justamente nessa faixa. O piso do
+ * rerank é proporcionalmente menor para preservar a intenção original.
+ */
+const RERANK_SCORE_FACTOR = 0.75;
+
 const mapChunks = (chunks: RetrievedChunk[]) =>
   chunks
-    .filter(chunk => chunk.similarity >= getRagMinimumSimilarity())
+    .filter(
+      chunk =>
+        chunk.similarity >= getRagMinimumSimilarity() * RERANK_SCORE_FACTOR
+    )
     .map(chunk => ({
       id: chunk.id,
       content: chunk.content.slice(0, MAX_CHUNK_SNIPPET),
@@ -501,11 +523,26 @@ export const buildKnowledgeContextForQuery = async ({
   const descriptionLimit =
     loadStrategy === "full" ? MAX_DESCRIPTION_SECTIONS : 8;
 
-  if (loadStrategy === "full") {
+  // Base pequena não precisa de busca: cabe inteira no contexto.
+  //
+  // O caminho de corpus completo existia e foi estreitado para `loadStrategy
+  // === "full"`, que nenhum chamador de runtime usa — virou código morto. Em
+  // produção as bases da Nível somam 22 trechos e a da Fortmax, 10; recuperar
+  // 8 por similaridade num universo de 22 descarta contexto útil de graça e
+  // faz o assistente dizer que não encontrou o que está bem ali.
+  const totalReadyChunks = readyCount + cmsPublishedChunkCount;
+  const fitsInFullCorpus =
+    loadStrategy === "auto" &&
+    totalReadyChunks > 0 &&
+    totalReadyChunks <= AUTO_FULL_CORPUS_CHUNK_LIMIT;
+
+  if (loadStrategy === "full" || fitsInFullCorpus) {
+    const fullCorpusLimit =
+      loadStrategy === "full" ? 48 : AUTO_FULL_CORPUS_CHUNK_LIMIT;
     const documentChunks = await loadAllReadyChunkTexts(
       companyId,
       expandedKnowledgeBaseIds,
-      loadStrategy === "full" ? 48 : FULL_CORPUS_DOC_LIMIT
+      fullCorpusLimit
     );
     const descriptionChunks = await loadKnowledgeBaseDescriptionChunks(
       companyId,
@@ -517,7 +554,7 @@ export const buildKnowledgeContextForQuery = async ({
     const usedChunks = mergeContextChunks(
       documentChunks,
       descriptionChunks,
-      loadStrategy === "full" ? 48 : FULL_CORPUS_DOC_LIMIT
+      fullCorpusLimit
     );
 
     return {
@@ -561,11 +598,10 @@ export const buildKnowledgeContextForQuery = async ({
 
   let usedChunks: KnowledgeContextResult["usedChunks"] = mapChunks(merged);
 
-  if (
-    !usedChunks.length &&
-    readyCount + cmsPublishedChunkCount === 0 &&
-    descriptionReadyCount > 0
-  ) {
+  // Antes esta rede só pegava base VAZIA. Mas o caso que chega ao cliente é o
+  // contrário: base cheia e recuperação sem nada acima do limiar. Aí a
+  // descrição da base é melhor do que responder "não encontrei".
+  if (!usedChunks.length && descriptionReadyCount > 0) {
     const descriptionChunks = await loadKnowledgeBaseDescriptionChunks(
       companyId,
       expandedKnowledgeBaseIds,

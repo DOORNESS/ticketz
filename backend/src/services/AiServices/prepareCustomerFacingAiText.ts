@@ -25,6 +25,45 @@ type AgentWithBrand = Pick<AiAgent, "name" | "basePrompt"> & {
   } | null;
 };
 
+/** Abaixo disso o que sobrou não responde nada e é melhor usar o fallback. */
+const MIN_USEFUL_REPLY_LENGTH = 60;
+
+const splitSentences = (text: string): string[] =>
+  text
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map(part => part.trim())
+    .filter(Boolean);
+
+/**
+ * Remove apenas as frases problemáticas, preservando o restante da resposta.
+ */
+const removeOffendingSentences = (
+  text: string,
+  flags: { unsupportedProcedure: boolean; portalWithoutUrl: boolean }
+): string => {
+  const kept = splitSentences(text).filter(sentence => {
+    if (
+      flags.unsupportedProcedure &&
+      UNSUPPORTED_PROCEDURE_PATTERN.test(sentence)
+    ) {
+      return false;
+    }
+    if (
+      flags.portalWithoutUrl &&
+      /portal (?:de|do) clientes?/i.test(sentence) &&
+      !/https?:\/\//i.test(sentence)
+    ) {
+      return false;
+    }
+    return true;
+  });
+
+  return kept
+    .join(" ")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+};
+
 export const prepareCustomerFacingAiText = (
   text: string,
   userText: string,
@@ -70,6 +109,22 @@ export const prepareCustomerFacingAiText = (
     !/https?:\/\//i.test(sanitized);
 
   if (unsupportedProcedure || portalWithoutUrl) {
+    // Uma ressalva no meio de uma resposta útil não invalida a resposta.
+    //
+    // "O cashback cai na hora. Não encontrei o valor mínimo de resgate, quer
+    // que eu verifique?" era descartada inteira e substituída por "não
+    // encontrei orientação segura" — o cliente perdia a parte que respondia a
+    // pergunta dele e recebia a frase que mais irrita. Agora só a frase
+    // problemática sai; o resto fica, desde que ainda sobre resposta.
+    const trimmed = removeOffendingSentences(sanitized, {
+      unsupportedProcedure,
+      portalWithoutUrl
+    });
+
+    if (trimmed.length >= MIN_USEFUL_REPLY_LENGTH) {
+      return trimmed;
+    }
+
     return resolveAgentInformationalFallback(agent, userText);
   }
 

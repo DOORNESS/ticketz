@@ -139,8 +139,10 @@ describe("a correção do loop de fallback continua intacta", () => {
   });
 
   it("a chave de dedupe usa messageId e, sem ele, hash do texto", () => {
+    // O `reason` entrou na chave: sem ele, motivos com janelas diferentes
+    // disputavam a mesma reserva e um calava o outro.
     expect(processSrc).toMatch(
-      /ai:fallback:sent:\$\{ticketId\}:\$\{messageId\}/
+      /ai:fallback:sent:\$\{ticketId\}:\$\{reason\}:\$\{messageId\}/
     );
     expect(processSrc).toMatch(/createHash\("sha1"\)/);
   });

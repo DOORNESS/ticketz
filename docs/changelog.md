@@ -6,6 +6,86 @@ Formato baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/).
 
 ---
 
+## [1.8.0] — 2026-09-03
+
+### Corrigido (CRÍTICO) — a IA parou de responder e repetia a mesma frase de hora em hora
+
+Ticket #153: o cliente pediu para cancelar a conta e recebeu *"Ainda não encontrei uma resposta completa na base…"* às 08:29, 09:29, 10:29, 11:29 e 12:30. O banco de produção mostrou o tamanho real do problema: **2.374 execuções do mesmo turno entre 10:59 e 16:13**, um `job_started` a cada ~8 segundos, sempre com as mesmas 3 mensagens no buffer. Em 24 horas, **2.416 reprocessamentos e nenhuma resposta de verdade** — nenhum `respond` no log de decisões. O loop só parou porque um atendente fechou o ticket à mão.
+
+A entrada [1.7.9] atacou o sintoma: trocou a janela de anti-repetição de 2 minutos para 1 hora. O motor continuou rodando — a cadência que o cliente via passou a ser exatamente o TTL do dedupe, e nada mais.
+
+**O motor eram três defeitos que só juntos produziam trabalho infinito**, em `AiInboundQueueService.ts`:
+
+1. **Off-by-one no orçamento de tentativas.** O Bull incrementa `attemptsMade` *no momento da falha*, então dentro do handler ele vale 0, 1, 2 com `attempts: 3`. A condição `job.attemptsMade < getMaxAttempts()` era verdadeira nas três — o `throw` sempre acontecia e o ramo de desistência (que esvazia o buffer e manda um único aviso) **nunca era alcançado**. Efeito colateral: o `persistAiDecisionLog` de `job_failed` ficava depois do `throw`, então **o erro do provedor nunca era registrado**. Cinco horas de falha, zero pistas.
+2. **O `finally` fabricava trabalho novo.** As mensagens voltavam ao buffer no `catch`, e `rescheduleIfBuffered` agendava um job com `forceNewJob = true` — ou seja, `jobId: undefined`, **linhagem nova, orçamento de tentativas zerado**. O teto do Bull nunca era atingido porque nunca era o mesmo job.
+3. **Cota estourada era classificada como transitória.** `isTransientAiError` devolvia `true` para qualquer 429, e um `insufficient_quota` é permanente até alguém pagar a fatura. Pior: o timeout do próprio SDK da OpenAI escapava da classificação — a mensagem é `"Request timed out."`, e o teste procurava `"timeout"`, que não aparece em `"timed out"`.
+
+Correções:
+
+- `job.attemptsMade + 1 < getMaxAttempts()`, e o `job_failed` passa a ser gravado **na primeira falha**, antes de qualquer `throw`, com `consecutiveFailures`, `permanent` e `transient` nos detalhes.
+- Turno que falha não reagenda: `rescheduleIfBuffered` só roda quando o turno terminou bem. A retentativa é responsabilidade do Bull, dentro do mesmo job e do mesmo orçamento.
+- **`AiTicketFailureBreaker`** — disjuntor por ticket em Redis (`ai:failstreak:<id>`). Ao atingir `AI_TICKET_MAX_CONSECUTIVE_FAILURES` (padrão 3), ou logo na primeira falha permanente, o buffer é descartado, o job de debounce pendente é removido e o ticket **vai para uma pessoa** com `provider_error`. Zera a cada turno bem-sucedido.
+- `isTransientAiError` ganhou `isPermanentAiError` ao lado: cota, chave inválida, modelo inexistente, parâmetro recusado e 400/401/403/404/422 param de ser retentados. Timeout do SDK (`"timed out"`, `APIConnectionTimeoutError`), `"connection error"`, `"socket hang up"` e 5xx entram como transitórios de verdade.
+
+### Corrigido — a mesma pergunta calava respostas diferentes
+
+`buildFallbackDedupeKey` ignorava o `reason` quando havia `messageId`: sete emissores diferentes disputavam a chave `ai:fallback:sent:<ticket>:<mensagem>`, com janelas de 180 s e de 1 h. Quem chegasse primeiro impunha a própria janela aos outros — um `low_confidence_fallback` legítimo podia ficar uma hora calado. E como a supressão fazia `return` **antes** de `markSent`, o turno seguia como "sem resposta" e alimentava o reprocessamento seguinte.
+
+- O `reason` entra na chave sempre.
+- A reserva é liberada quando a entrega ao WhatsApp falha. Antes, uma queda de sessão calava a IA pela janela inteira.
+- Fallback suprimido passa a finalizar o estado do ticket, em vez de deixá-lo preso em `processing`.
+
+### Adicionado — repetir "não sei" vira atendimento humano
+
+**`AiFallbackStreakService`**: fallbacks consecutivos são contados por ticket (`ai:fallbackstreak:<id>`). Ao chegar em `AI_MAX_CONSECUTIVE_FALLBACKS` (padrão 2), o turno seguinte **não** manda a frase de novo — abre handoff com `no_knowledge_found`. Resposta de verdade zera o contador.
+
+Só motivos de "não sei responder" consomem o orçamento; um aviso de instabilidade momentânea não conta. É o que faltava no caso concreto: quem pede para cancelar a conta chega a uma pessoa na terceira tentativa, não na décima.
+
+### Corrigido — a base tinha a resposta e a busca não achava
+
+As bases de produção são pequenas: 12 + 6 + 4 trechos na Nível, 10 na Fortmax. Três defeitos somados faziam o assistente dizer que não encontrou o que estava a um passo:
+
+1. **Corpus completo virou código morto.** O commit `3983017` estreitou a condição para `loadStrategy === "full"`, e nenhum chamador de runtime passa `"full"` — todos passam `"auto"`. Recuperar 8 trechos por similaridade num universo de 22 descarta contexto útil de graça. Agora, base com até `AI_AUTO_FULL_CORPUS_CHUNK_LIMIT` trechos (padrão 32) **entra inteira no contexto**, sem passar pela busca.
+2. **Piso de similaridade aplicado duas vezes.** `postProcessRetrievedChunks` filtrava em 0.25 *antes* do rerank; o rerank multiplica a similaridade por 0.75; e `mapChunks` filtrava de novo em 0.25, agora sobre o score reduzido. O piso real era **0.333**, não 0.25 — exatamente a faixa de trecho relevante em português. O segundo filtro passa a ser proporcional ao fator do rerank.
+3. **A descrição da base só socorria base vazia.** A rede pegava `readyCount === 0`, mas o caso que chega ao cliente é o oposto: base cheia e recuperação sem nada acima do limiar. Agora entra sempre que a recuperação volta vazia.
+
+### Corrigido — uma ressalva descartava a resposta inteira
+
+`prepareCustomerFacingAiText` trocava a resposta **completa** pelo fallback quando ela casava `UNSUPPORTED_PROCEDURE_PATTERN`. Na prática: *"O cashback cai na hora na sua conta. Não encontrei o valor mínimo de resgate, quer que eu verifique?"* virava "não encontrei orientação segura" — o cliente perdia justamente a parte que respondia. Agora só a frase problemática é removida; o resto sobrevive se ainda houver resposta útil (60 caracteres). Idem para "portal do cliente" sem URL.
+
+### Alterado — sem trecho recuperado, o assistente ainda pensa antes de desistir
+
+`InformationalDirectReplyService` devolvia a frase da marca **sem chamar o modelo** sempre que o RAG voltava vazio, e esse é o caminho dominante do WhatsApp. Com material publicado na base, o modelo passa a ser consultado mesmo sem trecho recuperado, sob regras estritas: não inventar política, valor, contato ou procedimento, e **nunca responder só que não encontrou** — ou resolve, ou faz uma pergunta objetiva, ou encaminha. A frase da marca fica reservada para base de fato vazia, onde é a resposta honesta.
+
+### Adicionado — sonda de diagnóstico de produção
+
+`.github/workflows/diag-prod.yml` (disparo manual, somente leitura) lê o env efetivo da VPS, filtra o log do backend por padrões de falha de IA e consulta o log de decisões, os agentes, as bases e o volume por hora. O relatório é **sanitizado** — sem texto de cliente, sem telefone, sem chave — e publicado na branch `zheus/diag/prod-ia`, porque o download de log do Actions não é acessível fora do runner e o repositório é público. Foi ela que trouxe os 2.374 reprocessamentos.
+
+**Pendência conhecida:** o secret `CONTABO_PASSWORD` está desatualizado — a sonda recebeu 40 caracteres e a VPS recusou (`InvalidCredentialsError`). Isso também derruba as etapas de migration e restart do `Publicar Produção`. Atualizar o secret antes da próxima publicação.
+
+### Novas variáveis de ambiente
+
+| Variável | Padrão | Efeito |
+|---|---|---|
+| `AI_TICKET_MAX_CONSECUTIVE_FAILURES` | 3 | Falhas seguidas antes de descartar o buffer e escalar |
+| `AI_TICKET_FAILURE_STREAK_TTL_SEC` | 3600 | Janela do contador de falhas |
+| `AI_MAX_CONSECUTIVE_FALLBACKS` | 2 | Fallbacks seguidos antes de virar handoff |
+| `AI_FALLBACK_STREAK_TTL_SEC` | 21600 | Janela do contador de fallbacks |
+| `AI_AUTO_FULL_CORPUS_CHUNK_LIMIT` | 32 | Até este tamanho a base vai inteira ao contexto |
+
+### Divergências doc↔código encontradas na auditoria
+
+- `AI_QUEUE_DEBOUNCE_MS=0` **não desliga o debounce**: `parsePositiveInt` rejeita 0 e devolve 1200. `MANUAL_PLATAFORMA.md` §1611 e §1780 documentam o valor errado, e todo o caminho "immediate" (com seu contador `ai:inline-retry`) é código morto em produção. Não foi alterado nesta entrega — ligar um caminho inteiro que nunca rodou não cabe numa correção de incidente.
+- `AI_QUEUE_LOCK_TTL_SEC` tem padrão 120, não 300 (`MANUAL_PLATAFORMA.md` §1615, `docs/AI_SETUP.md` §103).
+- A cadência de 2 em 2 minutos do #152 vinha do `DUPLICATE_WINDOW_MS` de `sendAiWhatsAppReply`, não da expiração do lock — a entrada [1.7.9] atribui à causa errada.
+- `CLAUDE.md` §165 diz `DEPLOY_MODE=patch`; o workflow usa `full`.
+
+### Testes
+
+`AiLoopBreaker.spec.ts` (13 casos: classificação de erro, chave de dedupe, disjuntor, orçamento de fallbacks) e `AiLoopBreakerWiring.spec.ts` (12 casos que leem o código para nenhuma das três peças do loop voltar sozinha numa refatoração). `AudioPurgeWiring.spec.ts` alinhado ao novo formato da chave.
+
+---
+
 ## [1.7.9] — 2026-09-01
 
 ### Corrigido (URGENTE) — IA repetia a mesma frase ao cliente a cada 2 minutos

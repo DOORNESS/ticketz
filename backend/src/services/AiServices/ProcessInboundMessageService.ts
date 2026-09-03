@@ -30,6 +30,12 @@ import {
 } from "./AiScheduleContextService";
 import { buildKnowledgeContextForQuery } from "./KnowledgeContextService";
 import HandoffToHumanService from "./HandoffToHumanService";
+import {
+  registerFallbackDelivered,
+  clearFallbackStreak,
+  shouldEscalateInsteadOfFallback,
+  getMaxConsecutiveFallbacks
+} from "./AiFallbackStreakService";
 import { deliverAiReply, sendAiWhatsAppReply } from "./sendAiWhatsAppReply";
 import StorageService from "../StorageService/StorageService";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
@@ -173,8 +179,12 @@ export const buildFallbackDedupeKey = ({
   reason: string;
   userText?: string;
 }): string => {
+  // O `reason` entra na chave SEMPRE. Sem ele, um `low_confidence_fallback`
+  // (janela de 3 min) e o `mandatory_reply_guard` (janela de 1 h) disputavam a
+  // mesma chave: quem chegasse primeiro impunha a própria janela ao outro, e
+  // um fallback legítimo podia ficar uma hora calado no mesmo turno.
   if (messageId) {
-    return `ai:fallback:sent:${ticketId}:${messageId}`;
+    return `ai:fallback:sent:${ticketId}:${reason}:${messageId}`;
   }
 
   const normalized = (userText || "").trim().toLowerCase();
@@ -211,6 +221,57 @@ export const sendAiCustomerFallback = async ({
   skipDedupe?: boolean;
   dedupeTtlSeconds?: number;
 }): Promise<void> => {
+  // Antes de repetir "não encontrei", conferir se já repetimos demais. Depois
+  // do limite, insistir é pior que passar para uma pessoa.
+  try {
+    if (
+      await shouldEscalateInsteadOfFallback({ ticketId: ticket.id, reason })
+    ) {
+      const escalationAgent = await resolveProcessingAgent(ticket);
+      if (escalationAgent) {
+        logger.info(
+          {
+            ticketId: ticket.id,
+            reason,
+            maxConsecutiveFallbacks: getMaxConsecutiveFallbacks()
+          },
+          "AI reached the consecutive fallback limit — handing the ticket to a human"
+        );
+        await HandoffToHumanService({
+          ticket,
+          agent: escalationAgent,
+          userMessage: userText,
+          messageId,
+          handoffReason: AI_HANDOFF_REASONS.no_knowledge_found,
+          reason: "consecutive_fallback_limit"
+        });
+        markSent?.();
+        await clearFallbackStreak(ticket.id);
+        await persistAiDecisionLog({
+          companyId,
+          ticketId: ticket.id,
+          messageId,
+          action: "handoff",
+          reason: "consecutive_fallback_limit",
+          details: {
+            originalReason: reason,
+            maxConsecutiveFallbacks: getMaxConsecutiveFallbacks()
+          },
+          userMessage: maskSensitiveLog(userText)
+        });
+        return;
+      }
+    }
+  } catch (escalationError) {
+    logger.warn(
+      { escalationError, ticketId: ticket.id, reason },
+      "Failed to escalate after consecutive fallbacks; sending fallback instead"
+    );
+  }
+
+  let reservedDedupeKey: string | null = null;
+  let releaseDedupeKey: (() => Promise<void>) | null = null;
+
   if (!skipDedupe) {
     try {
       const { getAiInboundQueue } = await import("./AiInboundQueueService");
@@ -233,8 +294,22 @@ export const sendAiCustomerFallback = async ({
           { ticketId: ticket.id, reason, dedupeKey },
           "AI fallback suppressed by dedupe — customer already received it"
         );
+        // O turno acabou aqui de qualquer forma. Sem finalizar, o ticket ficava
+        // preso em `processing` e alimentava o próximo reprocessamento.
+        try {
+          await finalizeAiResponse(ticket, messageId);
+        } catch (finalizeError) {
+          logger.warn(
+            { finalizeError, ticketId: ticket.id },
+            "Failed to finalize AI state after suppressed fallback"
+          );
+        }
         return;
       }
+      reservedDedupeKey = dedupeKey;
+      releaseDedupeKey = async () => {
+        await redis.del(dedupeKey);
+      };
     } catch (dedupeError) {
       logger.warn(
         { dedupeError, ticketId: ticket.id },
@@ -271,8 +346,22 @@ export const sendAiCustomerFallback = async ({
   }
 
   if (!delivered) {
+    // A chave foi reservada antes do envio. Se o WhatsApp recusou, manter a
+    // reserva calaria a IA por toda a janela por causa de uma falha de rede.
+    if (releaseDedupeKey && reservedDedupeKey) {
+      try {
+        await releaseDedupeKey();
+      } catch (releaseError) {
+        logger.warn(
+          { releaseError, ticketId: ticket.id, reason },
+          "Failed to release fallback dedupe key after undelivered message"
+        );
+      }
+    }
     return;
   }
+
+  await registerFallbackDelivered(ticket.id);
 
   await persistAiDecisionLog({
     companyId,
@@ -1096,6 +1185,7 @@ const ProcessInboundMessageService = async ({
 
       await deliverAiReply(ticket, outboundText);
       markCustomerReply();
+      await clearFallbackStreak(ticket.id);
 
       return;
     }
@@ -1108,6 +1198,9 @@ const ProcessInboundMessageService = async ({
 
     await deliverAiReply(ticket, outboundText);
     markCustomerReply();
+    // Resposta de verdade zera o orçamento de fallbacks: a conversa voltou a
+    // andar e o próximo "não sei" merece uma chance nova.
+    await clearFallbackStreak(ticket.id);
 
     await finalizeAiResponse(ticket, primaryMessageId);
 
@@ -1315,6 +1408,7 @@ const ProcessInboundMessageService = async ({
         if (recoveryText.length >= 20) {
           await deliverAiReply(ticket, recoveryText);
           markCustomerReply();
+          await clearFallbackStreak(ticket.id);
           await finalizeAiResponse(ticket, primaryMessageId);
           await persistAiDecisionLog({
             companyId,

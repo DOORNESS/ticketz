@@ -1,5 +1,6 @@
 import Queue, { Job } from "bull";
 import Ticket from "../../models/Ticket";
+import Message from "../../models/Message";
 import AiAgent from "../../models/AiAgent";
 import { logger } from "../../utils/logger";
 import {
@@ -12,7 +13,15 @@ import ProcessInboundMessageService, {
   sendAiCustomerFallback
 } from "./ProcessInboundMessageService";
 import { isAiFeaturesEnabled } from "./AiPlatformState";
-import { isTransientAiError } from "./isTransientAiError";
+import { isTransientAiError, isPermanentAiError } from "./isTransientAiError";
+import {
+  registerTicketFailure,
+  clearTicketFailures,
+  hasExhaustedTicketFailures,
+  getMaxTicketFailures
+} from "./AiTicketFailureBreaker";
+import HandoffToHumanService from "./HandoffToHumanService";
+import { AI_HANDOFF_REASONS } from "./AiOperationalTypes";
 import { isInformationalIntent } from "./Triage/CaseCompletenessEngine";
 import {
   recordAiJobCompleted,
@@ -343,7 +352,85 @@ const rescheduleIfBuffered = async (
       return;
     }
 
+    // `forceNewJob` só é aceitável quando o turno terminou bem: aí o job novo
+    // representa mensagens novas do cliente. No caminho de erro ele criava uma
+    // linhagem de job com orçamento de tentativas zerado, e o teto do Bull
+    // nunca era alcançado.
     await scheduleDebouncedJob(companyId, ticketId, Boolean(currentJob));
+  }
+};
+
+/** Remove o job de debounce pendente do ticket, se houver. */
+const removePendingDebounceJob = async (ticketId: number): Promise<void> => {
+  try {
+    const job = await getAiInboundQueue().getJob(debounceJobId(ticketId));
+    if (job) {
+      const state = await job.getState();
+      if (isRemovableDebounceJobState(state)) {
+        await job.remove();
+      }
+    }
+  } catch (error) {
+    logger.warn(
+      { error, ticketId },
+      "Failed to remove pending AI debounce job"
+    );
+  }
+};
+
+/**
+ * Última parada quando a IA não consegue mais atender o ticket.
+ *
+ * Repetir a mesma frase é o pior desfecho possível: o cliente conclui que
+ * ninguém está lendo. Aqui o ticket passa para uma pessoa, com o motivo
+ * técnico registrado no log de decisões para quem for investigar depois.
+ */
+const escalateAfterExhaustedFailures = async ({
+  companyId,
+  ticketId,
+  reason,
+  errorMessage
+}: {
+  companyId: number;
+  ticketId: number;
+  reason: string;
+  errorMessage: string;
+}): Promise<void> => {
+  try {
+    const revalidated = await revalidateTicketForAi(ticketId, companyId);
+    if (!revalidated) {
+      return;
+    }
+
+    const lastInbound = await Message.findOne({
+      where: { ticketId, fromMe: false },
+      order: [["createdAt", "DESC"]]
+    });
+
+    await HandoffToHumanService({
+      ticket: revalidated.ticket,
+      agent: revalidated.agent,
+      userMessage: lastInbound?.body || "",
+      messageId: lastInbound?.id,
+      handoffReason: AI_HANDOFF_REASONS.provider_error,
+      reason
+    });
+
+    await persistAiDecisionLog({
+      companyId,
+      ticketId,
+      action: "handoff",
+      reason,
+      details: {
+        error: errorMessage.slice(0, 300),
+        maxConsecutiveFailures: getMaxTicketFailures()
+      }
+    });
+  } catch (error) {
+    logger.error(
+      { error, ticketId, companyId, reason },
+      "Failed to escalate ticket to a human after exhausted AI failures"
+    );
   }
 };
 
@@ -355,6 +442,7 @@ export const processBufferedAiInbound = async (
   const redis = getAiInboundQueue().client;
   const lockTtlSeconds = getLockTtlSeconds();
   let ownsLock = false;
+  let turnFailed = false;
   let drainedPayloads: AiInboundPayload[] = [];
 
   if (job) {
@@ -464,36 +552,96 @@ export const processBufferedAiInbound = async (
     });
 
     drainedPayloads = [];
+    await clearTicketFailures(redis, ticketId);
 
     if (job) {
       await recordAiJobCompleted(job, "completed");
     }
   } catch (error) {
+    turnFailed = true;
     if (drainedPayloads.length) {
       await requeueBufferedMessages(ticketId, drainedPayloads);
       drainedPayloads = [];
     }
 
-    if (
-      job &&
-      isTransientAiError(error) &&
-      job.attemptsMade < getMaxAttempts()
-    ) {
-      throw error;
-    }
+    const permanent = isPermanentAiError(error);
+    const failures = await registerTicketFailure(redis, ticketId);
+    const exhausted = permanent || hasExhaustedTicketFailures(failures);
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : String(error || "ai_queue_error");
 
-    logger.error(
-      { error, ticketId, companyId, attemptsMade: job?.attemptsMade },
-      "AI inbound processing failed with definitive error"
-    );
-
+    // O erro do provedor precisa aparecer JÁ na primeira falha. Antes ele só
+    // era registrado depois do `throw`, que nunca acontecia — o painel via
+    // milhares de `job_started` e nenhum motivo.
     await persistAiDecisionLog({
       companyId,
       ticketId,
       action: "job_failed",
-      reason: error instanceof Error ? error.message : "ai_queue_error",
-      details: { attemptsMade: job?.attemptsMade || 0, immediate: !job }
+      reason: errorMessage.slice(0, 300),
+      details: {
+        attemptsMade: job?.attemptsMade || 0,
+        immediate: !job,
+        consecutiveFailures: failures,
+        permanent,
+        transient: isTransientAiError(error)
+      }
     });
+
+    if (exhausted) {
+      // Fim de linha: descarta o que ficou no buffer para nenhum job novo
+      // nascer dele, e entrega o ticket a uma pessoa.
+      await redis.del(bufferKey(ticketId));
+      await removePendingDebounceJob(ticketId);
+      logger.error(
+        {
+          error,
+          ticketId,
+          companyId,
+          consecutiveFailures: failures,
+          permanent
+        },
+        permanent
+          ? "AI inbound processing hit a permanent provider error — escalating"
+          : "AI inbound processing exhausted the ticket failure budget — escalating"
+      );
+      await escalateAfterExhaustedFailures({
+        companyId,
+        ticketId,
+        reason: permanent
+          ? "provider_error_permanent"
+          : "ai_failure_streak_exhausted",
+        errorMessage
+      });
+      if (job) {
+        await recordAiJobCompleted(job, "failed");
+      }
+      return;
+    }
+
+    if (
+      job &&
+      isTransientAiError(error) &&
+      job.attemptsMade + 1 < getMaxAttempts()
+    ) {
+      // `attemptsMade` já foi incrementado pelo Bull quando este handler roda,
+      // então comparar com o teto direto deixava a última tentativa passar
+      // como se ainda houvesse orçamento — e o ramo de desistência abaixo
+      // nunca era alcançado.
+      throw error;
+    }
+
+    logger.error(
+      {
+        error,
+        ticketId,
+        companyId,
+        attemptsMade: job?.attemptsMade,
+        consecutiveFailures: failures
+      },
+      "AI inbound processing failed with definitive error"
+    );
 
     if (!job && isTransientAiError(error)) {
       const retryKey = `ai:inline-retry:${ticketId}`;
@@ -592,7 +740,9 @@ export const processBufferedAiInbound = async (
     // Only the lock owner may schedule the next buffered turn. Contending
     // workers must leave this responsibility to the owner; otherwise every
     // collision creates another job and an unbounded retry storm.
-    if (ownsLock) {
+    // Um turno que falhou não gera trabalho novo: o Bull já cuida da
+    // retentativa dentro do mesmo job, e o disjuntor decide quando parar.
+    if (ownsLock && !turnFailed) {
       await rescheduleIfBuffered(companyId, ticketId, job);
     }
   }
