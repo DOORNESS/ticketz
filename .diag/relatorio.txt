@@ -1,0 +1,188 @@
+======================================================================
+1. ENV EFETIVO DO BACKEND EM PRODUCAO (C:\ticketz\backend\.env)
+======================================================================
+NODE_ENV=production
+DB_MAX_CONNECTIONS=10
+DB_MIN_CONNECTIONS=0
+DB_ACQUIRE=15000
+REDIS_URI=<22 chars>
+REDIS_OPT_LIMITER_MAX=1
+REDIS_OPT_LIMITER_DURATION=3000
+AI_QUEUE_CONCURRENCY=15
+AI_QUEUE_DEBOUNCE_MS=0
+AI_QUEUE_MAX_ATTEMPTS=3
+AI_QUEUE_BACKOFF_MS=1500
+AI_QUEUE_CONGESTION_THRESHOLD=100
+AI_PROVIDER_TIMEOUT_MS=45000
+AI_PROVIDER_MAX_RETRIES=1
+AI_REENGAGEMENT_ENABLED=true
+AI_PROACTIVE_FOLLOWUP_ENABLED=true
+AI_PROACTIVE_FOLLOWUP_MINUTES=5
+--- PROCESSO NODE ---
+
+  Id StartTime
+  -- ---------
+6856 9/3/2026 2:54:56 PM
+
+
+
+
+======================================================================
+2. LOG DO BACKEND — LINHAS DE FALHA DA IA
+======================================================================
+(analisadas 4001 linhas)
+
+--- padrao: insufficient_quota (6 exemplos) ---
+  "type": "insufficient_quota",
+  "type": "insufficient_quota"
+  "type": "insufficient_quota",
+  "type": "insufficient_quota"
+  "type": "insufficient_quota",
+  "type": "insufficient_quota"
+
+--- padrao: Vector knowledge search failed (6 exemplos) ---
+  [33mWARN[39m [13:09:14.621] (5032): [36m[ticketz]: Vector knowledge search failed, falling back to keyword search[39m
+  [33mWARN[39m [13:09:22.230] (5032): [36m[ticketz]: Vector knowledge search failed, falling back to keyword search[39m
+  [33mWARN[39m [13:09:30.151] (5032): [36m[ticketz]: Vector knowledge search failed, falling back to keyword search[39m
+  [33mWARN[39m [13:09:38.026] (5032): [36m[ticketz]: Vector knowledge search failed, falling back to keyword search[39m
+  [33mWARN[39m [13:09:45.807] (5032): [36m[ticketz]: Vector knowledge search failed, falling back to keyword search[39m
+  [33mWARN[39m [13:09:53.635] (5032): [36m[ticketz]: Vector knowledge search failed, falling back to keyword search[39m
+
+--- padrao: 429 (6 exemplos) ---
+  "status": 429,
+  "status": 429,
+  "status": 429,
+  "status": 429,
+  "status": 429,
+  "status": 429,
+
+--- padrao: suppressed by dedupe (6 exemplos) ---
+  [32mINFO[39m [13:09:15.746] (5032): [36m[ticketz]: AI fallback suppressed by dedupe �?" customer already received it[39m
+  [32mINFO[39m [13:09:23.463] (5032): [36m[ticketz]: AI fallback suppressed by dedupe �?" customer already received it[39m
+  [32mINFO[39m [13:09:31.401] (5032): [36m[ticketz]: AI fallback suppressed by dedupe �?" customer already received it[39m
+  [32mINFO[39m [13:09:39.167] (5032): [36m[ticketz]: AI fallback suppressed by dedupe �?" customer already received it[39m
+  [32mINFO[39m [13:09:46.963] (5032): [36m[ticketz]: AI fallback suppressed by dedupe �?" customer already received it[39m
+  [32mINFO[39m [13:09:55.230] (5032): [36m[ticketz]: AI fallback suppressed by dedupe �?" customer already received it[39m
+
+--- padrao: transcri (6 exemplos) ---
+  [33mWARN[39m [14:54:16.645] (8480): [36m[ticketz]: OPENAI_API_KEY not set �?" AI transcription and chat require the key in Settings or env[39m
+  [33mWARN[39m [14:55:10.316] (6856): [36m[ticketz]: OPENAI_API_KEY not set �?" AI transcription and chat require the key in Settings or env[39m
+  [32mINFO[39m [16:18:18.344] (6856): [36m[ticketz]: AudioPipeline:transcribe_start[39m
+  [35mstage[39m: "transcribe_start"
+  [32mINFO[39m [16:18:18.470] (6856): [36m[ticketz]: AudioTranscription: start[39m
+  [31mERROR[39m [16:18:19.704] (6856): [36m[ticketz]: AudioTranscription: attempt failed[39m
+
+--- padrao: audio (6 exemplos) ---
+  [32mINFO[39m [16:18:16.047] (6856): [36m[ticketz]: AudioPipeline:buffer_loaded[39m
+  [35mpipeline[39m: "audio"
+  [35mmimeType[39m: "audio/ogg; codecs=opus"
+  [32mINFO[39m [16:18:16.047] (6856): [36m[ticketz]: AudioPipeline:mime_detected[39m
+  [35mpipeline[39m: "audio"
+  [35mmimeType[39m: "audio/ogg; codecs=opus"
+
+--- padrao: whisper (6 exemplos) ---
+  [35mmodel[39m: "whisper-1"
+  [35mmodel[39m: "whisper-1"
+  [35mmodel[39m: "whisper-1"
+  [35mmodel[39m: "whisper-1"
+  [35mmodel[39m: "whisper-1"
+  [35mmodel[39m: "whisper-1"
+
+======================================================================
+3. BANCO DE PRODUCAO — ESTADO DA IA
+======================================================================
+
+--- Razoes de decisao da IA — ULTIMAS 2 HORAS (pos-deploy) ---
+motivo | total | primeiro | ultimo
+empty_inbound_text_fallback | 2 | 2026-09-03 19:18:41.156000+00:00 | 2026-09-03 19:18:42.172000+00:00
+message_buffered_for_processing | 2 | 2026-09-03 19:18:30.250000+00:00 | 2026-09-03 19:18:32.938000+00:00
+processing_buffered_messages | 2 | 2026-09-03 19:18:33+00:00 | 2026-09-03 19:18:35.614000+00:00
+
+--- Ultimos 25 eventos de IA (sem texto de cliente) ---
+ticketId | direction | model | motivo | transferredToHuman | createdAt
+156 | system | decision-log | empty_inbound_text_fallback | False | 2026-09-03 19:18:42.172000+00:00
+155 | system | decision-log | empty_inbound_text_fallback | False | 2026-09-03 19:18:41.156000+00:00
+156 | system | decision-log | processing_buffered_messages | False | 2026-09-03 19:18:35.614000+00:00
+155 | system | decision-log | processing_buffered_messages | False | 2026-09-03 19:18:33+00:00
+156 | system | decision-log | message_buffered_for_processing | False | 2026-09-03 19:18:32.938000+00:00
+155 | system | decision-log | message_buffered_for_processing | False | 2026-09-03 19:18:30.250000+00:00
+
+--- Razoes de decisao da IA — ultimas 24h ---
+motivo | total | ultimo
+processing_buffered_messages | 2418 | 2026-09-03 19:18:35.614000+00:00
+mandatory_reply_guard | 16 | 2026-09-03 15:30:03.366000+00:00
+message_buffered_for_processing | 10 | 2026-09-03 19:18:32.938000+00:00
+ | 6 | 2026-09-03 16:13:37.274000+00:00
+informational_brand_fallback | 3 | 2026-09-03 14:28:06.971000+00:00
+fast_greeting_reply | 2 | 2026-09-03 14:21:55.429000+00:00
+empty_inbound_text_fallback | 2 | 2026-09-03 19:18:42.172000+00:00
+ticket_no_longer_eligible_for_ai | 1 | 2026-09-03 16:13:09.056000+00:00
+processing_error_fallback | 1 | 2026-09-03 10:59:54.370000+00:00
+
+--- Agentes: modelo, provedor, marca, bases vinculadas ---
+id | name | brandId | textModel | provider | active | maxTokens | bases
+7 | Webin | 2 | gpt-4o-mini | openai | True | 4096 | 1
+9 | Nivelton | 1 | gpt-4o-mini | openai | True | 4096 | 4
+
+--- Bases de conhecimento e embeddings ---
+id | name | brandId | active | chunks | com_embedding
+2 | Fortmax Site | 2 | True | 10 | 10
+3 | Nivel clientes | 1 | True | 12 | 12
+5 | Nivel empresa | 1 | True | 6 | 6
+9 | Nivel Recuperação de Senha | 1 | True | 4 | 4
+15 | Respostas anexas — Nível | 1 | True | 0 | 0
+
+--- Volume de decisoes por hora — ultimas 12h ---
+hora | total | tickets
+2026-09-03 19:00:00+00:00 | 6 | 2
+2026-09-03 16:00:00+00:00 | 106 | 6
+2026-09-03 15:00:00+00:00 | 456 | 1
+2026-09-03 14:00:00+00:00 | 508 | 2
+2026-09-03 13:00:00+00:00 | 454 | 1
+2026-09-03 12:00:00+00:00 | 456 | 1
+2026-09-03 11:00:00+00:00 | 466 | 1
+2026-09-03 10:00:00+00:00 | 7 | 1
+
+--- Colunas de AiConversationLogs ---
+column_name | data_type
+id | integer
+companyId | integer
+ticketId | integer
+messageId | character varying
+direction | character varying
+userMessage | text
+aiResponse | text
+usedChunks | jsonb
+model | character varying
+tokensInput | integer
+tokensOutput | integer
+transferredToHuman | boolean
+error | text
+createdAt | timestamp with time zone
+
+--- Ticket mais reprocessado — motivos ---
+motivo | total | primeiro | ultimo
+processing_buffered_messages | 2374 | 2026-09-03 10:59:00.246000+00:00 | 2026-09-03 16:13:01.916000+00:00
+mandatory_reply_guard | 13 | 2026-09-03 11:00:23.449000+00:00 | 2026-09-03 15:30:03.366000+00:00
+message_buffered_for_processing | 5 | 2026-09-03 10:58:57.543000+00:00 | 2026-09-03 11:12:28.535000+00:00
+ | 1 | 2026-09-03 16:13:06.759000+00:00 | 2026-09-03 16:13:06.759000+00:00
+fast_greeting_reply | 1 | 2026-09-03 10:59:04.776000+00:00 | 2026-09-03 10:59:04.776000+00:00
+informational_brand_fallback | 1 | 2026-09-03 11:14:25.408000+00:00 | 2026-09-03 11:14:25.408000+00:00
+processing_error_fallback | 1 | 2026-09-03 10:59:54.370000+00:00 | 2026-09-03 10:59:54.370000+00:00
+ticket_no_longer_eligible_for_ai | 1 | 2026-09-03 16:13:09.056000+00:00 | 2026-09-03 16:13:09.056000+00:00
+
+--- Amostra bruta do ticket em loop (colunas nao textuais) ---
+id | companyId | ticketId | messageId | direction | userMessage | aiResponse | usedChunks | model | tokensInput | tokensOutput | transferredToHuman | error | createdAt
+53372 | 1 | 153 |  | system |  | [job_cancelled] ticket_no_longer_eligible_for_ai |  | decision-log |  |  | False | ticket_no_longer_eligible_for_ai | 2026-09-03 16:13:09.056000+00:00
+53371 | 1 | 153 | op-1788451986759 | system | Ticket encerrado pelo humano | [ticket_closed_by_human] | {'event': 'ticket_closed_by_human', 'label': 'Ticket encerrado pelo humano', 'userId': 1} | operational-log |  |  | False |  | 2026-09-03 16:13:06.759000+00:00
+53370 | 1 | 153 |  | system |  | [job_started] processing_buffered_messages | {'immediate': False, 'messageCount': 3} | decision-log |  |  | False | processing_buffered_messages | 2026-09-03 16:13:01.916000+00:00
+53369 | 1 | 153 |  | system |  | [job_started] processing_buffered_messages | {'immediate': False, 'messageCount': 3} | decision-log |  |  | False | processing_buffered_messages | 2026-09-03 16:12:53.916000+00:00
+53368 | 1 | 153 |  | system |  | [job_started] processing_buffered_messages | {'immediate': False, 'messageCount': 3} | decision-log |  |  | False | processing_buffered_messages | 2026-09-03 16:12:45.978000+00:00
+53367 | 1 | 153 |  | system |  | [job_started] processing_buffered_messages | {'immediate': False, 'messageCount': 3} | decision-log |  |  | False | processing_buffered_messages | 2026-09-03 16:12:38.087000+00:00
+53366 | 1 | 153 |  | system |  | [job_started] processing_buffered_messages | {'immediate': False, 'messageCount': 3} | decision-log |  |  | False | processing_buffered_messages | 2026-09-03 16:12:30.103000+00:00
+53365 | 1 | 153 |  | system |  | [job_started] processing_buffered_messages | {'immediate': False, 'messageCount': 3} | decision-log |  |  | False | processing_buffered_messages | 2026-09-03 16:12:22.197000+00:00
+
+--- Chave de IA configurada por empresa (so presenca) ---
+companyId | key | estado
+1 | aiProvider | definido (6 chars)
+1 | openAiKey | definido (164 chars)
