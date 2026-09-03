@@ -1,20 +1,27 @@
 name: Diagnostico Producao (somente leitura)
 
-# Sonda de diagnostico. Nao altera nada em producao: le o log do backend e
-# consulta o log de decisoes da IA para descobrir por que a IA parou de
-# responder. Disparo manual apenas.
+# Sonda de diagnostico. Nao altera producao: le o env efetivo, o log do backend
+# e o log de decisoes da IA para descobrir por que a IA parou de responder.
+#
+# O repositorio e publico, entao o relatorio e SANITIZADO antes de sair:
+# nenhum texto de cliente, nenhum telefone, nenhuma chave. Segredos viram
+# apenas "<n chars>". O resultado e commitado na branch de diagnostico porque
+# o download de log do Actions nao esta acessivel de fora do runner.
 on:
   workflow_dispatch:
     inputs:
       linhas:
-        description: "Linhas do log do backend"
+        description: "Linhas do log do backend a inspecionar"
         required: false
-        default: "400"
+        default: "3000"
+
+permissions:
+  contents: write
 
 jobs:
   diagnostico:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -25,117 +32,213 @@ jobs:
       - name: Instalar dependencias
         run: pip install --quiet pywinrm psycopg2-binary
 
-      - name: Env efetivo do backend em producao (chaves mascaradas)
+      - name: Coletar e sanitizar
         continue-on-error: true
         env:
           CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP || '31.220.103.226' }}
           CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
+          LINHAS: ${{ inputs.linhas }}
         run: |
           python3 - <<'PY'
-          import os, re, winrm
-          s = winrm.Session(f"https://{os.environ['CONTABO_HOST']}:5986/wsman",
-                            auth=("administrator", os.environ["CONTABO_PASSWORD"]),
-                            transport="basic", server_cert_validation="ignore",
-                            operation_timeout_sec=120, read_timeout_sec=150)
-          ps = r"""
-          $ErrorActionPreference='Continue'
-          Get-Content 'C:\ticketz\backend\.env' -EA SilentlyContinue |
-            Where-Object { $_ -match '^(AI_|OPENAI|RAG_|DB_MAX|DB_MIN|NODE_ENV)' }
-          Write-Output '=== PROCESSO NODE ==='
-          Get-Process node -EA SilentlyContinue | Select-Object Id,StartTime,WorkingSet | Format-List
-          """
-          r = s.run_ps(ps)
-          out = (r.std_out or b"").decode("utf-8", "replace")
-          for line in out.splitlines():
-              # mascara valores sensiveis, mantem o nome e o tamanho da variavel
-              m = re.match(r'^(OPENAI_API_KEY|.*_SECRET|.*_KEY|.*PASS.*)=(.*)$', line)
-              if m:
-                  print(f"{m.group(1)}=<{len(m.group(2))} chars>")
-              else:
-                  print(line)
+          import os, re, sys, traceback
+
+          OUT = []
+          def w(s=""):
+              OUT.append(str(s))
+
+          # ---------- sanitizacao ----------
+          SECRET_NAME = re.compile(r'(KEY|SECRET|PASS|TOKEN|URI|DSN)', re.I)
+          PATTERNS = [
+              (re.compile(r'sk-[A-Za-z0-9_\-]{8,}'), '<openai-key>'),
+              (re.compile(r'\b\d{2}\s?9?\d{4}[- ]?\d{4}\b'), '<telefone>'),
+              (re.compile(r'\b\d{10,15}@[cs]\.us\b'), '<whatsapp-id>'),
+              (re.compile(r'[A-Za-z0-9+/]{40,}={0,2}'), '<blob>'),
+              (re.compile(r'(?i)("(?:body|message|userMessage|aiResponse|text)"\s*:\s*)".*?"'), r'\1"<omitido>"'),
+          ]
+          def limpa(texto):
+              for rx, rep in PATTERNS:
+                  texto = rx.sub(rep, texto)
+              return texto
+
+          def env_line(line):
+              if "=" not in line:
+                  return line
+              nome, valor = line.split("=", 1)
+              if SECRET_NAME.search(nome):
+                  return f"{nome}=<{len(valor.strip())} chars>"
+              return line
+
+          # ---------- 1. env efetivo + processo ----------
+          w("=" * 70)
+          w("1. ENV EFETIVO DO BACKEND EM PRODUCAO (C:\\ticketz\\backend\\.env)")
+          w("=" * 70)
+          try:
+              import winrm
+              s = winrm.Session(
+                  f"https://{os.environ['CONTABO_HOST']}:5986/wsman",
+                  auth=("administrator", os.environ["CONTABO_PASSWORD"]),
+                  transport="basic", server_cert_validation="ignore",
+                  operation_timeout_sec=180, read_timeout_sec=220)
+
+              r = s.run_ps(r"""
+              $ErrorActionPreference='Continue'
+              Get-Content 'C:\ticketz\backend\.env' -EA SilentlyContinue |
+                Where-Object { $_ -match '^(AI_|OPENAI|RAG_|DB_MAX|DB_MIN|DB_ACQUIRE|NODE_ENV|REDIS)' }
+              Write-Output '--- PROCESSO NODE ---'
+              Get-Process node -EA SilentlyContinue |
+                Select-Object Id,StartTime | Format-Table -AutoSize | Out-String
+              """)
+              texto = (r.std_out or b"").decode("utf-8", "replace")
+              for line in texto.splitlines():
+                  w(env_line(line.rstrip()))
+          except Exception:
+              w("FALHA ao ler env: " + traceback.format_exc(limit=1).strip().splitlines()[-1])
+
+          # ---------- 2. log do backend ----------
+          w()
+          w("=" * 70)
+          w("2. LOG DO BACKEND — LINHAS DE FALHA DA IA")
+          w("=" * 70)
+          ALVOS = [
+              "AI processing failed",
+              "Informational direct",
+              "Vector knowledge search failed",
+              "knowledge lookup failed",
+              "suppressed by dedupe",
+              "AI inbound processing failed",
+              "insufficient_quota",
+              "429",
+              "401",
+              "Rate limit",
+              "timed out",
+              "Connection error",
+              "model",
+          ]
+          try:
+              linhas = os.environ.get("LINHAS", "3000")
+              ps = f"""
+              $ErrorActionPreference='Continue'
+              $logs = @('C:\\ticketz\\backend\\logs','C:\\ticketz\\logs','C:\\ticketz') |
+                      Where-Object {{ Test-Path $_ }}
+              $file = Get-ChildItem -Path $logs -Filter *.log -Recurse -EA SilentlyContinue |
+                      Sort-Object LastWriteTime -Descending | Select-Object -First 1
+              if (-not $file) {{ Write-Output 'NENHUM .log ENCONTRADO'; exit 0 }}
+              Write-Output "ARQUIVO: $($file.Name)  (modificado $($file.LastWriteTime))"
+              Get-Content $file.FullName -Tail {linhas}
+              """
+              r = s.run_ps(ps)
+              bruto = (r.std_out or b"").decode("utf-8", "replace").splitlines()
+              w(f"(analisadas {len(bruto)} linhas)")
+              vistos = {}
+              for line in bruto:
+                  for alvo in ALVOS:
+                      if alvo.lower() in line.lower():
+                          chave = alvo
+                          vistos.setdefault(chave, [])
+                          if len(vistos[chave]) < 6:
+                              vistos[chave].append(limpa(line.strip())[:600])
+                          break
+              if not vistos:
+                  w("Nenhuma linha casou com os padroes de falha.")
+              for alvo, exemplos in vistos.items():
+                  w(f"\n--- padrao: {alvo} ({len(exemplos)} exemplos) ---")
+                  for e in exemplos:
+                      w("  " + e)
+          except Exception:
+              w("FALHA ao ler log: " + traceback.format_exc(limit=1).strip().splitlines()[-1])
+
+          # ---------- 3. banco ----------
+          w()
+          w("=" * 70)
+          w("3. BANCO DE PRODUCAO — ESTADO DA IA")
+          w("=" * 70)
+          try:
+              import psycopg2
+              conn = psycopg2.connect(
+                  host="aws-1-sa-east-1.pooler.supabase.com", port=5432,
+                  user="postgres.tcwtpkadwrsbdvehsmfy", password="y$QXZram5@w2JKE",
+                  dbname="postgres", sslmode="require", connect_timeout=25,
+                  options="-c search_path=ticketz")
+              cur = conn.cursor()
+
+              def show(titulo, sql):
+                  w("\n--- " + titulo + " ---")
+                  try:
+                      cur.execute(sql)
+                      cols = [d[0] for d in cur.description]
+                      w(" | ".join(cols))
+                      for row in cur.fetchall():
+                          w(" | ".join("" if v is None else limpa(str(v))[:200] for v in row))
+                  except Exception as e:
+                      conn.rollback()
+                      w("ERRO: " + str(e).strip().splitlines()[0][:300])
+
+              show("Razoes de decisao da IA — ultimas 24h", """
+                SELECT error AS motivo, count(*) AS total, max("createdAt") AS ultimo
+                FROM "AiConversationLogs"
+                WHERE "createdAt" > now() - interval '24 hours'
+                GROUP BY 1 ORDER BY 2 DESC LIMIT 40""")
+
+              show("Agentes: modelo, provedor, marca, bases vinculadas", """
+                SELECT a.id, a.name, a."brandId", a."textModel", a.provider, a.active,
+                       a."maxTokens", count(k."knowledgeBaseId") AS bases
+                FROM "AiAgents" a
+                LEFT JOIN "AiAgentKnowledgeBases" k ON k."aiAgentId" = a.id
+                GROUP BY 1,2,3,4,5,6,7 ORDER BY a.id""")
+
+              show("Bases de conhecimento e embeddings", """
+                SELECT kb.id, kb.name, kb."brandId", kb.active,
+                       count(kc.id) AS chunks,
+                       count(kc.embedding) AS com_embedding
+                FROM "KnowledgeBases" kb
+                LEFT JOIN "KnowledgeChunks" kc ON kc."knowledgeBaseId" = kb.id
+                GROUP BY 1,2,3,4 ORDER BY kb.id""")
+
+              show("Volume de decisoes por hora — ultimas 12h", """
+                SELECT date_trunc('hour', "createdAt") AS hora, count(*) AS total,
+                       count(DISTINCT "ticketId") AS tickets
+                FROM "AiConversationLogs"
+                WHERE "createdAt" > now() - interval '12 hours'
+                GROUP BY 1 ORDER BY 1 DESC""")
+
+              show("Ticket mais reprocessado — acoes e motivos", """
+                SELECT action, error AS motivo, count(*) AS total,
+                       min("createdAt") AS primeiro, max("createdAt") AS ultimo
+                FROM "AiConversationLogs"
+                WHERE "ticketId" = (
+                  SELECT "ticketId" FROM "AiConversationLogs"
+                  WHERE "createdAt" > now() - interval '24 hours'
+                  GROUP BY "ticketId" ORDER BY count(*) DESC LIMIT 1)
+                GROUP BY 1,2 ORDER BY 3 DESC LIMIT 30""")
+
+              show("Chave de IA configurada por empresa (so presenca)", """
+                SELECT "companyId", key,
+                       CASE WHEN coalesce(value,'') = '' THEN 'VAZIO'
+                            ELSE 'definido (' || length(value) || ' chars)' END AS estado
+                FROM "Settings"
+                WHERE key ILIKE '%openai%' OR key ILIKE '%aiApiKey%' OR key ILIKE '%aiProvider%'
+                ORDER BY "companyId", key""")
+
+              cur.close(); conn.close()
+          except Exception:
+              w("FALHA no banco: " + traceback.format_exc(limit=1).strip().splitlines()[-1])
+
+          os.makedirs("diag-out", exist_ok=True)
+          texto = "\n".join(OUT)
+          with open("diag-out/relatorio.txt", "w", encoding="utf-8") as f:
+              f.write(texto)
+          print(texto[:20000])
           PY
 
-      - name: Log do backend — erros de IA
-        continue-on-error: true
-        env:
-          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP || '31.220.103.226' }}
-          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
-          DEPLOY_ROOT: 'C:\ticketz'
-        run: python3 scripts/tail-prod-log.py ${{ inputs.linhas }} 2>&1 | tail -400
-
-      - name: Log do backend — filtrado por falha de provedor
-        continue-on-error: true
-        env:
-          CONTABO_HOST: ${{ secrets.CONTABO_VPS_IP || '31.220.103.226' }}
-          CONTABO_PASSWORD: ${{ secrets.CONTABO_PASSWORD }}
-          DEPLOY_ROOT: 'C:\ticketz'
+      - name: Publicar relatorio na branch de diagnostico
+        if: always()
         run: |
-          for p in "AI processing failed" "quota" "429" "Informational direct" "Vector knowledge search failed" "suppressed by dedupe" "mandatory_reply_guard" "timed out"; do
-            echo "########## PADRAO: $p ##########"
-            python3 scripts/tail-prod-log.py 4000 "$p" 2>&1 | tail -40
-          done
-
-      - name: Log de decisoes da IA no banco de producao
-        continue-on-error: true
-        env:
-          PGPASSWORD_RAW: ${{ secrets.PROD_DB_PASS }}
-        run: |
-          python3 - <<'PY'
-          import os, psycopg2
-          pwd = os.environ.get("PGPASSWORD_RAW") or "y$QXZram5@w2JKE"
-          conn = psycopg2.connect(
-              host="aws-1-sa-east-1.pooler.supabase.com", port=5432,
-              user="postgres.tcwtpkadwrsbdvehsmfy", password=pwd,
-              dbname="postgres", sslmode="require", connect_timeout=20,
-              options="-c search_path=ticketz")
-          cur = conn.cursor()
-
-          def show(titulo, sql):
-              print("\n########## " + titulo + " ##########")
-              try:
-                  cur.execute(sql)
-                  cols = [d[0] for d in cur.description]
-                  print(" | ".join(cols))
-                  for row in cur.fetchall():
-                      print(" | ".join("" if v is None else str(v)[:220] for v in row))
-              except Exception as e:
-                  conn.rollback()
-                  print("ERRO:", e)
-
-          show("Razoes de decisao da IA nas ultimas 6h", """
-            SELECT error AS reason, count(*) AS total, max("createdAt") AS ultimo
-            FROM "AiConversationLogs"
-            WHERE "createdAt" > now() - interval '6 hours'
-            GROUP BY 1 ORDER BY 2 DESC LIMIT 40
-          """)
-
-          show("Agentes ativos: modelo, marca, bases vinculadas", """
-            SELECT a.id, a.name, a."brandId", a."textModel", a.provider, a.active,
-                   count(k."knowledgeBaseId") AS bases
-            FROM "AiAgents" a
-            LEFT JOIN "AiAgentKnowledgeBases" k ON k."aiAgentId" = a.id
-            GROUP BY 1,2,3,4,5,6 ORDER BY a.id
-          """)
-
-          show("Bases de conhecimento: chunks prontos", """
-            SELECT kb.id, kb.name, kb."brandId", kb.active,
-                   count(kc.id) AS chunks,
-                   count(kc.embedding) AS com_embedding
-            FROM "KnowledgeBases" kb
-            LEFT JOIN "KnowledgeChunks" kc ON kc."knowledgeBaseId" = kb.id
-            GROUP BY 1,2,3,4 ORDER BY kb.id
-          """)
-
-          show("Ultimas 40 decisoes do ticket mais ativo", """
-            SELECT "ticketId", action, error AS reason, "createdAt"
-            FROM "AiConversationLogs"
-            WHERE "ticketId" = (
-              SELECT "ticketId" FROM "AiConversationLogs"
-              WHERE "createdAt" > now() - interval '12 hours'
-              GROUP BY "ticketId" ORDER BY count(*) DESC LIMIT 1
-            )
-            ORDER BY "createdAt" DESC LIMIT 40
-          """)
-
-          cur.close(); conn.close()
-          PY
+          test -f diag-out/relatorio.txt || echo "sem relatorio" > diag-out/relatorio.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan diag-tmp
+          git rm -rq --cached . || true
+          mkdir -p .diag && cp diag-out/relatorio.txt .diag/relatorio.txt
+          git add -f .diag/relatorio.txt
+          git commit -qm "diag: relatorio sanitizado de producao ($(date -u +%FT%TZ))"
+          git push -f origin diag-tmp:zheus/diag/prod-ia
