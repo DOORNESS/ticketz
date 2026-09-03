@@ -27,6 +27,26 @@ Correções:
 - **`AiTicketFailureBreaker`** — disjuntor por ticket em Redis (`ai:failstreak:<id>`). Ao atingir `AI_TICKET_MAX_CONSECUTIVE_FAILURES` (padrão 3), ou logo na primeira falha permanente, o buffer é descartado, o job de debounce pendente é removido e o ticket **vai para uma pessoa** com `provider_error`. Zera a cada turno bem-sucedido.
 - `isTransientAiError` ganhou `isPermanentAiError` ao lado: cota, chave inválida, modelo inexistente, parâmetro recusado e 400/401/403/404/422 param de ser retentados. Timeout do SDK (`"timed out"`, `APIConnectionTimeoutError`), `"connection error"`, `"socket hang up"` e 5xx entram como transitórios de verdade.
 
+### Causa raiz confirmada no log de produção — cota da OpenAI esgotada
+
+Com a credencial da VPS restabelecida, a sonda leu o log do backend e fechou a questão. Toda chamada ao provedor volta assim:
+
+```
+"status": 429
+"type": "insufficient_quota"
+```
+
+E, a cada ~8 segundos, `Vector knowledge search failed, falling back to keyword search` — o mesmo 429 derrubando também a chamada de *embedding*, o que explica por que nem a busca na base funcionava.
+
+É a peça que faltava:
+
+- **Por que a IA não respondia nada.** A conta da OpenAI está sem saldo. Nenhuma completion e nenhum embedding passa. Não era prompt, não era base de conhecimento, não era modelo.
+- **Por que o loop era infinito.** `insufficient_quota` chega com status **429**, o mesmo de um rate limit legítimo. `isTransientAiError` devolvia `true` e o sistema retentava para sempre um erro que só sai quando a fatura é paga.
+
+`AI_PROVIDER_TIMEOUT_MS` em produção é **45000**, o padrão do código — o `4500` visto no `.env-backend-vps` local é resíduo de arquivo desatualizado, não o valor efetivo. Descartado como hipótese.
+
+**Ação fora do código:** repor o saldo da conta OpenAI da empresa 1. Até lá, o comportamento correto é o que esta entrega instala — o ticket vai para uma pessoa na primeira falha permanente, em vez de repetir a mesma frase.
+
 ### Corrigido — a mesma pergunta calava respostas diferentes
 
 `buildFallbackDedupeKey` ignorava o `reason` quando havia `messageId`: sete emissores diferentes disputavam a chave `ai:fallback:sent:<ticket>:<mensagem>`, com janelas de 180 s e de 1 h. Quem chegasse primeiro impunha a própria janela aos outros — um `low_confidence_fallback` legítimo podia ficar uma hora calado. E como a supressão fazia `return` **antes** de `markSent`, o turno seguia como "sem resposta" e alimentava o reprocessamento seguinte.
